@@ -147,3 +147,17 @@ def test_messages_live_under_msg_and_wiki_replaces_qmd(capsys):
     ):
         assert cli.main(retired) == 2
         assert replacement in capsys.readouterr().err
+
+
+def test_missing_role_worktree_points_to_git_worktree_add(tmp_path):
+    from orai import runtime
+
+    project = write_project(
+        tmp_path / "p",
+        TWO_ROLES.replace('guide = "docs/dev.md"', 'guide = "docs/dev.md"\nworktree = ".worktrees/dev"').replace(
+            'provider = "claude"\nworktree = "."', 'provider = "claude"'
+        ),
+        git=True,
+    )
+    check = next(c for c in runtime.diagnose(project) if c.component == "role.dev")
+    assert "git worktree add .worktrees/dev" in check.next_action

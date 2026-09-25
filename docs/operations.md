@@ -12,8 +12,9 @@ mise use pypi:oXpace/orai@<버전>   # mise pypi backend(uv 사용)로 내려받
 orai setup                         # 기본 세팅
 ```
 
-- GitHub에 게시하기 전에는 위 설치를 검증할 수 없다. mise `pypi` backend는 GitHub 원천을 GitHub API로 조회하며, `git+file://` 같은 로컬 원천은 지원하지 않는다(mise 2026.9.13에서 확인). 게시 전에는 `uvx --from git+<원천>@trunk orai setup`으로 한 번 실행할 수 있다. 이 방식은 설치 없이 실행만 하므로, 이후 `mise use`로 고정한다.
+- mise는 `oXpace/orai`의 GitHub Release 목록에서 버전을 읽고, 해당 태그의 소스를 `uv tool install`로 설치한다(2026-09-25 `0.1.0`으로 확인). 로컬 원천(`git+file://`)은 지원하지 않으므로, 게시 전 변경을 시험할 때는 `uvx --from git+<원천>@trunk orai setup`을 쓴다.
 - `setup`은 프로젝트에 Orai 고정이 없으면 `mise use` 안내를 출력한다.
+- mise에 `minimum_release_age` 설정이 있으면 새 Release가 버전 목록(`mise ls-remote`)에서 한동안 숨겨진다. 이때도 `@0.1.0`처럼 버전을 명시하면 설치된다.
 - PATH에 다른 `orai`(예: 예전 전역 링크)가 있어도, mise가 활성화된 셸에서는 프로젝트에 고정한 버전이 먼저 선택된다.
 
 AMQ, Codex, Claude Code, QMD, CodeGraph는 사용자가 설치한다. Orai는 이 도구들을 설치하거나 업그레이드하지 않는다. 필요한 버전은 [호환성](compatibility.md)에 있다.

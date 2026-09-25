@@ -19,6 +19,7 @@ from orai import mail
 from orai.doctor import BLOCKED, DEGRADED, HEALTHY, NOT_CONFIGURED, NOT_READY, Check
 from orai.integrations import mcp_servers
 from orai.process import checked
+from orai.project import main_checkout
 from orai.providers import claude, codex
 from orai.state import RoleFiles, locked, read_json, role_lock, write_json
 
@@ -324,6 +325,14 @@ def status(project):
     return 0
 
 
+def next_step(project, role, name):
+    if not (project.root / role.worktree).is_dir():
+        if main_checkout(project.root):
+            return f"Create it with `git worktree add {role.worktree}` (the repository needs a first commit)"
+        return f"Create the folder {role.worktree}"
+    return f"Fix the worktree, or `orai run {name} --fresh` for a new conversation"
+
+
 def diagnose(project):
     """Read-only project checks: local state, mail and each role's resume readiness."""
     checks = []
@@ -399,7 +408,7 @@ def diagnose(project):
                     f"role.{name}",
                     DEGRADED,
                     str(exc),
-                    f"Fix the worktree, or `orai run {name} --fresh` for a new conversation",
+                    next_step(project, role, name),
                     detail=detail,
                 )
             )

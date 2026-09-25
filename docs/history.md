@@ -89,6 +89,8 @@
 - 기본 doctor가 의미 검색을 실행하지 않아 항상 degraded가 되던 문제를 고쳤다. 해당 항목은 `not-checked`(검증 아님, 문제도 아님)로 표시한다.
 - 검증: 임시 Git 원천에서 `uvx --from git+file://…@trunk orai setup`을 실행했다. 빈 폴더가 trunk 저장소가 됐고, 파일 생성, wiki 색인·서버(포트 18267, 문서 1개), CodeGraph 색인을 거쳐 진단이 healthy였다. `mise use pypi:…`는 로컬 원천을 지원하지 않아 GitHub 게시 후 검증한다.
 
+공개 배포(같은 날): MIT(© oXpace)로 `github.com/oXpace/orai`를 공개하고 Release `0.1.0`을 만들었다. CI는 macOS 15·Ubuntu 24.04 × Python 3.11·3.14.7 네 조합 모두 통과했다(macOS에서는 실제 AMQ를 설치해 통합 테스트까지 실행). 빈 폴더에서 `mise use pypi:oXpace/orai@0.1.0`으로 설치했다. mise는 `uv tool install`로 GitHub Release 태그 소스를 설치해 `mise.toml`에 고정했다. 이어서 `orai setup --preset pm-staff`로 trunk 저장소, 파일, AMQ 루트, wiki(문서 1개, 전용 포트), CodeGraph 색인까지 완료했다. 남은 진단은 첫 실행 때 만들어지는 mailbox와 staff worktree 생성뿐이었고, staff worktree의 안내 문구를 `git worktree add`로 고쳤다.
+
 ### 미검증
 
 - Codex↔Claude 실제 요청·회신, 알림 도착(Codex queue·Claude channel), 종료 후 동일 UUID 복구, 중복 실행 거부.
