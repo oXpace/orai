@@ -67,6 +67,18 @@
 
 ## 검증 기록
 
+### 2026-09-25, 0.2.0 (Go, macOS 27.0 arm64)
+
+| 범위 | 결과 |
+|---|---|
+| `mise run check` (gofmt, go vet, race 검사기를 켠 전체 테스트, 빌드한 바이너리의 종단 테스트) | 통과. 최상위 테스트 157개(하위 포함 375개), 3회 반복 모두 통과 |
+| CI (macOS 15 + 실제 AMQ, Ubuntu 24.04, 4개 타깃 크로스 빌드) | 통과 |
+| 메일함 AMQ 0.80.1 양방향 호환 | 통과 (Orai → `amq drain`·`reply`, `amq send` → Orai 수신·답장) |
+| 이 저장소에서 Go 바이너리로 `orai doctor --deep` | 기존 wiki 서버(포트 18800)를 같은 프로젝트로 인식. vector·lex+vec·본문 조회 healthy, CodeGraph 심볼 조회 healthy |
+| Release `0.2.0` → 빈 폴더에서 `mise use github:oXpace/orai@0.2.0` | 2.9초 만에 설치, `orai 0.2.0` |
+| 이어서 `orai setup --preset pm-staff` | trunk 저장소, 파일, 메일함, wiki(문서 1개, 전용 포트), CodeGraph 색인 완료. 첫 커밋과 `git worktree add .worktrees/staff` 후 `orai doctor` healthy |
+| 설치된 바이너리로 메시지 흐름 | Desktop `msg send` → staff worktree에서 역할 신원으로 `msg inbox` 수신. `amq send` → Orai 수신. staff worktree에서 `orai staff --dry-run`이 main 프로젝트와 메일함을 해석 |
+
 ### 2026-09-25, 0.1.0 (Python, macOS 27.0 arm64)
 
 | 범위 | 결과 |
