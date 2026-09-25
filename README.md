@@ -1,15 +1,16 @@
 # Orai
 
-Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**으로 실행하는 로컬 런처다. 세션끼리는 [AMQ](https://github.com/avivsinai/agent-message-queue) 메시지로 협업한다.
+Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**으로 실행하고, 역할끼리 메시지로 협업하게 하는 프로젝트 하네스다. Go 단일 실행 파일이며 프로젝트마다 설치한다.
 
 - **정확한 재개**: 역할마다 캡처한 대화 UUID로만 재개한다. "가장 최근 대화"를 추측하지 않는다.
-- **알림만 전달**: 새 메시지 ID를 Codex queue나 Claude 로컬 MCP channel로 알린다. 메시지를 대신 소비하지 않는다.
+- **프로젝트 메일함**: 역할 사이의 메시지를 프로젝트 안의 메일함으로 주고받는다. 디스크 형식이 [AMQ](https://github.com/avivsinai/agent-message-queue)와 같아 `amq`로도 읽을 수 있지만, AMQ 설치는 필요 없다.
+- **알림만 전달**: 새 메시지를 파일 변경 이벤트로 즉시 감지해 ID만 Codex queue나 Claude 로컬 MCP channel로 알린다. 메시지를 대신 소비하지 않는다.
 - **공통 메시지 액션**: `orai msg inbox`, `orai msg send`, `orai msg reply`
 - **프로젝트 wiki와 코드 그래프**: 프로젝트 문서 검색(wiki, 엔진 QMD)과 CodeGraph를 프로젝트별로 격리해 설정·진단·복구한다.
-- **한 번에 준비**: 빈 폴더에서 `orai setup` 한 번으로 저장소, 설정, 에이전트 지침, 메일 루트, wiki, 코드 그래프까지 준비한다.
+- **한 번에 준비**: 빈 폴더에서 `orai setup` 한 번으로 저장소, 설정, 에이전트 지침, 메일함, wiki, 코드 그래프까지 준비한다.
 - **진단**: `orai doctor`가 구성요소별 상태와 안전한 다음 조치를 JSON으로 보고한다.
 
-큐는 AMQ가, 대화는 각 provider가, 역할 조직과 업무 규칙은 각 프로젝트가 소유한다. Orai는 이 책임들을 다시 구현하지 않는다.
+대화는 각 provider가, 역할 조직과 업무 규칙은 각 프로젝트가 소유한다. Orai는 이 책임들을 다시 구현하지 않는다.
 
 ## 빠른 시작
 
@@ -17,8 +18,8 @@ Orai는 프로젝트마다 설치하고 버전을 고정한다([운영 안내](d
 
 ```sh
 mkdir my-app && cd my-app
-mise use pypi:oXpace/orai@<버전>     # 이 프로젝트에 Orai 설치·고정 (mise.toml)
-orai setup --preset pm-staff          # 저장소(trunk)·설정·지침·메일 루트·wiki·코드 그래프·진단
+mise use github:oXpace/orai@<버전>   # 이 프로젝트에 Orai 설치·고정 (mise.toml)
+orai setup --preset pm-staff          # 저장소(trunk)·설정·지침·메일함·wiki·코드 그래프·진단
 
 # 역할 실행 (역할마다 터미널 하나)
 orai pm            # = orai run pm, 기본은 정확한 재개
@@ -36,13 +37,13 @@ orai status && orai doctor
 
 ## 상태
 
-`0.1.0` — pre-alpha. 2026-09-25 기준:
+`0.2.0` — pre-alpha, Go. 2026-09-25 기준:
 
 | 범위 | 상태 |
 |---|---|
-| 단위·격리 통합 테스트 174건 (Python 3.11·3.14), 실제 AMQ 0.80.1 임시 큐 통합 | 통과 (`mise run test`) |
-| wheel을 빌드해 checkout 밖에 설치한 CLI 실행, `init` 멱등성, 템플릿 누락 검사 | 통과 (`mise run test:package`) |
-| 호스트 도구 capability·로그인 진단 (AMQ, Codex 0.157.0, Claude Code 2.1.282) | healthy (`orai doctor`) |
+| 단위·통합 테스트(race 검사기), 빌드한 바이너리를 checkout 밖에서 실행하는 종단 테스트 | 통과 (`mise run check`, CI macOS·Linux) |
+| 메일함의 실제 AMQ 0.80.1 양방향 호환 (Orai ↔ `amq` 전송·수신·답장) | 통과 |
+| 호스트 도구 capability·로그인 진단 (Codex 0.157.0, Claude Code 2.1.282) | healthy (`orai doctor`) |
 | 이 저장소 문서의 실제 QMD 2.8.3 색인·의미 검색, 서버 다운 감지와 `recover` | 통과 (`orai doctor --deep`) |
 | 실제 CodeGraph 1.5.0 색인·심볼 조회 | 통과 |
 | Codex↔Claude 실제 요청·회신, 종료 후 동일 UUID 복구 | **미검증** — [실제 파일럿](docs/operations.md#실제-파일럿-계정호스트-준비-후) 대기 |
@@ -64,4 +65,4 @@ orai status && orai doctor
 
 [MIT](LICENSE) © 2026 oXpace
 
-Orai는 AMQ, Codex CLI, Claude Code, QMD, CodeGraph를 번들하거나 재배포하지 않는다. 사용자가 설치한 실행 파일을 별도 프로세스로 호출할 뿐이며, 각 도구의 라이선스와 약관(Claude Code는 Anthropic 상용 약관)은 사용자에게 그대로 적용된다.
+Orai는 Codex CLI, Claude Code, QMD, CodeGraph를 번들하거나 재배포하지 않는다. 사용자가 설치한 실행 파일을 별도 프로세스로 호출할 뿐이며, 각 도구의 라이선스와 약관(Claude Code는 Anthropic 상용 약관)은 사용자에게 그대로 적용된다.

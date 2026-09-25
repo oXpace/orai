@@ -33,28 +33,41 @@
 
 ## 변환 내역
 
+0.1.0은 Python으로 옮겼고, 0.2.0에서 Go로 다시 옮겼다(아래 [Go 전환](#go-전환-020)). 표의 Orai 열은 현재(Go) 위치다.
+
 | 원천 (`b91019e`) | Orai | 바꾼 점과 이유 |
 |---|---|---|
-| `scripts/orai` | `orai.cli:main` (console script), `python -m orai` | 설치 위치를 루트로 추정하지 않는다. `--project`, cwd 탐색, `orai <role>` 별칭, `orai msg`로 메시지 명령 묶음 |
-| `scripts/lib/orai_runtime.py` | `config`, `project`, `state`, `mail`, `runtime`, `providers/codex` | `ROOT=스크립트 위치` → 프로젝트 루트 해석. 고정 pm/staff → 설정의 역할 목록과 provider 분기. "PM은 trunk" → 역할별 선택적 `branch`. 고정 세션 `orai` → `session` 설정. 역할명 기반 channel 분기 → provider 기반. `.agents/orai.json` → `orai.toml`(schema 1, 상대경로, 알 수 없는 키 거부). 모델·effort 선택화. 호출 셸의 `AMQ_GLOBAL_ROOT`·`ORAI_*` 차단 추가. 새 역할 mailbox 보강(`amq init --force`, 미처리 메일 보존 확인). 역할 세션 안에서 중첩 실행 거부 |
-| `scripts/lib/orai_channel.py` | `providers/claude_channel.py` | 고정 역할 검사 → 이름 형식 검사. `python -m`으로 실행 |
-| `scripts/tests/test_orai_*.py` | `tests/test_runtime.py`, `test_channel.py`, `test_messages.py` | 계약을 그대로 유지하고 역할명을 일반화(`lead`/`dev`/`reviewer-2`). 실제 AMQ 격리 통합 테스트 유지 |
-| `scripts/qmd-setup`, `scripts/test-qmd-setup.py` | `integrations/qmd.py`(wiki 엔진), `orai wiki …`, `tests/test_qmd.py` | 8181·`docs`·한국어 질의 고정 → 프로젝트별 포트·컬렉션·smoke 설정. `--index` 격리. `stop` 추가. `--install`(전역 npm 설치) 제거. 검증 단계를 doctor 진단 항목과 공유 |
-| `scripts/setup-orai.py`, `test_orai_setup.py` | `scaffold.py`, `bootstrap.py`, `orai setup`, `tests/test_scaffold.py`, `tests/test_setup.py` | 사전 충돌 검사, dry-run/apply, 원자적 쓰기, 백업, 멱등성을 참고했다. Telegraphy 마이그레이션은 가져오지 않았다. AGENTS/.gitignore는 관리 블록만 바꾼다 |
-| `scripts/orai.md`, `.agents/skills/orai/**` | `docs/operations.md`, `templates/skill.md` | CLI 운영 문서와 에이전트용 메시지 액션을 분리했다. Pockets 고유 경로·Linear·TASKS 참조는 제거했다 |
-| `.agents/orai.json`, `PM.md`, `STAFF.md` | `templates/pm-staff.toml`, `pm.md`, `staff.md` (`--preset pm-staff`) | 모델과 effort를 고정하지 않는 선택형 예제로 일반화했다 |
+| `scripts/orai` | `cmd/orai`, `internal/cli` | 설치 위치를 루트로 추정하지 않는다. `--project`, cwd 탐색, `orai <role>` 별칭, `orai msg`로 메시지 명령 묶음 |
+| `scripts/lib/orai_runtime.py` | `internal/{config,project,state,runtime,providers}` | `ROOT=스크립트 위치` → 프로젝트 루트 해석. 고정 pm/staff → 설정의 역할 목록과 provider 분기. "PM은 trunk" → 역할별 선택적 `branch`. 고정 세션 `orai` → `session` 설정. 역할명 기반 channel 분기 → provider 기반. `.agents/orai.json` → `orai.toml`(schema 1, 상대경로, 알 수 없는 키 거부). 모델·effort 선택화. 호출 셸의 `AM_*`·`AMQ_GLOBAL_ROOT`·`ORAI_*` 차단. 역할 세션 안에서 중첩 실행 거부. `amq coop exec` 대신 provider를 직접 실행 |
+| AMQ 호출(`amq env/list/drain/read/send/reply/init`) | `internal/mail` | AMQ schema 1과 같은 디스크 형식의 자체 메일함. 2초 폴링 대신 파일 변경 이벤트(kqueue/inotify) + 보조 주기 |
+| `scripts/lib/orai_channel.py` | `internal/channel` (`orai _channel`) | 고정 역할 검사 → 이름 형식 검사. 메일함 변경 이벤트로 알림 |
+| `scripts/tests/test_orai_*.py` | `internal/{runtime,providers,channel,cli,mail}/*_test.go` | 계약을 그대로 유지하고 역할명을 일반화(`lead`/`dev`/`reviewer-2`). 실제 AMQ와의 양방향 호환 테스트 추가 |
+| `scripts/qmd-setup`, `scripts/test-qmd-setup.py` | `internal/wiki`, `orai wiki …` | 8181·`docs`·한국어 질의 고정 → 프로젝트별 포트·컬렉션·smoke 설정. `--index` 격리. `stop` 추가. `--install`(전역 npm 설치) 제거. 검증 단계를 doctor 진단 항목과 공유 |
+| `scripts/setup-orai.py`, `test_orai_setup.py` | `internal/{scaffold,setup}`, `orai setup` | 사전 충돌 검사, dry-run/apply, 원자적 쓰기, 백업, 멱등성을 참고했다. Telegraphy 마이그레이션은 가져오지 않았다. AGENTS/.gitignore는 관리 블록만 바꾼다 |
+| `scripts/orai.md`, `.agents/skills/orai/**` | `docs/operations.md`, `internal/scaffold/templates/skill.md` | CLI 운영 문서와 에이전트용 메시지 액션을 분리했다. Pockets 고유 경로·Linear·TASKS 참조는 제거했다 |
+| `.agents/orai.json`, `PM.md`, `STAFF.md` | `internal/scaffold/templates/{pm-staff.toml,pm.md,staff.md}` (`--preset pm-staff`) | 모델과 effort를 고정하지 않는 선택형 예제로 일반화했다 |
 
 ### 가져오지 않은 것
 
 - 실제 `.orai` 상태·UUID·nonce·잠금, `.agent-mail` 큐·receipt·transcript, QMD/CodeGraph DB, 모델 파일, 개인 전역 설정·토큰, TASKS/Linear 데이터
 - Pockets의 merge gate, 모바일 빌드, 제품 AC, JVM·iOS·Android 검증 체계
 - Senior 역할과 `.codex/agents/verifier.toml`(Pockets의 모바일 검증에 특화됨). 필요하면 프로젝트 프리셋으로 다시 설계한다
-- Pockets `pyproject.toml`(이름이 `pockets`인 초기 뼈대). Orai 패키지는 새로 정의했다
-- 권장 구조의 `examples/pm-staff/`: 예제를 패키지 밖에 두면 `init`이 배포하는 템플릿과 어긋날 수 있다. 그래서 `src/orai/templates`와 `--preset pm-staff`로 단일화했다
+- Pockets `pyproject.toml`(이름이 `pockets`인 초기 뼈대). Orai 패키지는 새로 정의했다(0.2.0부터 Go 모듈 `github.com/oXpace/orai`)
+- 권장 구조의 `examples/pm-staff/`: 예제를 패키지 밖에 두면 `setup`이 배포하는 템플릿과 어긋날 수 있다. 그래서 바이너리에 내장한 템플릿과 `--preset pm-staff`로 단일화했다
+
+## Go 전환 (0.2.0)
+
+2026-09-25, 사용자 결정: 장기적으로 유리한 쪽, 특히 성능을 기준으로 Python에서 Go로 옮겼다. 같은 날 AMQ 의존도 자체 메일함으로 바꿨다.
+
+- **이유**: 단일 실행 파일 배포(런타임 불필요), 빠른 시작, 파일 변경 이벤트 기반 알림, AMQ(Go, MIT)의 메일함 형식을 그대로 따를 수 있다는 점. Rust는 이 작업량에서 성능 차이가 드러나지 않고, 같은 생태계(AMQ, amq-squad, orca-cli)가 Go라 Go를 골랐다.
+- **측정** (이 호스트, 중앙값): `--version` Python 70 ms → Go 6 ms, `status` 105 → 33 ms, `doctor` 336 → 207 ms(외부 도구 호출이 대부분). 알림 대기는 2초 폴링에서 이벤트 즉시 감지로 바뀌었다.
+- **방식**: Python 테스트를 계약 명세로 삼아 Go 테스트로 옮겼다. 동작은 유지하고, 동등성을 확인한 뒤 Python 구현을 지웠다. 0.1.0 Release(Python)는 그대로 남겼다.
+- **AMQ 대체**: Orai가 쓰던 AMQ 기능(메일함, 메시지 형식, 전송·답장·목록·수신·읽기, receipt)을 `internal/mail`로 구현했다. 실제 AMQ 0.80.1과 서로 보내고 받고 답장하는 교차 테스트를 둔다. 이 테스트가 AMQ가 요구하는 `dlq/` 폴더 누락을 잡아냈다. AMQ의 원격 중계, 깨우기, 실행기, swarm 등은 쓰지 않아 가져오지 않았다.
+- **바뀐 점**: `orai setup`이 `.amqrc` 대신 메일함을 직접 만든다. Claude 채널은 `orai _channel`, hook은 설치된 `orai` 바이너리를 부른다. 설치 명령은 `mise use github:oXpace/orai@<버전>`이다.
 
 ## 검증 기록
 
-### 2026-09-25 (macOS 27.0 arm64, 커밋 전 작업 트리)
+### 2026-09-25, 0.1.0 (Python, macOS 27.0 arm64)
 
 | 범위 | 결과 |
 |---|---|

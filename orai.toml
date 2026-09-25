@@ -13,4 +13,4 @@ vec = "이전 실행이 남긴 낡은 hook이 세션 신원을 덮어쓰지 못�
 expect = "docs/architecture.md"
 
 [integrations.codegraph]
-smoke_symbol = "validate_saved"
+smoke_symbol = "ValidateSaved"

@@ -1,0 +1,42 @@
+name: release
+
+# Publishing a GitHub Release builds and attaches the binaries that
+# `mise use github:oXpace/orai@<version>` installs.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  binaries:
+    strategy:
+      matrix:
+        include:
+          - { goos: darwin, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          VERSION: ${{ github.event.release.tag_name }}
+        run: |
+          name="orai_${VERSION}_${GOOS}_${GOARCH}"
+          mkdir -p "dist/$name"
+          go build -trimpath -ldflags "-s -w -X github.com/oXpace/orai/internal/version.Version=${VERSION}" \
+            -o "dist/$name/orai" ./cmd/orai
+          cp LICENSE README.md "dist/$name/"
+          # Files at the archive root so mise finds the orai binary without a bin_path.
+          tar -C "dist/$name" -czf "dist/$name.tar.gz" .
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.tar.gz --clobber

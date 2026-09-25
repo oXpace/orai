@@ -8,21 +8,23 @@ Orai는 **프로젝트 단위**로 설치한다. 프로젝트마다 `mise.toml`�
 
 ```sh
 mkdir my-app && cd my-app
-mise use pypi:oXpace/orai@<버전>   # mise pypi backend(uv 사용)로 내려받아 mise.toml에 고정
+mise use github:oXpace/orai@<버전>  # GitHub Release의 바이너리를 받아 mise.toml에 고정
 orai setup                         # 기본 세팅
 ```
 
-- mise는 `oXpace/orai`의 GitHub Release 목록에서 버전을 읽고, 해당 태그의 소스를 `uv tool install`로 설치한다(2026-09-25 `0.1.0`으로 확인). 로컬 원천(`git+file://`)은 지원하지 않으므로, 게시 전 변경을 시험할 때는 `uvx --from git+<원천>@trunk orai setup`을 쓴다.
+- mise github backend는 `oXpace/orai`의 GitHub Release에서 현재 플랫폼(darwin/linux, arm64/amd64)의 `orai_<버전>_<os>_<arch>.tar.gz`를 받는다. 실행에 Go나 다른 런타임은 필요 없다. 게시 전 변경은 Orai checkout에서 `go run ./cmd/orai --project <경로> setup`으로 시험한다.
+- 0.1.0(Python)은 `pypi:oXpace/orai@0.1.0`으로 고정돼 있다. 0.2.0부터는 `github:` 백엔드를 쓴다.
 - `setup`은 프로젝트에 Orai 고정이 없으면 `mise use` 안내를 출력한다.
-- mise에 `minimum_release_age` 설정이 있으면 새 Release가 버전 목록(`mise ls-remote`)에서 한동안 숨겨진다. 이때도 `@0.1.0`처럼 버전을 명시하면 설치된다.
+- mise에 `minimum_release_age` 설정이 있으면 새 Release가 버전 목록(`mise ls-remote`)에서 한동안 숨겨진다. 이때도 `@0.2.0`처럼 버전을 명시하면 설치된다.
 - PATH에 다른 `orai`(예: 예전 전역 링크)가 있어도, mise가 활성화된 셸에서는 프로젝트에 고정한 버전이 먼저 선택된다.
 
-AMQ, Codex, Claude Code, QMD, CodeGraph는 사용자가 설치한다. Orai는 이 도구들을 설치하거나 업그레이드하지 않는다. 필요한 버전은 [호환성](compatibility.md)에 있다.
+Codex, Claude Code, QMD, CodeGraph는 사용자가 설치한다. Orai는 이 도구들을 설치하거나 업그레이드하지 않는다. AMQ는 필요 없다(메일함은 Orai가 관리하며 형식만 AMQ와 호환된다). 필요한 버전은 [호환성](compatibility.md)에 있다.
 
 Orai 자체를 개발하는 checkout에서는 다음과 같이 준비한다.
 
 ```sh
-mise install && mise run setup    # Python·uv pin, uv sync --locked → .venv
+mise install && mise run setup    # Go pin, go mod download
+mise run build                    # dist/orai
 ```
 
 ## 프로젝트 준비 (`orai setup`)
@@ -50,7 +52,7 @@ orai setup --branch <이름>        # 새 저장소의 기본 브랜치 (기본 
    - wiki 폴더가 없으면 `docs/README.md` 시작 페이지를 만든다.
    - `.orai/project.json`을 기록한다.
    - 기존 파일을 바꿀 때는 원본을 `.orai/backups/<시각>/`에 먼저 저장한다.
-3. **AMQ 루트** (역할이 있는 프로젝트): 루트에 `.amqrc`가 없으면 `amq coop init --root .agent-mail --agents user --no-gitignore`로 AMQ가 직접 만든다. 기존 `.agent-mail` 설정과 미처리 메일은 보존된다(AMQ 0.80.1에서 확인). `.gitignore` 블록에 `/.amqrc`, `/.agent-mail/`, 루트 안의 역할 worktree가 추가된다.
+3. **메일함** (역할이 있는 프로젝트): `.agent-mail/<session>`에 역할과 `user`의 메일함을 만든다. 기존 메일함이 있으면 없는 handle만 추가하고 메시지는 건드리지 않는다. `.gitignore` 블록에 `/.agent-mail/`와 루트 안의 역할 worktree가 추가된다.
 4. **wiki**: 엔진(QMD)이 설치돼 있고 문서가 있으면 색인이 없을 때 `orai wiki init`을, 있으면 `orai wiki recover`를 실행한다. 두 경우 모두 서버를 시작하고 검증한다.
 5. **코드 그래프**: CodeGraph가 설치돼 있고 색인이 없으면 `codegraph init`을 실행한다.
 6. **진단**: `orai doctor`를 요약해 남은 조치만 보여준다.
@@ -70,7 +72,7 @@ orai status                # 실행 여부, 세션 ID, 알림 준비, 미처리 
 
 중지는 해당 CLI를 정상 종료한다. SIGTERM·SIGHUP은 자식 CLI에 전달되고, 종료 후 상태는 `stopped`가 된다. PID만 보고 lock 파일을 지우지 않는다.
 
-**역할 추가.** `orai.toml`에 역할을 추가하고 `orai run <새 역할>`을 실행한다. 기존 mailbox 설정에 새 handle을 합쳐 `amq init --force`로 mailbox를 만든다. AMQ 0.80.1에서 이 과정 중 기존 미처리 메일이 보존되는 것을 확인했다. 이미 AMQ에 등록된 handle(은퇴한 역할 포함)은 목록에서 빠지지 않는다.
+**역할 추가.** `orai.toml`에 역할을 추가하고 `orai setup` 또는 `orai run <새 역할>`을 실행하면 새 handle의 메일함이 추가된다. 기존 메시지는 건드리지 않으며, 이미 등록된 handle(은퇴한 역할 포함)은 `meta/config.json`에서 빠지지 않는다.
 
 ## 메시지
 
@@ -80,7 +82,7 @@ orai msg send <role|user> [--kind K] [--thread T] (--body 텍스트 | --file 경
 orai msg reply <받은-ID> (--body | --file | 표준 입력)
 ```
 
-역할 세션 밖(Desktop)에서는 사용자 권한으로 `--as user`를 붙인다. 역할 세션 안에서는 `--as`를 쓸 수 없다. 본문 없이 대화형 터미널에서 실행하면 기다리지 않고 바로 사용법 오류를 낸다. AMQ의 출력, 경고, 종료 코드는 그대로 전달한다.
+역할 세션 밖(Desktop)에서는 사용자 권한으로 `--as user`를 붙인다. 역할 세션 안에서는 `--as`를 쓸 수 없다. 본문 없이 대화형 터미널에서 실행하면 기다리지 않고 바로 오류를 낸다. 결과는 JSON으로 출력한다(형태는 AMQ의 `send`/`list`/`drain`/`read`/`reply` 출력과 같다). 성공 0, 실패 1, 사용법 오류 2로 끝난다.
 
 ## 진단
 
@@ -94,7 +96,7 @@ orai doctor --deep    # QMD vector·lex+vec·본문 조회, CodeGraph smoke 심�
 | 0 | 모든 확인 항목 healthy (선택 연동의 not-configured 포함) |
 | 1 | 일부 degraded / not-ready / 선택 연동 blocked, 또는 프로젝트를 찾지 못함 |
 | 2 | 사용법·설정 오류 |
-| 3 | 코어(AMQ, 사용 중인 provider와 로그인, mail) blocked |
+| 3 | 코어(사용 중인 provider와 로그인, 메일함) blocked |
 
 각 항목의 `next_action`은 안전한 다음 조치다. `doctor`는 아무 상태도 바꾸지 않는다. 복구는 아래의 명시적 명령으로 한다.
 
@@ -140,7 +142,7 @@ codegraph status --json <프로젝트 루트>
 | 저장된 대화 없음·경로 변경 | transcript나 worktree를 되살리거나 `--fresh`. 최근 대화를 추측하지 않는다 |
 | 세션 ID 미수집 | Codex `/hooks` 신뢰, Claude SessionStart hook 오류를 확인한 뒤 `--fresh` |
 | Claude 알림 준비 안 됨 | channel 동의·MCP 연결·`channel_ready` 호출 여부를 `orai status`로 확인. 초기 연결 중 잠깐 `no MCP server configured`가 보일 수 있다 |
-| Codex queue 오류 | `orai status`의 `last_error`를 확인한다. 실패하는 동안에도 메시지는 AMQ에 남는다 |
+| Codex queue 오류 | `orai status`의 `last_error`를 확인한다. 실패하는 동안에도 메시지는 메일함에 남는다 |
 | 프로젝트 이동·복사 경고 | `.orai/`를 검토한 뒤 `orai setup`으로 다시 연결하고, 역할은 `--fresh`로 시작 |
 | QMD `connection refused` | `orai wiki recover` |
 | QMD `access denied` | 샌드박스 밖에서 다시 확인한다. 그 결과는 그 환경에만 적용된다 |
@@ -149,18 +151,18 @@ codegraph status --json <프로젝트 루트>
 ## 검증
 
 ```sh
-mise run check           # lint + test + test:package (CI와 같음)
-mise run test            # 단위·격리 통합 (실제 AMQ가 있으면 임시 큐 통합 포함)
-mise run test:package    # wheel을 빌드해 checkout 밖 venv에 설치한 뒤 실행
+mise run check           # gofmt + go vet + test (CI와 같음)
+mise run test            # race 검사기, 빌드한 바이너리를 checkout 밖에서 실행하는 종단 테스트 포함
+                         # (AMQ가 설치돼 있으면 메일함 양방향 호환 테스트도 실행)
 ```
 
-테스트는 실제 역할 세션, 실제 프로젝트 큐, `8181` 서버를 건드리지 않는다. fake provider와 fixture로 통과한 것을 실제 provider 동작으로 기록하지 않는다.
+테스트는 실제 역할 세션, 실제 프로젝트 메일함, `8181` 서버를 건드리지 않는다. fake provider와 fixture로 통과한 것을 실제 provider 동작으로 기록하지 않는다.
 
 ### 실제 파일럿 (계정·호스트 준비 후)
 
 격리된 작은 파일럿 저장소에서 수행한다. Orai 저장소와 Pockets에서는 하지 않는다.
 
-1. 빈 폴더에서 `mise use pypi:oXpace/orai@<버전>`, `orai setup --preset pm-staff`, 첫 커밋, `git worktree add .worktrees/staff`, `orai doctor`.
+1. 빈 폴더에서 `mise use github:oXpace/orai@<버전>`, `orai setup --preset pm-staff`, 첫 커밋, `git worktree add .worktrees/staff`, `orai doctor`.
 2. 두 터미널에서 `orai pm`, `orai staff`를 실행한다. Codex `/hooks` 신뢰와 Claude channel에 동의한다.
 3. 요청과 회신을 주고받는다(`send` → 알림 → `inbox <ID>` → `reply`). 작업 중 알림, 유휴 알림, 수신자가 꺼져 있을 때의 적재, 재접속 후 알림을 각각 확인한다.
 4. 역할을 종료한 뒤 다시 실행해 같은 UUID로 재개되고 메시지를 받는지 확인한다. 중복 실행이 거부되는지 확인한다.

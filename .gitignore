@@ -1,12 +1,5 @@
-# Python / uv
-.venv/
-__pycache__/
-*.py[cod]
+# Build output
 dist/
-build/
-*.egg-info/
-.pytest_cache/
-.ruff_cache/
 
 .DS_Store
 

@@ -1,50 +1,39 @@
 min_version = "2026.9.0"
 
-# Orai 개발에 필요한 런타임만 고정한다. AMQ·Codex·Claude·QMD·CodeGraph는
-# 사용자의 기존 설치를 쓰고 docs/compatibility.md에서 버전·capability를 관리한다.
+# Orai 개발에 필요한 도구만 고정한다. Codex·Claude·QMD·CodeGraph는 사용자의 기존
+# 설치를 쓰고 docs/compatibility.md에서 버전·capability를 관리한다.
 [tools]
-python = "3.14.7"
-uv = "0.12.18"
+go = "1.27.1"
 
 [settings]
 lockfile = true
 # 지원 대상: macOS arm64(검증 환경), Linux(코어·CI). Windows는 지원하지 않는다.
 lockfile_platforms = ["macos-arm64", "linux-x64", "linux-arm64"]
 
-[env]
-_.python.venv = { path = ".venv", create = false }
-# uv uses the pinned interpreter unless the caller (e.g. the CI matrix) sets UV_PYTHON.
-UV_PYTHON = "{{ get_env(name='UV_PYTHON', default='3.14.7') }}"
-
 [tasks.setup]
-description = "Create .venv from uv.lock"
-run = "uv sync --locked"
+description = "Download Go module dependencies"
+run = "go mod download"
 
 [tasks.lint]
-description = "Static checks"
-run = ["uv run --locked ruff check", "uv run --locked ruff format --check"]
+description = "Formatting and static checks"
+run = ['test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)', "go vet ./..."]
 
 [tasks.fmt]
-description = "Apply formatting and safe fixes"
-run = ["uv run --locked ruff check --fix", "uv run --locked ruff format"]
+description = "Apply gofmt"
+run = "gofmt -w ."
 
 [tasks.test]
-description = "Unit and isolated integration tests"
-run = "uv run --locked pytest"
+description = "Unit, integration and end-to-end tests (race detector on)"
+run = "go test -race ./..."
 
 [tasks.build]
-description = "Build sdist and wheel into dist/"
-run = "uv build --clear"
-
-[tasks."test:package"]
-description = "Install the built wheel outside the checkout and run it"
-depends = ["build"]
-run = "uv run --locked pytest -m package"
+description = "Build ./dist/orai for this machine"
+run = "go build -trimpath -o dist/orai ./cmd/orai"
 
 [tasks.check]
 description = "Everything CI runs"
-depends = ["lint", "test", "test:package"]
+depends = ["lint", "test"]
 
 [tasks.doctor]
 description = "Read-only diagnosis of this checkout as an Orai project"
-run = "uv run --locked orai doctor"
+run = "go run ./cmd/orai doctor"

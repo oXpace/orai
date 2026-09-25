@@ -4,19 +4,20 @@
 
 ## 정의와 경계
 
-Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 세션**으로 실행하는 로컬 런처다. 세션끼리는 AMQ 메시지로 협업한다. Orai가 제공하는 것은 다섯 가지다.
+Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 세션**으로 실행하는 프로젝트 하네스다. 세션끼리는 프로젝트 메일함으로 메시지를 주고받으며 협업한다. Go로 작성한 단일 실행 파일이며, Orai가 제공하는 것은 여섯 가지다.
 
 1. 역할 세션 실행과 **정확한 대화 복구**
-2. 새 메시지 **알림** 전달 (알림만 하고 메시지를 대신 소비하지 않는다)
-3. 공통 **메시지 액션** (`inbox`, `send`, `reply`)
-4. 프로젝트 탐색 도구(프로젝트 wiki, CodeGraph)의 설정·진단·복구
-5. 위 네 가지의 **진단** (`doctor`)
+2. 프로젝트 **메일함**(AMQ와 같은 디스크 형식)
+3. 새 메시지 **알림** 전달 (알림만 하고 메시지를 대신 소비하지 않는다)
+4. 공통 **메시지 액션** (`orai msg inbox|send|reply`)
+5. 프로젝트 탐색 도구(프로젝트 wiki, CodeGraph)의 설정·진단·복구
+6. 위 항목의 **진단** (`doctor`)
 
 소유권은 아래처럼 나뉜다. Orai는 다른 쪽의 책임을 다시 구현하지 않는다.
 
 | 대상 | 소유자 | Orai의 역할 |
 |---|---|---|
-| 큐, 배달, receipt, thread | AMQ | `amq` CLI 호출, 신원 환경 구성 |
+| 메일함, 배달, receipt, thread | Orai (`internal/mail`) | AMQ schema 1과 같은 디스크 형식이라 `amq`도 같은 메일함을 읽고 쓴다. AMQ 설치는 필요 없다 |
 | 대화 내용, transcript, 모델 실행 | Codex / Claude | 정확한 세션 ID로 시작·재개 |
 | 역할 조직, 업무 규칙, 승인, 이슈 트래커 정책 | 소비 프로젝트 | `orai.toml`과 역할 지침 경로를 읽어 전달만 함 |
 | 문서 색인·검색, 코드 그래프 | QMD(wiki 엔진) / CodeGraph | 프로젝트별 격리 설정, 상태 진단, 명시적 복구 |
@@ -27,11 +28,11 @@ Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 �
 
 | 개념 | 정의 | 결정 방법 |
 |---|---|---|
-| 설치 위치 | `orai` 패키지가 설치된 곳 | `sys.executable`과 `python -m orai`. 소스 checkout 경로를 추정하지 않는다 |
+| 설치 위치 | `orai` 실행 파일이 있는 곳 | 실행 중인 바이너리 경로(`os.Executable`). 소스 checkout 경로를 추정하지 않는다 |
 | 프로젝트 루트 | `orai.toml`과 로컬 상태를 소유하는 main checkout | `--project` → 없으면 cwd에서 가장 가까운 `orai.toml`. Git worktree 안이면 main worktree에 `orai.toml`이 있을 때 main을 루트로 삼는다 |
 | 역할 worktree | 역할 CLI가 작업하는 디렉터리 | `roles.<name>.worktree` (루트 기준 상대경로. `../repo-dev` 같은 형제 worktree도 가능) |
 
-`orai.toml`이 없는 디렉터리에서는 프로젝트를 추측하지 않고 오류로 끝낸다. 역할이 있는 프로젝트는 루트에 `.amqrc`가 있어야 한다. 이 파일이 없으면 AMQ가 Git 밖에서 전역 `~/.amqrc`를 쓸 수 있고, 그러면 서로 다른 프로젝트가 같은 세션 mailbox를 공유하게 된다. `.amqrc`는 `orai setup`이 AMQ(`amq coop init`)를 통해 만든다. 역할 세션 안에서는 `ORAI_PROJECT`가 신원에 묶여 있으므로 다른 `--project`로 메시지 명령을 실행할 수 없다.
+`orai.toml`이 없는 디렉터리에서는 프로젝트를 추측하지 않고 오류로 끝낸다. 메일함은 항상 `<프로젝트 루트>/.agent-mail/<session>`이며 프로젝트 루트에서만 결정된다. 호출 셸의 `AM_*`·`ORAI_*` 환경변수나 전역 설정이 다른 프로젝트의 메일함을 가리키게 할 수 없다. 역할 세션 안에서는 `ORAI_PROJECT`가 신원에 묶여 있으므로 다른 `--project`로 메시지 명령을 실행할 수 없다.
 
 ## 프로젝트 ID와 이동·복사 정책
 
@@ -42,7 +43,7 @@ Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 �
 
 ## 설정과 로컬 상태
 
-공유 설정(`orai.toml`, 커밋 대상)에는 이식 가능한 사실만 둔다. schema 버전, AMQ 세션 이름, 역할(provider, 상대경로, 선택적 model·effort·branch), 연동 설정이 여기에 해당한다. 모델과 effort는 코어에 기본값이 없다. 값이 없으면 각 provider의 기본값을 쓴다. 모르는 키, 절대경로, 루트를 벗어나는 지침 경로, 예약어 역할명(`init`, `run`, `user` 등 CLI 명령과 사용자 handle)은 거부한다.
+공유 설정(`orai.toml`, 커밋 대상)에는 이식 가능한 사실만 둔다. schema 버전, 메일함 세션 이름, 역할(provider, 상대경로, 선택적 model·effort·branch), 연동 설정이 여기에 해당한다. 모델과 effort는 코어에 기본값이 없다. 값이 없으면 각 provider의 기본값을 쓴다. 모르는 키, 절대경로, 루트를 벗어나는 지침 경로, 예약어 역할명(`setup`, `run`, `msg`, `wiki`, `user` 등 CLI 명령과 사용자 handle)은 거부한다.
 
 로컬 상태(`.orai/`, 0700, 커밋 제외) 구조는 다음과 같다.
 
@@ -53,25 +54,30 @@ Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 �
   roles/<role>.lock         역할당 하나의 실행 (flock; 자식 프로세스에 상속)
   roles/<role>.delivery.json / .channel.json   알림 준비 상태 (run nonce 단위)
   history/                  --fresh로 교체된 이전 상태
-  backups/<stamp>/          init이 수정한 파일의 원본
+  backups/<stamp>/          setup이 수정한 파일의 원본
   wiki/                     이 프로젝트 전용 wiki(QMD) 설정·DB
+.agent-mail/<session>/       프로젝트 메일함 (AMQ schema 1 호환, 0700/0600)
+  meta/config.json          {"agents": [...], "created_utc", "version": 1}
+  agents/<handle>/inbox/{tmp,new,cur}/<id>.md
+  agents/<handle>/outbox/sent/<id>.md, dlq/{tmp,new,cur}/, receipts/<id>__<handle>__drained.json
 ```
 
-모든 상태 파일은 임시 파일에 쓴 뒤 `os.replace`로 원자적으로 교체하고, 권한은 0600으로 만든다.
+모든 상태 파일은 임시 파일에 쓰고 fsync한 뒤 rename으로 원자적으로 교체하며, 권한은 0600으로 만든다. 메시지 배달은 `inbox/tmp`에 쓴 뒤 `link(2)`로 `inbox/new`에 게시하므로 기존 메시지를 덮어쓰지 않는다. 메시지 파일은 `---json` 머리말(schema, id, from, to, thread, subject, created, refs, priority, kind)과 본문으로 되어 있다. 1:1 thread 이름은 `p2p/<작은 handle>__<큰 handle>`이다. 답장은 원본의 thread를 잇고 refs에 원본 ID를 넣으며, question에는 answer, review_request에는 review_response kind를 붙인다. `inbox`(drain)와 `inbox <ID>`(read)는 메시지를 `cur/`로 옮기고 drained receipt를 남긴다. `inbox --peek`와 알림은 목록만 읽는다.
 
 ## 세션 수명주기
 
 ```
 orai run <role>
   ├─ 설정·worktree·branch 검증, 저장 상태 검증(provider·cwd·정확한 transcript)
-  ├─ mail_env: 프로젝트 .amqrc 필수, 호출 셸의 AM_*·AMQ_GLOBAL_ROOT·ORAI_* 제거 → amq env로 base 해석
-  ├─ role lock 획득 → mailbox 준비 → state{nonce, status=starting}
-  ├─ amq coop exec --no-wake --no-init --named=false --root <session root> --me <role> <provider…>
+  ├─ role lock 획득 → 메일함 준비(없는 handle 추가) → state{nonce, status=starting}
+  ├─ provider 직접 실행 (lock fd를 자식에 상속, SIGTERM·SIGHUP은 자식에 전달)
+  │     환경: 호출 셸의 AM_*·AMQ_GLOBAL_ROOT·ORAI_* 제거 후 ORAI_ROLE/PROJECT/SESSION/RUN_NONCE/MAIL_ROOT,
+  │           AMQ 호환을 위한 AM_ROOT/AM_ME/AM_SESSION 설정
   │     provider는 프로세스 인자로만 설정한다(전역 설정 불변)
-  │       - SessionStart hook: python -m orai --project <root> _capture
+  │       - SessionStart hook: <orai 바이너리> --project <root> _capture
   │       - Codex:  resume <UUID> | 새 대화, -c hooks/mcp_servers
   │       - Claude: --session-id <새 UUID> | --resume <UUID>, --settings, --mcp-config(orai 채널 + wiki)
-  ├─ (Codex) notifier 스레드: codex queue --thread <UUID>
+  ├─ (Codex) notifier: 메일함 변경 이벤트(kqueue/inotify) + 2초 보조 주기 → codex queue --thread <UUID>
   └─ 종료: status=stopped, lock 해제
 ```
 
@@ -83,14 +89,14 @@ orai run <role>
 
 ## 알림
 
-알림 문구는 `오라이: 새 메시지\nIDs: <id,…>` 하나로 고정한다. notifier는 `amq list --new --json`만 호출하므로 메시지 소비와 receipt는 역할이 `orai msg inbox <ID>`를 실행할 때만 생긴다. 알림 성공, 큐 적재, 소비, 업무 완료는 모두 다른 상태다.
+알림 문구는 `오라이: 새 메시지\nIDs: <id,…>` 하나로 고정한다. notifier와 채널은 `inbox/new` 목록만 읽으므로 메시지 소비와 receipt는 역할이 `orai msg inbox <ID>`를 실행할 때만 생긴다. 알림 성공, 큐 적재, 소비, 업무 완료는 모두 다른 상태다.
 
 | provider | 경로 | 준비 조건 |
 |---|---|---|
-| Codex | 런처 안의 스레드가 `codex queue --thread <UUID>` 호출 | 같은 nonce로 신원 캡처 완료 |
-| Claude | `python -m orai.providers.claude_channel` (stdio MCP, `claude/channel` capability) | initialize + `channel_ready` 도구 호출. `channel_ready`는 Orai가 제공하는 MCP 도구이며 Claude의 API 이름이 아니다 |
+| Codex | 런처 안의 notifier가 `codex queue --thread <UUID>` 호출 | 같은 nonce로 신원 캡처 완료 |
+| Claude | `orai _channel` (stdio MCP, `claude/channel` capability) | initialize + `channel_ready` 도구 호출. `channel_ready`는 Orai가 제공하는 MCP 도구이며 Claude의 API 이름이 아니다 |
 
-두 경로 모두 연결 중에 이미 알린 ID는 다시 알리지 않는다. 전달이 실패하면 다음 주기에 재시도하고, 재연결하면 남아 있는 ID를 다시 알린다.
+두 경로 모두 새 메시지를 파일 변경 이벤트로 즉시 감지하고, 이벤트를 놓쳐도 2초 보조 주기로 확인한다. 연결 중에 이미 알린 ID는 다시 알리지 않는다. 전달이 실패하면 다음 주기에 재시도하고, 재연결하면 남아 있는 ID를 다시 알린다.
 
 ## 탐색 도구 연동
 
@@ -116,20 +122,24 @@ orai run <role>
 
 wiki 진단은 원인별로 나눈다. 연결 거부, 샌드박스 접근 거부, 다른 프로젝트 서버, MCP handshake 실패, 빈 색인, embedding 미완료, vector 검색 실패, lex+vec·본문 조회 실패가 각각 다른 항목으로 보고된다. 기본 doctor는 모델을 불러오지 않으므로 의미 검색 항목을 not-checked로 표시한다. not-checked는 검증했다는 뜻이 아니지만, 문제로 세지도 않는다. 의미 검색까지 확인하려면 `--deep`을 쓴다. 한 환경(예: 샌드박스 밖)에서 성공했다고 다른 환경에서도 성공했다고 확대하지 않는다.
 
-종료 코드: 0 healthy / 1 degraded(또는 코어가 not-configured) / 2 사용법·설정 오류 / 3 코어 blocked. 메시지 명령은 AMQ의 종료 코드와 진단 출력을 그대로 전달한다.
+종료 코드: 0 healthy / 1 degraded(또는 코어가 not-configured) / 2 사용법·설정 오류 / 3 코어 blocked. 메시지 명령은 성공 0, 실패 1, 사용법 오류 2다.
 
 ## 모듈 지도
 
-| 모듈 | 책임 |
+| 패키지 | 책임 |
 |---|---|
-| `cli.py` | 인자 파싱, `orai <role>` 별칭, 출력, 종료 코드 |
-| `project.py` | 프로젝트 루트·worktree 해석, ID, 이동·복사 감지 |
-| `config.py` | `orai.toml` schema 검증 |
-| `state.py` | 원자적 저장, 역할 lock, 이전 상태 이력 |
-| `mail.py` | AMQ 환경·신원, 메시지 액션 |
-| `runtime.py` | 실행·캡처·재개 검증, status, 프로젝트 진단 |
-| `providers/` | Codex·Claude 인자, Codex queue notifier, Claude MCP channel |
-| `integrations/` | wiki 엔진(QMD) 수명주기·진단, CodeGraph 진단, 역할별 MCP 주입 |
-| `doctor.py` | 진단 상태 모델, 도구 capability·로그인 검사 |
-| `scaffold.py`, `templates/` | `orai setup`의 파일 계획·적용과 배포 템플릿 |
-| `bootstrap.py` | `orai setup` 전체 흐름: 파일 → wiki → 코드 그래프 → 진단 |
+| `cmd/orai` | 진입점 (빌드한 바이너리의 종단 테스트 포함) |
+| `internal/cli` | 인자 파싱, `orai <role>` 별칭, 출력, 종료 코드 |
+| `internal/project` | 프로젝트 루트·worktree 해석, ID, 이동·복사 감지, setup 대상 |
+| `internal/config` | `orai.toml` schema 검증 |
+| `internal/state` | 원자적 저장, 역할 lock, 이전 상태 이력 |
+| `internal/mail` | AMQ 호환 메일함: 전송·답장·목록·수신·읽기, 변경 감시 |
+| `internal/runtime` | 실행·캡처·재개 검증, status, 프로젝트 진단 |
+| `internal/providers` | Codex·Claude 인자, Codex queue notifier |
+| `internal/channel` | Claude MCP 채널 (`orai _channel`) |
+| `internal/wiki` | wiki 엔진(QMD) 수명주기·진단, 역할별 MCP 주입 |
+| `internal/codegraph` | CodeGraph 진단과 setup 단계 |
+| `internal/doctor` | 진단 상태 모델, 도구 capability·로그인 검사 |
+| `internal/scaffold` | `orai setup`의 파일 계획·적용, 내장 템플릿(`go:embed`) |
+| `internal/setup` | `orai setup` 전체 흐름: 파일 → wiki → 코드 그래프 → 진단 |
+| `internal/version` | 버전 (릴리스 빌드 시 `-ldflags`로 주입) |
