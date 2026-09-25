@@ -1,0 +1,21 @@
+# Orai project declaration — commit this file.
+# Preset: pm-staff. Two resident roles as an example; rename, add or remove roles freely.
+schema = 1
+session = "orai"
+
+[roles.pm]
+provider = "codex"
+worktree = "."
+guide = ".agents/roles/pm.md"
+# model = "..."             # choose per project; Orai has no built-in model defaults
+# effort = "..."
+
+[roles.staff]
+provider = "claude"
+worktree = ".worktrees/staff"   # create with: git worktree add .worktrees/staff
+guide = ".agents/roles/staff.md"
+
+[integrations.wiki]
+collections = { docs = "docs" }
+
+[integrations.codegraph]

@@ -1,0 +1,25 @@
+# Orai project declaration — commit this file.
+# Local state (sessions, locks, QMD index) lives in .orai/ and is never shared.
+schema = 1
+session = "orai"            # AMQ session name under this project's mail base
+
+# Declare roles as needed. Any name/count works; the provider decides the delivery path.
+# [roles.lead]
+# provider = "codex"        # codex | claude
+# worktree = "."            # relative to this file; sibling worktrees like "../repo-lead" also work
+# guide = ".agents/roles/lead.md"
+# model = "..."             # optional; the provider's default otherwise
+# effort = "..."            # optional
+# branch = "trunk"          # optional; refuse to start on another branch
+
+# Development preset: project wiki (docs search) and code graph. Remove a table to opt out.
+[integrations.wiki]
+collections = { docs = "docs" }   # engine = "qmd" (default)
+# port = 18181              # optional; default is derived from the project path
+# [integrations.wiki.smoke]  # a fact only your docs contain; proves search serves this project
+# lex = "unique term"
+# vec = "a question answered by that document"
+# expect = "docs/architecture.md"
+
+[integrations.codegraph]
+# smoke_symbol = "main"     # a symbol `orai doctor --deep` must find

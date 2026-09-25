@@ -1,0 +1,16 @@
+# Orai's own development project: docs search and code graph only.
+# Resident roles are exercised in a separate pilot project (docs/operations.md), not here.
+schema = 1
+name = "orai"
+session = "orai"
+
+[integrations.wiki]
+collections = { docs = "docs" }
+
+[integrations.wiki.smoke]
+lex = "nonce"
+vec = "이전 실행이 남긴 낡은 hook이 세션 신원을 덮어쓰지 못하게 막는 방법"
+expect = "docs/architecture.md"
+
+[integrations.codegraph]
+smoke_symbol = "validate_saved"
