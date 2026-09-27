@@ -1,7 +1,7 @@
 # Orai project declaration — commit this file.
 # Local state (sessions, locks, QMD index) lives in .orai/ and is never shared.
 schema = 1
-session = "orai"            # AMQ session name under this project's mail base
+session = "orai"            # mailbox name: .agent-mail/<session>/
 
 # Declare roles as needed. Any name/count works; the provider decides the delivery path.
 # [roles.lead]

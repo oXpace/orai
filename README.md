@@ -12,6 +12,19 @@ Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**
 
 대화는 각 provider가, 역할 조직과 업무 규칙은 각 프로젝트가 소유한다. Orai는 이 책임들을 다시 구현하지 않는다.
 
+### AMQ와의 관계
+
+0.1.0은 [AMQ](https://github.com/avivsinai/agent-message-queue)의 `amq coop`으로 메일함을 만들고 역할을 실행했다. 0.2.0부터는 AMQ를 실행하지 않는다.
+
+| 0.1.0 (AMQ 사용) | 0.2.0~ (내장) |
+|---|---|
+| `amq coop init`: `.amqrc`, 메일함 생성 | `orai setup`이 메일함 생성 |
+| `amq coop exec`: 역할 신원 설정, provider 실행 | `orai run`이 신원·잠금·환경을 정하고 provider 실행 |
+| `amq send`·`drain`·`reply` | `orai msg send`·`inbox`·`reply` |
+| 2초 주기로 `amq` 호출해 새 메시지 확인 | 파일 변경 이벤트로 즉시 감지 |
+
+메일함 디스크 형식(AMQ schema 1)만 그대로 유지한다. 그래서 AMQ로 쌓인 기존 메일함을 그대로 이어 쓰고, AMQ를 설치했다면 `amq`로 같은 메일함을 읽고 보낼 수 있다. 이 호환성은 CI에서 실제 `amq`와의 양방향 테스트로 확인한다.
+
 ## 빠른 시작
 
 Orai는 프로젝트마다 설치하고 버전을 고정한다([운영 안내](docs/operations.md#설치)).
