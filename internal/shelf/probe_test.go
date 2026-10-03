@@ -1,7 +1,7 @@
 // Covers reachability, probe, smoke-result formatting, and MCPServers. Every QMD MCP
 // call goes through a fake mcpClient; no test binds or connects to a real QMD server or
 // port 8181.
-package wiki
+package shelf
 
 import (
 	"net"
@@ -100,14 +100,14 @@ func TestProbeMcpHandshakeFailureBlocksMcp(t *testing.T) {
 
 	checks := probe(s, false)
 	by := byComponent(checks)
-	if by["wiki.server"].Status != doctor.Healthy {
-		t.Fatalf("wiki.server status = %q, want healthy", by["wiki.server"].Status)
+	if by["shelf.server"].Status != doctor.Healthy {
+		t.Fatalf("shelf.server status = %q, want healthy", by["shelf.server"].Status)
 	}
-	if by["wiki.mcp"].Status != doctor.Blocked {
-		t.Fatalf("wiki.mcp status = %q, want blocked", by["wiki.mcp"].Status)
+	if by["shelf.mcp"].Status != doctor.Blocked {
+		t.Fatalf("shelf.mcp status = %q, want blocked", by["shelf.mcp"].Status)
 	}
-	if !strings.Contains(strings.ToLower(by["wiki.mcp"].Reason), "handshake") {
-		t.Fatalf("wiki.mcp reason = %q, want mention of handshake", by["wiki.mcp"].Reason)
+	if !strings.Contains(strings.ToLower(by["shelf.mcp"].Reason), "handshake") {
+		t.Fatalf("shelf.mcp reason = %q, want mention of handshake", by["shelf.mcp"].Reason)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestProbeIdentityMismatchBlocksAndStopsFurtherChecks(t *testing.T) {
 	for _, c := range checks {
 		components = append(components, c.Component)
 	}
-	want := []string{"wiki.server", "wiki.mcp", "wiki.identity"}
+	want := []string{"shelf.server", "shelf.mcp", "shelf.identity"}
 	if len(components) != len(want) {
 		t.Fatalf("components = %v, want %v", components, want)
 	}
@@ -149,8 +149,8 @@ func TestProbeEmptyIndexIsNotReady(t *testing.T) {
 
 	checks := probe(s, false)
 	last := checks[len(checks)-1]
-	if last.Component != "wiki.index" {
-		t.Fatalf("component = %q, want wiki.index", last.Component)
+	if last.Component != "shelf.index" {
+		t.Fatalf("component = %q, want shelf.index", last.Component)
 	}
 	if last.Status != doctor.NotReady {
 		t.Fatalf("status = %q, want not-ready", last.Status)
@@ -164,8 +164,8 @@ func TestProbeNeedsEmbeddingIsDegraded(t *testing.T) {
 
 	checks := probe(s, false)
 	last := checks[len(checks)-1]
-	if last.Component != "wiki.index" {
-		t.Fatalf("component = %q, want wiki.index", last.Component)
+	if last.Component != "shelf.index" {
+		t.Fatalf("component = %q, want shelf.index", last.Component)
 	}
 	if last.Status != doctor.Degraded {
 		t.Fatalf("status = %q, want degraded", last.Status)
@@ -182,8 +182,8 @@ func TestProbeHealthyIndexNotDeepMarksSearchNotChecked(t *testing.T) {
 
 	checks := probe(s, false)
 	last := checks[len(checks)-1]
-	if last.Component != "wiki.search" {
-		t.Fatalf("component = %q, want wiki.search", last.Component)
+	if last.Component != "shelf.search" {
+		t.Fatalf("component = %q, want shelf.search", last.Component)
 	}
 	if last.Status != doctor.NotChecked {
 		t.Fatalf("status = %q, want not-checked", last.Status)
@@ -212,8 +212,8 @@ func TestProbeDeepVectorFailureBlocksVectorAndLexicalSuccessCannotMaskIt(t *test
 
 	checks := probe(s, true)
 	last := checks[len(checks)-1]
-	if last.Component != "wiki.vector" {
-		t.Fatalf("component = %q, want wiki.vector", last.Component)
+	if last.Component != "shelf.vector" {
+		t.Fatalf("component = %q, want shelf.vector", last.Component)
 	}
 	if last.Status != doctor.Blocked {
 		t.Fatalf("status = %q, want blocked", last.Status)
@@ -276,7 +276,7 @@ func TestProbeDeepVectorOkButMissesSmokeDocumentIsDegraded(t *testing.T) {
 	checks := probe(s, true)
 	var vector doctor.Check
 	for _, c := range checks {
-		if c.Component == "wiki.vector" {
+		if c.Component == "shelf.vector" {
 			vector = c
 		}
 	}
@@ -327,7 +327,7 @@ func TestProbeDeepGetReturningEmptyTextIsDegraded(t *testing.T) {
 	checks := probe(s, true)
 	var hybrid doctor.Check
 	for _, c := range checks {
-		if c.Component == "wiki.hybrid" {
+		if c.Component == "shelf.hybrid" {
 			hybrid = c
 		}
 	}
@@ -361,12 +361,44 @@ func TestSmokeHitMatchesRealQMDResultFormats(t *testing.T) {
 		checks := probe(s, true)
 		var vector doctor.Check
 		for _, c := range checks {
-			if c.Component == "wiki.vector" {
+			if c.Component == "shelf.vector" {
 				vector = c
 			}
 		}
 		if vector.Status != doctor.Healthy {
 			t.Fatalf("returned=%q: status = %q, want healthy", returned, vector.Status)
 		}
+	}
+}
+
+// The index should hold what orai.toml declares. A collection left over from an earlier
+// declaration keeps answering searches, so doctor names it and the command that drops it.
+func TestProbeNamesCollectionsTheIndexStillHasButOraiTomlDroppedAndOverlaps(t *testing.T) {
+	withOpenPort(t)
+	s := qmdSettings(t, false, 19222)
+	setClient(t, &fakeClient{status: func() map[string]any {
+		result := statusResult(s, 5, true, 0)
+		content := result["structuredContent"].(map[string]any)
+		content["collections"] = append(content["collections"].([]any), map[string]any{"name": "old-notes", "path": "/elsewhere"})
+		return result
+	}})
+	check, ok := byComponent(probe(s, false))["shelf.collections"]
+	if !ok || check.Status != doctor.Degraded || !strings.Contains(check.Reason, "old-notes") ||
+		!strings.Contains(check.NextAction, "orai shelf stop && orai shelf refresh") {
+		t.Fatalf("leftover collection: %+v", check)
+	}
+
+	// Two declared collections over the same documents are named too.
+	s.Collections["adr"], s.Patterns["adr"] = s.Collections["docs"]+"/adr", "**/*.md"
+	setClient(t, &fakeClient{status: func() map[string]any { return statusResult(s, 5, true, 0) }})
+	check = byComponent(probe(s, false))["shelf.collections"]
+	if check.Status != doctor.Degraded || !strings.Contains(check.Reason, "docs and adr") || !strings.Contains(check.NextAction, `pattern = "*.md"`) {
+		t.Fatalf("overlapping collections: %+v", check)
+	}
+
+	// Declared once each: no such check at all.
+	s.Patterns["docs"] = "*.md"
+	if _, present := byComponent(probe(s, false))["shelf.collections"]; present {
+		t.Fatal("a clean declaration is reported as a problem")
 	}
 }

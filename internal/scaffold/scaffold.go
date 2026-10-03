@@ -628,9 +628,9 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 		}
 	}
 
-	if cfg != nil && cfg.Wiki != nil {
+	if cfg != nil && cfg.Shelf != nil {
 		folderSet := map[string]bool{}
-		for _, folder := range cfg.Wiki.Collections {
+		for _, folder := range cfg.Shelf.Collections {
 			folderSet[folder] = true
 		}
 		folders := make([]string, 0, len(folderSet))
@@ -642,7 +642,7 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 			if _, err := os.Stat(filepath.Join(root, folder)); err != nil {
 				if p, ok := regular(folder + "/README.md"); ok {
 					actions = append(actions, Action{
-						Description: fmt.Sprintf("Create %s/README.md (wiki starter page)", folder),
+						Description: fmt.Sprintf("Create %s/README.md (shelf starter page)", folder),
 						Path:        p,
 						Data:        []byte(Template("docs-readme.md")),
 						Mode:        0o644,

@@ -1,7 +1,7 @@
 // Covers setup.Run's top-level orchestration (plan/apply and reporting) using injected
-// step functions, so it does not need internal/cli or a real wiki/codegraph tool. The
-// wiki-step/codegraph-step tests themselves belong with the packages that own those
-// real steps (internal/wiki and internal/codegraph). Tool steps and diagnosis are
+// step functions, so it does not need internal/cli or a real shelf/codegraph tool. The
+// shelf-step/codegraph-step tests themselves belong with the packages that own those
+// real steps (internal/shelf and internal/codegraph). Tool steps and diagnosis are
 // exercised with fakes.
 package setup_test
 
@@ -49,7 +49,7 @@ func git(t *testing.T, dir string, args ...string) string {
 // tests that only care about the file-plan/tool-step behavior.
 func noDiagnose(*project.Project) []doctor.Check { return nil }
 
-// noSteps replaces wiki/codegraph in tests that don't exercise a real tool.
+// noSteps replaces shelf/codegraph in tests that don't exercise a real tool.
 var noSteps []func(*project.Project) string
 
 func TestEmptyFolderBecomesATrunkRepositoryWithNoTools(t *testing.T) {
@@ -82,7 +82,7 @@ func TestEmptyFolderBecomesATrunkRepositoryWithNoTools(t *testing.T) {
 	if !strings.Contains(text, "does not pin Orai") || !strings.Contains(text, scaffold.InstallSpec) {
 		t.Fatalf("output missing the Orai-pin note:\n%s", text)
 	}
-	if !strings.Contains(text, "wiki, codegraph: skipped (--no-tools)") {
+	if !strings.Contains(text, "shelf, codegraph: skipped (--no-tools)") {
 		t.Fatalf("output missing the --no-tools line:\n%s", text)
 	}
 	if !strings.Contains(text, "Diagnosis:") {
@@ -185,7 +185,7 @@ func TestCliInitTwicePrintsAlreadyCurrent(t *testing.T) {
 func TestAFailedToolStepMakesSetupExitNonzero(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
 	steps := []func(*project.Project) string{
-		func(*project.Project) string { return "wiki: init failed: boom" },
+		func(*project.Project) string { return "shelf: init failed: boom" },
 		func(*project.Project) string { return "codegraph: indexed" },
 	}
 	var out bytes.Buffer
@@ -193,7 +193,7 @@ func TestAFailedToolStepMakesSetupExitNonzero(t *testing.T) {
 	if rc != 1 {
 		t.Fatalf("Run() = %d, want 1; output:\n%s", rc, out.String())
 	}
-	if !strings.Contains(out.String(), "wiki: init failed: boom") {
+	if !strings.Contains(out.String(), "shelf: init failed: boom") {
 		t.Fatalf("output missing the failed step line:\n%s", out.String())
 	}
 }
@@ -204,7 +204,7 @@ func TestToolsDisabledSkipsStepsEntirely(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
 	called := false
 	steps := []func(*project.Project) string{
-		func(*project.Project) string { called = true; return "wiki: init failed: boom" },
+		func(*project.Project) string { called = true; return "shelf: init failed: boom" },
 	}
 	var out bytes.Buffer
 	rc, _ := setup.Run(root, scaffold.Options{}, false, false, &out, steps, noDiagnose)
@@ -214,7 +214,7 @@ func TestToolsDisabledSkipsStepsEntirely(t *testing.T) {
 	if called {
 		t.Fatal("step was called despite tools=false")
 	}
-	if !strings.Contains(out.String(), "wiki, codegraph: skipped (--no-tools)") {
+	if !strings.Contains(out.String(), "shelf, codegraph: skipped (--no-tools)") {
 		t.Fatalf("output missing the skip line:\n%s", out.String())
 	}
 }

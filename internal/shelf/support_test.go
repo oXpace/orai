@@ -2,7 +2,7 @@
 // goes through the runCommand/lookPath/reachability/newClient/probe/verify/
 // ownServerRunning package vars, so no test binds or connects to a real port, spawns a
 // real qmd, or talks to a real QMD server.
-package wiki
+package shelf
 
 import (
 	"fmt"
@@ -31,11 +31,11 @@ func writeProject(t *testing.T, root, text string) *project.Project {
 	return p
 }
 
-// makeQMDProject creates a project with [integrations.wiki] (an explicit port when
+// makeQMDProject creates a project with [integrations.shelf] (an explicit port when
 // != 0) and an empty docs/ folder.
 func makeQMDProject(t *testing.T, root string, port int) *project.Project {
 	t.Helper()
-	text := "schema = 1\nsession = \"orai\"\n\n[integrations.wiki]\n"
+	text := "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\n"
 	if port != 0 {
 		text += fmt.Sprintf("port = %d\n", port)
 	}
@@ -46,13 +46,13 @@ func makeQMDProject(t *testing.T, root string, port int) *project.Project {
 	return p
 }
 
-// qmdSettings builds a project's wiki Settings for the given port, optionally with a
-// [integrations.wiki.smoke] block when smoke is true.
+// qmdSettings builds a project's shelf Settings for the given port, optionally with a
+// [integrations.shelf.smoke] block when smoke is true.
 func qmdSettings(t *testing.T, smoke bool, port int) *Settings {
 	t.Helper()
-	text := fmt.Sprintf("schema = 1\nsession = \"orai\"\n\n[integrations.wiki]\nport = %d\n", port)
+	text := fmt.Sprintf("schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\nport = %d\n", port)
 	if smoke {
-		text += "\n[integrations.wiki.smoke]\nlex = \"overview\"\nvec = \"architecture\"\nexpect = \"docs/found.md\"\n"
+		text += "\n[integrations.shelf.smoke]\nlex = \"overview\"\nvec = \"architecture\"\nexpect = \"docs/found.md\"\n"
 	}
 	p := writeProject(t, filepath.Join(t.TempDir(), "proj"), text)
 	return NewSettings(p)
@@ -100,9 +100,16 @@ func installSuccessMocks(t *testing.T, running bool, verifyErr error, binary str
 	calls := &[][]string{}
 	runCommand = func(_ io.Writer, argv []string, s *Settings, capture bool) (string, error) {
 		*calls = append(*calls, append([]string(nil), argv...))
+		if capture && argv[len(argv)-1] == "list" {
+			listed := "Collections:\n\n"
+			for _, name := range s.collectionNames() {
+				listed += fmt.Sprintf("%s (qmd://%s/)\n  Pattern:  %s\n\n", name, name, s.Patterns[name])
+			}
+			return listed, nil
+		}
 		if capture {
 			name := argv[len(argv)-1]
-			return fmt.Sprintf("Path: %s\n", s.Collections[name]), nil
+			return fmt.Sprintf("Collection: %s\n  Path:     %s\n  Pattern:  %s\n", name, s.Collections[name], s.Patterns[name]), nil
 		}
 		return "", nil
 	}

@@ -19,7 +19,7 @@ import (
 const (
 	sid      = "ed936671-e8a5-4d6d-a38f-c5bcc152ab10"
 	otherSID = "741e3b28-1050-49ce-93d9-847ecf8334c3"
-	twoRoles = `schema = 1
+	twoRoles = `schema = 2
 session = "orai"
 
 [roles.lead]
@@ -142,7 +142,7 @@ func index(args []string, value string) int {
 
 func TestModelAndEffortAreOptional(t *testing.T) {
 	clearOraiEnv(t)
-	p := writeProject(t, t.TempDir(), "schema = 1\n[roles.a]\nprovider = \"codex\"\n[roles.b]\nprovider = \"claude\"\n")
+	p := writeProject(t, t.TempDir(), "schema = 2\n[roles.a]\nprovider = \"codex\"\n[roles.b]\nprovider = \"claude\"\n")
 	for _, role := range p.Config.Roles {
 		args, _ := ProviderArgs(p, role, "")
 		for _, a := range args {
@@ -202,17 +202,17 @@ func TestInjectedMCPServersReachBothProviders(t *testing.T) {
 	defer func() { MCPServers = saved }()
 	MCPServers = func(_ *project.Project, provider string) map[string]map[string]any {
 		if provider == "codex" {
-			return map[string]map[string]any{"wiki-x": {"url": "http://127.0.0.1:18555/mcp"}}
+			return map[string]map[string]any{"shelf-x": {"url": "http://127.0.0.1:18555/mcp"}}
 		}
-		return map[string]map[string]any{"wiki-x": {"type": "http", "url": "http://127.0.0.1:18555/mcp"}}
+		return map[string]map[string]any{"shelf-x": {"type": "http", "url": "http://127.0.0.1:18555/mcp"}}
 	}
 	codex, _ := ProviderArgs(f.p, f.p.Config.Roles["lead"], "")
-	if index(codex, `mcp_servers.wiki-x={"url" = "http://127.0.0.1:18555/mcp"}`) < 0 {
+	if index(codex, `mcp_servers.shelf-x={"url" = "http://127.0.0.1:18555/mcp"}`) < 0 {
 		t.Fatalf("codex args %v", codex)
 	}
 	claude, _ := ProviderArgs(f.p, f.p.Config.Roles["dev"], "")
-	if !strings.Contains(claude[index(claude, "--mcp-config")+1], `"wiki-x":{"type":"http"`) {
-		t.Fatal("claude mcp-config lacks the wiki")
+	if !strings.Contains(claude[index(claude, "--mcp-config")+1], `"shelf-x":{"type":"http"`) {
+		t.Fatal("claude mcp-config lacks the shelf")
 	}
 }
 
@@ -595,7 +595,7 @@ func TestDiagnoseReportsRolesMailAndMissingWorktree(t *testing.T) {
 		!strings.Contains(byName["role.dev"], "git worktree add .worktrees/dev") {
 		t.Fatalf("checks %v", byName)
 	}
-	noRoles := writeProject(t, t.TempDir(), "schema = 1\n")
+	noRoles := writeProject(t, t.TempDir(), "schema = 2\n")
 	if got := Diagnose(noRoles); got[1].Status != "not-configured" {
 		t.Fatalf("mail without roles: %+v", got[1])
 	}

@@ -1,4 +1,4 @@
-package wiki
+package shelf
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -224,6 +225,23 @@ func identity(status map[string]any, s *Settings) string {
 	return ""
 }
 
+// undeclared lists collections the server still indexes that orai.toml no longer
+// declares. Their documents keep showing up in searches until the index is refreshed.
+func undeclared(status map[string]any, s *Settings) []string {
+	var names []string
+	if list, ok := status["collections"].([]any); ok {
+		for _, item := range list {
+			row, _ := item.(map[string]any)
+			name, _ := row["name"].(string)
+			if _, declared := s.Collections[name]; name != "" && !declared {
+				names = append(names, name)
+			}
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
 // textOf concatenates the text of every content item in an MCP tool result (a `get`
 // call's document body, or its resource's text).
 func textOf(result map[string]any) string {
@@ -251,18 +269,26 @@ func documentKey(file string) string {
 // expectedURI is the "<collection>/<path>" of the smoke fixture's expected document.
 func expectedURI(s *Settings) string {
 	target := resolvePath(filepath.Join(s.Project.Root, s.Smoke.Expect))
+	// The deepest folder wins: with `core = docs (*.md)` and `adr = docs/adr`, a document
+	// under docs/adr belongs to adr, not to the folder that merely contains it.
+	best, bestFolder := "", ""
 	for _, name := range s.collectionNames() {
 		folder := s.Collections[name]
 		rel, err := filepath.Rel(folder, target)
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			continue
 		}
-		if rel == "." {
-			return name
+		if len(folder) <= len(bestFolder) {
+			continue
 		}
-		return name + "/" + filepath.ToSlash(rel)
+		bestFolder = folder
+		if rel == "." {
+			best = name
+		} else {
+			best = name + "/" + filepath.ToSlash(rel)
+		}
 	}
-	return ""
+	return best
 }
 
 // truthy reports whether a JSON-ish value from a QMD status/result should be treated

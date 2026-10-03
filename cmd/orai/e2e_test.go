@@ -88,7 +88,7 @@ func TestSetupTwiceIsANoOpWithEmbeddedTemplates(t *testing.T) {
 func TestHelpForACommandChangesNothing(t *testing.T) {
 	project := filepath.Join(t.TempDir(), "app")
 	_ = os.Mkdir(project, 0o755)
-	for _, argv := range [][]string{{"setup", "--help"}, {"setup", "-h"}, {"doctor", "--help"}, {"wiki", "--help"},
+	for _, argv := range [][]string{{"setup", "--help"}, {"setup", "-h"}, {"doctor", "--help"}, {"shelf", "--help"},
 		{"msg", "--help"}, {"msg", "send", "--help"}, {"run", "--help"}, {"status", "--help"}} {
 		out, errOut, code := orai(t, project, "", "", argv...)
 		if code != 0 || !strings.HasPrefix(out, "usage: orai "+argv[0]) {
@@ -216,5 +216,39 @@ func TestChannelStartsAndStopsOnEOF(t *testing.T) {
 	data, _ := os.ReadFile(filepath.Join(dir, "staff.channel.json"))
 	if !strings.Contains(string(data), `"ready": false`) {
 		t.Fatalf("state %s", data)
+	}
+}
+
+// A project set up by 0.3 keeps working after the binary is upgraded: its schema 1
+// orai.toml is read as written, doctor names the two-line edit, and the old command
+// name points at the new one.
+func TestProjectFromZeroThreeKeepsWorkingAndIsToldWhatToEdit(t *testing.T) {
+	project := filepath.Join(t.TempDir(), "app")
+	_ = os.Mkdir(project, 0o755)
+	orai(t, project, "", "", "setup", "--role", "lead=codex", "--no-tools")
+	file := filepath.Join(project, "orai.toml")
+	data, _ := os.ReadFile(file)
+	old := strings.NewReplacer("schema = 2", "schema = 1", "[integrations.shelf]", "[integrations.wiki]").Replace(string(data))
+	if old == string(data) || !strings.Contains(old, "[integrations.wiki]") {
+		t.Fatalf("fixture was not rewritten:\n%s", data)
+	}
+	if err := os.WriteFile(file, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, _ := orai(t, project, "", "", "doctor")
+	for _, want := range []string{"! project", "uses schema 1", "set `schema = 2` and rename `[integrations.wiki]` to `[integrations.shelf]`", "shelf"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("doctor output lacks %q:\n%s%s", want, out, errOut)
+		}
+	}
+	if status, _, code := orai(t, project, "", "", "status"); code != 0 || !strings.Contains(status, `"role": "lead"`) {
+		t.Fatalf("status with a schema 1 file: %d %s", code, status)
+	}
+	if _, errOut, code := orai(t, project, "", "", "wiki", "refresh"); code != 2 || !strings.Contains(errOut, "`wiki` moved; use `orai shelf`") {
+		t.Fatalf("old command name: %d %s", code, errOut)
+	}
+	after, _ := os.ReadFile(file)
+	if string(after) != old {
+		t.Fatal("orai.toml was rewritten")
 	}
 }

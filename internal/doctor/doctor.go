@@ -38,7 +38,7 @@ const DocsURL = "https://github.com/oXpace/orai/blob/trunk/docs"
 const (
 	InstallCodex     = "Install Codex CLI: `npm install -g @openai/codex` (or `brew install --cask codex`), then `codex login`"
 	InstallClaude    = "Install Claude Code: `curl -fsSL https://claude.ai/install.sh | bash` (or `npm install -g @anthropic-ai/claude-code`), then `claude auth login`"
-	InstallQMD       = "Install QMD: `npm install -g @tobilu/qmd` (needs Node 22+), then `orai setup`. Or remove [integrations.wiki] from orai.toml to opt out"
+	InstallQMD       = "Install QMD: `npm install -g @tobilu/qmd` (needs Node 22+), then `orai setup`. Or remove [integrations.shelf] from orai.toml to opt out"
 	InstallCodegraph = "Install CodeGraph: `npm install -g @colbymchenry/codegraph`, then `orai setup`. Or remove [integrations.codegraph] from orai.toml to opt out"
 	// CannotRun is the next step when a tool is installed but fails to start. The usual
 	// cause in a fresh shell: an npm-installed tool whose `node` is not on PATH.

@@ -1,4 +1,4 @@
-package wiki
+package shelf
 
 import (
 	"fmt"
@@ -15,15 +15,15 @@ import (
 // `orai setup` never runs a real qmd during a test.
 var lifecycleCall = Lifecycle
 
-// SetupStep is `orai setup`'s wiki step: bring the project wiki up once Markdown
+// SetupStep is `orai setup`'s shelf step: bring the project shelf up once Markdown
 // documents exist, skipping (never failing the whole setup) when the engine is not
 // installed or there is nothing to index yet.
 func SetupStep(p *project.Project, out io.Writer) string {
-	if p.Config.Wiki == nil {
-		return "wiki: not configured"
+	if p.Config.Shelf == nil {
+		return "shelf: not configured"
 	}
 	if _, err := lookPath("qmd"); err != nil {
-		return "wiki: skipped (the wiki engine QMD is not installed; `orai wiki --help` shows how to add it)"
+		return "shelf: skipped (the shelf engine QMD is not installed; `orai shelf --help` shows how to add it)"
 	}
 	s := NewSettings(p)
 	found := false
@@ -35,16 +35,16 @@ func SetupStep(p *project.Project, out io.Writer) string {
 		}
 	}
 	if !found {
-		return "wiki: skipped (no Markdown documents in " + strings.Join(s.collectionNames(), ", ") + " yet; add some, then `orai wiki init`)"
+		return "shelf: skipped (no Markdown documents in " + strings.Join(s.collectionNames(), ", ") + " yet; add some, then `orai shelf init`)"
 	}
 	action := "init"
-	if exists(s.ConfigFile) && exists(s.DB) {
+	if (exists(s.ConfigFile) && exists(s.DB)) || s.legacyOnly() {
 		action = "recover"
 	}
 	if err := lifecycleCall(p, action, out); err != nil {
-		return fmt.Sprintf("wiki: %s failed: %v", action, err)
+		return fmt.Sprintf("shelf: %s failed: %v", action, err)
 	}
-	return fmt.Sprintf("wiki: ready (%s)", action)
+	return fmt.Sprintf("shelf: ready (%s)", action)
 }
 
 // hasMarkdown reports whether folder contains a *.md file at any depth. Matches
@@ -65,12 +65,12 @@ func hasMarkdown(folder string) bool {
 }
 
 // MCPServers returns the per-process MCP entries injected at role launch for provider
-// (codex or claude); empty when the wiki is not configured. Global CLI config is left
+// (codex or claude); empty when the shelf is not configured. Global CLI config is left
 // alone; CodeGraph registration stays the user's own choice
 // (`codegraph install --location local`) and is never injected here.
 func MCPServers(p *project.Project, provider string) map[string]map[string]any {
 	servers := map[string]map[string]any{}
-	if p.Config.Wiki == nil {
+	if p.Config.Shelf == nil {
 		return servers
 	}
 	s := NewSettings(p)

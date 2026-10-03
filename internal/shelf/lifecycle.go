@@ -1,4 +1,4 @@
-package wiki
+package shelf
 
 import (
 	"bytes"
@@ -58,7 +58,7 @@ var ownServerRunning = func(s *Settings) (bool, error) {
 		return false, err
 	}
 	if mismatch := identity(status, s); mismatch != "" {
-		return false, fmt.Errorf("port %d serves another index (%s). Left untouched; set integrations.wiki.port.",
+		return false, fmt.Errorf("port %d serves another index (%s). Left untouched; set integrations.shelf.port.",
 			s.Port, mismatch)
 	}
 	return true, nil
@@ -69,15 +69,15 @@ var ownServerRunning = func(s *Settings) (bool, error) {
 // our own server is running, and a port already serving a different index is left
 // untouched.
 func Lifecycle(p *project.Project, action string, out io.Writer) error {
-	if p.Config.Wiki == nil {
-		return errors.New("Wiki is not configured: add [integrations.wiki] to orai.toml (`orai wiki --help` lists the settings)")
+	if p.Config.Shelf == nil {
+		return errors.New("Shelf is not configured: add [integrations.shelf] to orai.toml (`orai shelf --help` lists the settings)")
 	}
 	s := NewSettings(p)
 	for _, name := range s.collectionNames() {
 		path := s.Collections[name]
 		info, err := os.Stat(path)
 		if err != nil || !info.IsDir() {
-			return fmt.Errorf("collection '%s' folder is missing: %s. Create it or fix integrations.wiki.collections in orai.toml", name, path)
+			return fmt.Errorf("collection '%s' folder is missing: %s. Create it or fix integrations.shelf.collections in orai.toml", name, path)
 		}
 	}
 	if action == "check" {
@@ -85,15 +85,21 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 		// that was never initialized should hear that, though, not "connection refused".
 		if !exists(s.ConfigFile) || !exists(s.DB) {
 			if _, err := lookPath("qmd"); err != nil {
-				return errors.New("The wiki is not set up yet and its engine QMD is not installed. " + InstallHint)
+				return errors.New("The shelf is not set up yet and its engine QMD is not installed. " + InstallHint)
 			}
-			return errors.New("The wiki is not set up yet. Run `orai wiki init`.")
+			if s.legacyOnly() {
+				return errors.New("The index is still where Orai 0.3 kept it (.orai/wiki). Run `orai shelf recover` to move it to .orai/shelf.")
+			}
+			return errors.New("The shelf is not set up yet. Run `orai shelf init`.")
 		}
 		return verify(s, out)
 	}
 	qmd, err := lookPath("qmd")
 	if err != nil {
-		return errors.New("The wiki engine QMD is not installed. " + InstallHint)
+		return errors.New("The shelf engine QMD is not installed. " + InstallHint)
+	}
+	if err := adoptLegacy(s, qmd, action, out); err != nil {
+		return err
 	}
 	if err := state.PrivateDirs(s.Directory); err != nil {
 		return err
@@ -107,7 +113,7 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 	defer lock.Close()
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return errors.New("Another orai wiki command is running for this project")
+			return errors.New("Another orai shelf command is running for this project")
 		}
 		return err
 	}
@@ -118,15 +124,15 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 		return err
 	}
 	if action != "init" && (!exists(s.ConfigFile) || !exists(s.DB)) {
-		return errors.New("Project wiki config/index missing. Run `orai wiki init`.")
+		return errors.New("Project shelf config/index missing. Run `orai shelf init`.")
 	}
 	running, err := ownServerRunning(s)
 	if err != nil {
 		return err
 	}
 	if running && (action == "init" || action == "refresh") {
-		return fmt.Errorf("This project's wiki server is running. When no search is in progress, run "+
-			"`orai wiki stop && orai wiki %s`.", action)
+		return fmt.Errorf("This project's shelf server is running. When no search is in progress, run "+
+			"`orai shelf stop && orai shelf %s`.", action)
 	}
 	if !exists(s.ConfigFile) {
 		// Exclusive creation: an existing config (model, collections) is never overwritten.
@@ -134,32 +140,59 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 			return err
 		}
 	}
+	// Make the index hold exactly the collections orai.toml declares. init and refresh
+	// apply the difference (they re-index anyway); recover only starts the server, so it
+	// names the difference and the command that applies it. Other collections, the
+	// model and the DB are left as they are.
+	apply := action == "init" || action == "refresh"
+	stale := func(what string) error {
+		return fmt.Errorf("%s. Run `orai shelf stop && orai shelf refresh` to apply orai.toml", what)
+	}
 	for _, name := range s.collectionNames() {
-		path := s.Collections[name]
+		path, pattern := s.Collections[name], s.Patterns[name]
+		add := s.Argv(qmd, "collection", "add", path, "--name", name, "--mask", pattern)
 		shown, err := runCommand(out, s.Argv(qmd, "collection", "show", name), s, true)
 		if err != nil {
-			// A collection declared in orai.toml after the index was created. Adding it
-			// leaves the existing collections, model and DB as they are.
-			if action == "recover" {
-				return fmt.Errorf("collection '%s' is in orai.toml but not in the wiki index yet. Run "+
-					"`orai wiki stop && orai wiki refresh` to add it", name)
+			if !apply {
+				return stale(fmt.Sprintf("collection '%s' is in orai.toml but not in the index yet", name))
 			}
-			if _, err := runCommand(out, s.Argv(qmd, "collection", "add", path, "--name", name, "--mask", "**/*.md"), s, false); err != nil {
+			if _, err := runCommand(out, add, s, false); err != nil {
 				return err
 			}
 			continue
 		}
-		var paths []string
-		for _, line := range strings.Split(shown, "\n") {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "Path:") {
-				parts := strings.SplitN(trimmed, ":", 2)
-				paths = append(paths, strings.TrimSpace(parts[1]))
+		havePath, havePattern := shownField(shown, "Path:"), shownField(shown, "Pattern:")
+		if havePath == path && (havePattern == "" || havePattern == pattern) {
+			continue
+		}
+		change := fmt.Sprintf("collection '%s' is indexed as %s (%s) but orai.toml says %s (%s)", name, havePath, havePattern, path, pattern)
+		if !apply {
+			return stale(change)
+		}
+		fmt.Fprintln(out, "Re-registering: "+change)
+		if _, err := runCommand(out, s.Argv(qmd, "collection", "remove", name), s, false); err != nil {
+			return err
+		}
+		if _, err := runCommand(out, add, s, false); err != nil {
+			return err
+		}
+	}
+	if apply {
+		listed, err := runCommand(out, s.Argv(qmd, "collection", "list"), s, true)
+		if err != nil {
+			return err
+		}
+		for _, name := range listedCollections(listed) {
+			if _, declared := s.Collections[name]; declared {
+				continue
+			}
+			fmt.Fprintf(out, "Removing collection '%s' from the index: orai.toml no longer declares it\n", name)
+			if _, err := runCommand(out, s.Argv(qmd, "collection", "remove", name), s, false); err != nil {
+				return err
 			}
 		}
-		if len(paths) != 1 || paths[0] != path {
-			return fmt.Errorf("collection '%s' points elsewhere (%v); fix %s. Config and DB preserved.",
-				name, paths, s.ConfigFile)
+		for _, pair := range s.overlapping() {
+			fmt.Fprintf(out, "Note: collections %s cover the same documents, so they are indexed twice. %s\n", pair, overlapFix)
 		}
 	}
 	if action == "init" || action == "refresh" {
@@ -188,6 +221,55 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 		}
 	}
 	return verify(s, out)
+}
+
+// adoptLegacy moves an index Orai 0.3 built in .orai/wiki to .orai/shelf. The server
+// that index started is stopped first (its PID file is keyed by the index name, which
+// did not change), so nothing keeps the old path open. The index itself is not rebuilt.
+// For `stop` the move is all that happens here: the action stops the server itself, and
+// stopping twice would fail the second time.
+func adoptLegacy(s *Settings, qmd, action string, out io.Writer) error {
+	if !s.legacyOnly() {
+		return nil
+	}
+	fmt.Fprintf(out, "Moving the index from %s to %s (made by Orai 0.3)\n", s.LegacyDirectory(), s.Directory)
+	if action != "stop" {
+		// A server that is not running makes `mcp stop` fail; that is the state we want.
+		_, _ = runCommand(out, s.Argv(qmd, "mcp", "stop"), s, false)
+	}
+	// Left behind by an interrupted move; os.Remove only succeeds on an empty folder.
+	_ = os.Remove(filepath.Join(s.Directory, "setup.lock"))
+	_ = os.Remove(s.Directory)
+	if err := os.Rename(s.LegacyDirectory(), s.Directory); err != nil {
+		return fmt.Errorf("cannot move %s to %s: %w", s.LegacyDirectory(), s.Directory, err)
+	}
+	return nil
+}
+
+// overlapFix is what to change when two collections cover the same documents.
+const overlapFix = "Give the outer one a pattern that stays in its own folder, such as { path = \"docs\", pattern = \"*.md\" }"
+
+// shownField returns one field of `qmd collection show` ("" when absent).
+func shownField(shown, label string) string {
+	for _, line := range strings.Split(shown, "\n") {
+		if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, label) {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, label))
+		}
+	}
+	return ""
+}
+
+// listedCollections returns the collection names in `qmd collection list` output, where
+// each collection starts a line as "name (qmd://name/)".
+func listedCollections(listed string) []string {
+	var names []string
+	for _, line := range strings.Split(listed, "\n") {
+		name, rest, found := strings.Cut(line, " (qmd://")
+		if found && name != "" && !strings.ContainsAny(name, " \t") && strings.HasPrefix(rest, name+"/)") {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func createConfigExclusive(s *Settings) error {
@@ -227,7 +309,7 @@ var verify = func(s *Settings, out io.Writer) error {
 		if next != "" {
 			next = ". Next: " + next
 		}
-		return errors.New("Wiki is not verified: " + strings.Join(failed, "; ") + next)
+		return errors.New("Shelf is not verified: " + strings.Join(failed, "; ") + next)
 	}
 	fmt.Fprintf(out, "Ready: %s (MCP server name: %s)\n", s.Endpoint, s.ServerName)
 	return nil

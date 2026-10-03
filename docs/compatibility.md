@@ -30,7 +30,7 @@ Go 의존성의 정본은 `go.mod`와 `go.sum`이다. mise는 Go 버전과 task�
 |---|---|---|
 | Codex CLI | `npm install -g @openai/codex` 또는 `brew install --cask codex`, 이후 `codex login` | provider가 `codex`인 역할이 있을 때 |
 | Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` 또는 `npm install -g @anthropic-ai/claude-code`, 이후 `claude auth login` | provider가 `claude`인 역할이 있을 때 |
-| QMD | `npm install -g @tobilu/qmd` (Node 22 이상) | `[integrations.wiki]`를 쓸 때 (선택) |
+| QMD | `npm install -g @tobilu/qmd` (Node 22 이상) | `[integrations.shelf]`를 쓸 때 (선택) |
 | CodeGraph | `npm install -g @colbymchenry/codegraph` | `[integrations.codegraph]`를 쓸 때 (선택) |
 
 2026-10-03 macOS 27.0 arm64 호스트에서 확인했다.
@@ -38,7 +38,7 @@ Go 의존성의 정본은 `go.mod`와 `go.sum`이다. mise는 Go 버전과 task�
 | 도구 | 확인 버전 | 설치 출처(확인) | Orai가 쓰는 capability | doctor 검사 |
 |---|---|---|---|---|
 | Codex CLI | 0.160.0 | Homebrew cask `codex` | `resume <UUID>`, `queue --thread --message`, `-c hooks.SessionStart`, `-c mcp_servers.*`, `--add-dir` | 도움말 + `codex login status` |
-| Claude Code | 2.1.288 | 네이티브 설치 (`~/.local/share/claude/versions`) | `--session-id`, `--resume`, `--settings`, `--mcp-config`, `--dangerously-load-development-channels server:orai`, `--name`, `--effort` | 도움말 + `claude auth status` (channel 플래그는 도움말에 없어 실행 시 확인) |
+| Claude Code | 2.1.288 | 네이티브 설치 (`~/.local/share/claude/versions`) | `--session-id`, `--resume`, `--settings`, `--mcp-config`, `--dangerously-load-development-channels server:orai`, `--name`, `--effort` | 도움말 + `claude auth status` (channel 플래그는 도움말에 없어 실행 시 확인). `--deep`은 `claude mcp get shelf`의 출력(`URL:` 줄)으로 같은 이름의 다른 서버를 찾는다 |
 | QMD | 2.8.3 | npm `@tobilu/qmd` (mise Node 24.21.0 전역) | `--index`, `QMD_CONFIG_DIR`/`INDEX_PATH`, `collection show`, `update`, `embed`, `mcp --http --daemon --host --port`, `mcp stop`, MCP `status`/`query`/`get` | 포트·MCP·식별·색인, `--deep`에서 검색 |
 | CodeGraph | 1.6.0 | 번들 설치 `~/.codegraph/versions/v1.6.0` (npm 설치 아님) | `status --json`, `query --json --path`, `init`, `sync`, `install --print-config`, `--location local` | `status --json`, `--deep`에서 심볼 조회 |
 | Git | 2.56.0 | Homebrew | `worktree list --porcelain`, `rev-parse --show-toplevel` | 없음 |
@@ -62,11 +62,11 @@ Orai는 [MIT](../LICENSE)(© 2026 oXpace)다. 외부 도구는 번들하지 않�
 | 대상 | 라이선스 | 비고 |
 |---|---|---|
 | AMQ | MIT | 메일함 디스크 형식만 호환. 코드나 실행 파일을 포함하지 않음 |
-| QMD (내부 node-llama-cpp MIT) | MIT | 외부 실행 파일 (wiki 엔진) |
+| QMD (내부 node-llama-cpp MIT) | MIT | 외부 실행 파일 (shelf 엔진) |
 | CodeGraph | MIT | 외부 실행 파일 |
 | Codex CLI | Apache-2.0 | 외부 실행 파일 |
 | Claude Code | 상용 약관 (Anthropic Commercial Terms, 오픈소스 아님) | 사용자가 설치·로그인한 것을 실행만 한다. 번들·재배포하지 않는다 |
-| Qwen3-Embedding-0.6B (wiki 기본 모델) | Apache-2.0 | QMD가 사용자 캐시에 받는다. Orai는 배포하지 않는다 |
+| Qwen3-Embedding-0.6B (shelf 기본 모델) | Apache-2.0 | QMD가 사용자 캐시에 받는다. Orai는 배포하지 않는다 |
 | BurntSushi/toml / fsnotify, golang.org/x/sys | MIT / BSD-3-Clause | 바이너리에 포함되는 Go 의존성 |
 | mise, Go | MIT / BSD-3-Clause | 개발 도구 |
 | Pockets 추출 원천 | 작성자(Ox) 소유, 외부 기여 없음 | MIT로 공개. 가져온 파일의 커밋 작성자는 모두 `Ox`이며 AI 공동 작성 표기만 있음 |

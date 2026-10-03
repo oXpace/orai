@@ -1,5 +1,5 @@
 // Command orai runs Codex and Claude Code as role sessions with exact resume,
-// notifications, a project wiki and diagnostics.
+// notifications, a project shelf and diagnostics.
 package main
 
 import (

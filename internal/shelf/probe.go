@@ -1,4 +1,4 @@
-package wiki
+package shelf
 
 import (
 	"fmt"
@@ -15,15 +15,20 @@ import (
 // simulated without touching the real PATH.
 var lookPath = exec.LookPath
 
-// Diagnose is the read-only, layered wiki diagnosis: not-configured → engine on PATH →
+// Diagnose is the read-only, layered shelf diagnosis: not-configured → engine on PATH →
 // collection folders exist → project initialized → probe() the running server.
 func Diagnose(p *project.Project, deep bool) []doctor.Check {
-	if p.Config.Wiki == nil {
-		return []doctor.Check{doctor.New("wiki", doctor.NotConfigured, "no [integrations.wiki] in orai.toml", "")}
+	if p.Config.Shelf == nil {
+		return []doctor.Check{doctor.New("shelf", doctor.NotConfigured, "no [integrations.shelf] in orai.toml", "")}
 	}
 	s := NewSettings(p)
+	// The index and server first, then what the project's own MCP settings say about it.
+	return append(diagnose(s, deep), registration(s, deep))
+}
+
+func diagnose(s *Settings, deep bool) []doctor.Check {
 	if _, err := lookPath("qmd"); err != nil {
-		return []doctor.Check{doctor.New("wiki", doctor.Blocked, "the wiki engine QMD (qmd) is not on PATH", InstallHint)}
+		return []doctor.Check{doctor.New("shelf", doctor.Blocked, "the shelf engine QMD (qmd) is not on PATH", InstallHint)}
 	}
 	var missing []string
 	for _, name := range s.collectionNames() {
@@ -33,13 +38,18 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 		}
 	}
 	if len(missing) > 0 {
-		return []doctor.Check{doctor.New("wiki", doctor.NotReady,
+		return []doctor.Check{doctor.New("shelf", doctor.NotReady,
 			fmt.Sprintf("collection folder(s) missing: %s", strings.Join(missing, ", ")),
-			"Create the folder(s) or fix integrations.wiki.collections in orai.toml")}
+			"Create the folder(s) or fix integrations.shelf.collections in orai.toml")}
+	}
+	if s.legacyOnly() {
+		return []doctor.Check{doctor.New("shelf", doctor.NotReady,
+			"the index is still where Orai 0.3 kept it (.orai/wiki)",
+			"`orai shelf recover` moves it to .orai/shelf and restarts the server; nothing is rebuilt")}
 	}
 	if !exists(s.ConfigFile) || !exists(s.DB) {
-		c := doctor.New("wiki", doctor.NotReady, "the wiki has not been built for this project yet",
-			"`orai wiki init` (the first run downloads the embedding model, about 0.6 GB)")
+		c := doctor.New("shelf", doctor.NotReady, "the shelf has not been built for this project yet",
+			"`orai shelf init` (the first run downloads the embedding model, about 0.6 GB)")
 		return []doctor.Check{c.WithDetail(map[string]any{"version": doctor.VersionOf("qmd")})}
 	}
 	return probe(s, deep)
@@ -49,7 +59,7 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 // (deep) vector → hybrid → get. It is a var so tests can substitute canned results
 // (for example to test verify()'s failure handling without a fake server).
 var probe = func(s *Settings, deep bool) []doctor.Check {
-	c := "wiki"
+	c := "shelf"
 	state, detailErr := reachability(s.Port)
 	detail := map[string]any{"engine": "qmd", "endpoint": s.Endpoint, "index": s.Index, "db": s.DB}
 	switch state {
@@ -60,11 +70,11 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 			"Run the check outside the sandbox; a result there applies only to that environment").WithDetail(detail)}
 	case "refused":
 		return []doctor.Check{doctor.New(c+".server", doctor.Blocked,
-			"the wiki server is not running (it does not survive a reboot)", "`orai wiki recover`").WithDetail(detail)}
+			"the shelf server is not running (it does not survive a reboot)", "`orai shelf recover`").WithDetail(detail)}
 	case "error":
 		return []doctor.Check{doctor.New(c+".server", doctor.Blocked,
 			fmt.Sprintf("port probe failed: %s", detailErr),
-			fmt.Sprintf("Check that 127.0.0.1:%d is usable on this machine, or set integrations.wiki.port in orai.toml to another port", s.Port)).WithDetail(detail)}
+			fmt.Sprintf("Check that 127.0.0.1:%d is usable on this machine, or set integrations.shelf.port in orai.toml to another port", s.Port)).WithDetail(detail)}
 	}
 	checks := []doctor.Check{doctor.New(c+".server", doctor.Healthy, "port accepts connections", "").WithDetail(detail)}
 
@@ -76,7 +86,7 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 	status, err := handshake(client)
 	if err != nil {
 		checks = append(checks, doctor.New(c+".mcp", doctor.Blocked,
-			fmt.Sprintf("MCP handshake/status failed: %v", err), "Check the QMD log ("+withSuffix(s.PIDFile(), ".log")+"), then `orai wiki stop && orai wiki recover`"))
+			fmt.Sprintf("MCP handshake/status failed: %v", err), "Check the QMD log ("+withSuffix(s.PIDFile(), ".log")+"), then `orai shelf stop && orai shelf recover`"))
 		return checks
 	}
 	checks = append(checks, doctor.New(c+".mcp", doctor.Healthy, "MCP initialize and status succeeded", ""))
@@ -84,19 +94,30 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 	if mismatch := identity(status, s); mismatch != "" {
 		checks = append(checks, doctor.New(c+".identity", doctor.Blocked,
 			fmt.Sprintf("port %d serves another index: %s", s.Port, mismatch),
-			"That server is left untouched. Set integrations.wiki.port in orai.toml to a free port, then `orai wiki recover`"))
+			"That server is left untouched. Set integrations.shelf.port in orai.toml to a free port, then `orai shelf recover`"))
 		return checks
 	}
 	checks = append(checks, doctor.New(c+".identity", doctor.Healthy, "server indexes this project's collections", ""))
 
+	// What is indexed should be what orai.toml declares, once each.
+	if extra := undeclared(status, s); len(extra) > 0 {
+		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
+			fmt.Sprintf("the index still has collection(s) orai.toml no longer declares: %s (their documents still show up in searches)", strings.Join(extra, ", ")),
+			"`orai shelf stop && orai shelf refresh`"))
+	} else if pairs := s.overlapping(); len(pairs) > 0 {
+		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
+			fmt.Sprintf("collections %s cover the same documents, so searches return them twice", strings.Join(pairs, "; ")),
+			overlapFix+" in orai.toml, then `orai shelf stop && orai shelf refresh`"))
+	}
+
 	if !truthy(status["totalDocuments"]) {
-		checks = append(checks, doctor.New(c+".index", doctor.NotReady, "the wiki index has no documents",
-			"Add Markdown files under "+strings.Join(s.collectionNames(), ", ")+", then `orai wiki stop && orai wiki refresh`"))
+		checks = append(checks, doctor.New(c+".index", doctor.NotReady, "the shelf index has no documents",
+			"Add Markdown files under "+strings.Join(s.collectionNames(), ", ")+", then `orai shelf stop && orai shelf refresh`"))
 		return checks
 	}
 	if !truthy(status["hasVectorIndex"]) || truthy(status["needsEmbedding"]) {
 		chk := doctor.New(c+".index", doctor.Degraded, "some documents are not embedded yet (edited since the last refresh)",
-			"`orai wiki stop && orai wiki refresh`")
+			"`orai shelf stop && orai shelf refresh`")
 		checks = append(checks, chk.WithDetail(map[string]any{"needsEmbedding": status["needsEmbedding"]}))
 		return checks
 	}
@@ -132,7 +153,7 @@ func handshake(client mcpClient) (map[string]any, error) {
 // searchChecks exercises the models: vector-only first (so a lexical fallback cannot
 // hide an embedding failure), then lex+vec plus a document read.
 func searchChecks(client mcpClient, s *Settings) []doctor.Check {
-	c := "wiki"
+	c := "shelf"
 	names := s.collectionNames()
 	smoke := s.Smoke
 	var expect string
@@ -166,7 +187,7 @@ func searchChecks(client mcpClient, s *Settings) []doctor.Check {
 			fmt.Sprintf("vector search failed: %v", err), "Check model/GPU availability in the QMD log")}
 	}
 	if len(vector) == 0 {
-		return []doctor.Check{doctor.New(c+".vector", doctor.Degraded, "vector search returned no results", "`orai wiki stop && orai wiki refresh`")}
+		return []doctor.Check{doctor.New(c+".vector", doctor.Degraded, "vector search returned no results", "`orai shelf stop && orai shelf refresh`")}
 	}
 
 	var checks []doctor.Check
@@ -182,10 +203,10 @@ func searchChecks(client mcpClient, s *Settings) []doctor.Check {
 	if expect != "" && !matched {
 		chk := doctor.New(c+".vector", doctor.Degraded,
 			fmt.Sprintf("vector search missed the smoke document %s", expect),
-			"Check [integrations.wiki.smoke] in orai.toml (vec should be a question that document answers); if it is right, the embedding model recalls poorly for these documents")
+			"Check [integrations.shelf.smoke] in orai.toml (vec should be a question that document answers); if it is right, the embedding model recalls poorly for these documents")
 		checks = append(checks, chk.WithDetail(map[string]any{"hits": vector}))
 	} else {
-		reason := "vector-only search returned results (set [integrations.wiki.smoke] to check it returns the right document)"
+		reason := "vector-only search returned results (set [integrations.shelf.smoke] to check it returns the right document)"
 		if expect != "" {
 			reason = "vector-only search returned the smoke document"
 		}
@@ -215,14 +236,14 @@ func searchChecks(client mcpClient, s *Settings) []doctor.Check {
 	if err != nil {
 		checks = append(checks, doctor.New(c+".hybrid", doctor.Blocked,
 			fmt.Sprintf("lex+vec search or document read failed: %v", err),
-			"Check the QMD log ("+withSuffix(s.PIDFile(), ".log")+"), then `orai wiki stop && orai wiki recover`"))
+			"Check the QMD log ("+withSuffix(s.PIDFile(), ".log")+"), then `orai shelf stop && orai shelf recover`"))
 		return checks
 	}
 	if strings.TrimSpace(body) != "" {
 		checks = append(checks, doctor.New(c+".hybrid", doctor.Healthy, "lex+vec search and document read succeeded", ""))
 	} else {
 		checks = append(checks, doctor.New(c+".hybrid", doctor.Degraded, "document read returned no text",
-			"`orai wiki stop && orai wiki refresh` to rebuild the index from the current documents"))
+			"`orai shelf stop && orai shelf refresh` to rebuild the index from the current documents"))
 	}
 	return checks
 }

@@ -1,6 +1,6 @@
 // Covers Settings construction, including that two projects never collide on env,
 // index names, or PID files.
-package wiki
+package shelf
 
 import (
 	"path/filepath"
@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestSettingsEnvPointsInsideDotOraiWiki(t *testing.T) {
+func TestSettingsEnvPointsInsideDotOraiShelf(t *testing.T) {
 	p := makeQMDProject(t, filepath.Join(t.TempDir(), "proj"), 0)
 	s := NewSettings(p)
 	env := envMap(s.Env())
@@ -19,7 +19,7 @@ func TestSettingsEnvPointsInsideDotOraiWiki(t *testing.T) {
 	if env["INDEX_PATH"] != s.DB {
 		t.Fatalf("INDEX_PATH = %q, want %q", env["INDEX_PATH"], s.DB)
 	}
-	want := filepath.Join(p.Root, ".orai", "wiki")
+	want := filepath.Join(p.Root, ".orai", "shelf")
 	if s.Directory != want {
 		t.Fatalf("Directory = %q, want %q", s.Directory, want)
 	}

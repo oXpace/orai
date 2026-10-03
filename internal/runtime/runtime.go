@@ -27,7 +27,7 @@ import (
 	"github.com/oXpace/orai/internal/state"
 )
 
-// MCPServers returns per-process MCP entries for a provider (wired to the wiki by the CLI).
+// MCPServers returns per-process MCP entries for a provider (wired to the shelf by the CLI).
 var MCPServers = func(*project.Project, string) map[string]map[string]any { return map[string]map[string]any{} }
 
 // Executable is the running orai binary, used for hooks and the Claude channel.

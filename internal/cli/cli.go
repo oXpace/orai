@@ -22,19 +22,19 @@ import (
 	"github.com/oXpace/orai/internal/runtime"
 	"github.com/oXpace/orai/internal/scaffold"
 	"github.com/oXpace/orai/internal/setup"
+	"github.com/oXpace/orai/internal/shelf"
 	"github.com/oXpace/orai/internal/version"
-	"github.com/oXpace/orai/internal/wiki"
 )
 
 const exitUsage = 2
 
-var commands = map[string]bool{"setup": true, "run": true, "status": true, "doctor": true, "msg": true, "wiki": true,
+var commands = map[string]bool{"setup": true, "run": true, "status": true, "doctor": true, "msg": true, "shelf": true,
 	"_capture": true, "_channel": true, "help": true, "version": true}
 
-var wikiActions = map[string]bool{"init": true, "recover": true, "refresh": true, "check": true, "stop": true}
+var shelfActions = map[string]bool{"init": true, "recover": true, "refresh": true, "check": true, "stop": true}
 
 var renamed = map[string]string{"inbox": "orai msg inbox", "send": "orai msg send", "reply": "orai msg reply",
-	"qmd": "orai wiki", "init": "orai setup"}
+	"qmd": "orai shelf", "wiki": "orai shelf", "init": "orai setup"}
 
 const help = `usage: orai [--project PATH] <command> ...
 
@@ -53,8 +53,8 @@ commands:
   msg send <role|user> [--body TEXT | --file PATH] [--kind K] [--thread T] [--as user]
   msg reply <ID> [--body TEXT | --file PATH] [--kind K] [--as user]
                         Messages; the body defaults to piped stdin
-  wiki init|recover|refresh|check|stop
-                        Project wiki (docs search) lifecycle
+  shelf init|recover|refresh|check|stop
+                        Project shelf (docs search) lifecycle
 
 options:
   --project PATH        project directory (default: nearest orai.toml above the current directory)
@@ -66,7 +66,7 @@ const setupHelp = `usage: orai setup [--role NAME=PROVIDER[:WORKTREE] ...] [--pr
                   [--branch NAME] [--dry-run] [--no-tools] [--project PATH]
 
 Set up the project in this folder: Git repository, orai.toml, agent instructions,
-mailboxes, project wiki and code graph, then a diagnosis. Safe to re-run: existing
+mailboxes, project shelf and code graph, then a diagnosis. Safe to re-run: existing
 files are kept, and only what is missing is added.
 
 roles:
@@ -88,7 +88,7 @@ examples:
 options:
   --branch NAME         branch for a new repository (default trunk)
   --dry-run             print the plan and change nothing
-  --no-tools            files only: skip the wiki index/server and the code graph
+  --no-tools            files only: skip the shelf index/server and the code graph
 `
 
 const runHelp = `usage: orai run <role> [--fresh] [--dry-run] [--project PATH]
@@ -110,8 +110,9 @@ const doctorHelp = `usage: orai doctor [--deep] [--json] [--project PATH]
 
 Check this project without changing anything, and list what to do next.
 
-  --deep                also run real wiki searches and the code graph symbol lookup
-                        (loads the search models; the first run may download them)
+  --deep                also run real shelf searches and the code graph symbol lookup
+                        (loads the search models; the first run may download them),
+                        and ask Claude Code whether another MCP server is named shelf
   --json                machine-readable report (every field, including details)
 
 marks: ✓ healthy   ✗ blocked/unsupported   ! degraded/not-ready
@@ -121,7 +122,7 @@ exit codes: 0 healthy, 1 something needs attention, 2 usage or orai.toml error,
 3 a core component (provider CLI, login, mailboxes) is blocked.
 
 What --deep verifies is set in orai.toml:
-  [integrations.wiki.smoke]      lex / vec: two queries; expect: the document
+  [integrations.shelf.smoke]      lex / vec: two queries; expect: the document
                                  (path from the project folder) both must return
   [integrations.codegraph]       smoke_symbol: a symbol the index must contain
 Without them, --deep only checks that searches return something.
@@ -147,48 +148,66 @@ Messages between roles. Inside a role session the sender is that role. Outside o
 Output is JSON.
 `
 
-const wikiHelp = `usage: orai wiki init|recover|refresh|check|stop [--project PATH]
+const shelfHelp = `usage: orai shelf init|recover|refresh|check|stop [--project PATH]
 
-The project wiki makes this project's Markdown documents searchable from role
-sessions (MCP server ` + "`wiki-<project>`" + `). The engine is QMD, run only for this project:
-its index lives in .orai/wiki and its server listens on 127.0.0.1.
+The shelf makes this project's Markdown documents searchable. Role sessions reach it
+as the MCP server ` + "`shelf`" + `. It is a search index over the folders you register,
+not a copy: the documents stay where they are. The engine is QMD, run only for this
+project: its index lives in .orai/shelf and its server listens on 127.0.0.1.
 
   init      first time: build the index and embeddings, start the server, verify
   recover   start the server again (after a reboot) without rebuilding, verify
-  refresh   re-index after documents changed, then start and verify
+  refresh   re-index after documents or the collections in orai.toml changed (a
+            collection that was removed or re-declared is dropped or re-registered),
+            then start and verify
   check     verify the running server end to end; changes nothing
   stop      stop this project's server
 
 first time:
   1. Install QMD:  npm install -g @tobilu/qmd   (needs Node 22+)
   2. Put Markdown under docs/ (or the folders in orai.toml).
-  3. orai wiki init
+  3. orai shelf init
      The first run downloads the embedding model (about 0.6 GB) into ~/.cache/qmd;
      the first real search downloads the search models (about 2 GB). Projects share them.
   ` + "`orai setup`" + ` does steps 2-3 for you when QMD is installed.
 
 after editing documents:
-  orai wiki stop && orai wiki refresh
+  orai shelf stop && orai shelf refresh
   (refresh refuses while the server runs, so a search in progress is never cut off)
 
-settings, in orai.toml under [integrations.wiki]:
-  collections = { docs = "docs", notes = "notes" }   name = folder, relative.
-                                After adding one: orai wiki stop && orai wiki refresh
-  port = 18181                  only if the derived port is taken by another server
-  embed_model = "hf:..."        read by the first ` + "`orai wiki init`" + ` only
-  [integrations.wiki.smoke]     lex, vec, expect: a query pair and the document they
-                                must return, checked by ` + "`orai doctor --deep`" + `
+settings, in orai.toml under [integrations.shelf]:
+  collections = { docs = "docs" }           name = folder (relative): every .md under it
+  [integrations.shelf.collections]          or one line per collection, to split a folder:
+  core = { path = "docs", pattern = "*.md" }    only the files directly in docs/
+  adr  = "docs/adr"                             everything under docs/adr
+                                After changing them: orai shelf stop && orai shelf refresh
+  port = 18181                  fixes the server port (the default is derived from the
+                                project path). Set it when the address is written in a
+                                settings file, as below
+  embed_model = "hf:..."        read by the first ` + "`orai shelf init`" + ` only
+  [integrations.shelf.smoke]    lex, vec, expect: a query pair and the document (path
+                                from the project folder) they must return, checked by
+                                ` + "`orai doctor --deep`" + `
+
+outside role sessions (a desktop app, a plain claude or codex):
+  Role sessions are connected by Orai. Anything else reads the project's own MCP
+  settings, so write the server there under the name ` + "`shelf`" + `:
+    .codex/config.toml    [mcp_servers.shelf]
+                          url = "http://127.0.0.1:<port>/mcp"
+    Claude Code           claude mcp add --transport http --scope project shelf <url>
+  ` + "`orai doctor`" + ` (shelf.registration) prints the exact address and checks that what
+  those files say still matches it.
 
 More: ` + doctor.DocsURL + `/operations.md
 `
 
 // commandHelp is what `orai <command> --help` prints.
 var commandHelp = map[string]string{
-	"setup": setupHelp, "run": runHelp, "status": statusHelp, "doctor": doctorHelp, "msg": msgHelp, "wiki": wikiHelp,
+	"setup": setupHelp, "run": runHelp, "status": statusHelp, "doctor": doctorHelp, "msg": msgHelp, "shelf": shelfHelp,
 }
 
 func init() {
-	runtime.MCPServers = wiki.MCPServers
+	runtime.MCPServers = shelf.MCPServers
 }
 
 // Main runs the CLI and returns the process exit code.
@@ -252,16 +271,16 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 		return runDoctor(rest, stdout)
 	case "msg":
 		return runMessage(rest, stdin, stdout)
-	case "wiki":
+	case "shelf":
 		if o, err := parse(rest, map[string]bool{"project": true}); err == nil && len(o.args) == 0 {
-			fmt.Fprint(stdout, wikiHelp)
+			fmt.Fprint(stdout, shelfHelp)
 			return exitUsage, nil
 		}
 		return withProject(rest, nil, func(p *project.Project, o options) (int, error) {
-			if len(o.args) != 1 || !wikiActions[o.args[0]] {
-				return exitUsage, usagef("usage: orai wiki init|recover|refresh|check|stop (`orai wiki --help` explains each)")
+			if len(o.args) != 1 || !shelfActions[o.args[0]] {
+				return exitUsage, usagef("usage: orai shelf init|recover|refresh|check|stop (`orai shelf --help` explains each)")
 			}
-			return 0, wiki.Lifecycle(p, o.args[0], stdout)
+			return 0, shelf.Lifecycle(p, o.args[0], stdout)
 		})
 	case "_capture":
 		return withProject(rest, nil, func(p *project.Project, _ options) (int, error) {
@@ -356,7 +375,7 @@ func runSetup(argv []string, stdout io.Writer) (int, error) {
 		return exitUsage, usagef("not a directory: %s", root)
 	}
 	steps := []func(*project.Project) string{
-		func(p *project.Project) string { return wiki.SetupStep(p, stdout) },
+		func(p *project.Project) string { return shelf.SetupStep(p, stdout) },
 		codegraph.SetupStep,
 	}
 	return setup.Run(root, opts, o.flag("dry-run"), !o.flag("no-tools"), stdout, steps,
@@ -378,7 +397,7 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	checks := append([]doctor.Check{}, local[:1]...)
 	checks = append(checks, doctor.ToolChecks(p.Config.Providers())...)
 	checks = append(checks, local[1:]...)
-	checks = append(checks, wiki.Diagnose(p, deep)...)
+	checks = append(checks, shelf.Diagnose(p, deep)...)
 	return append(checks, codegraph.Diagnose(p, deep)...)
 }
 

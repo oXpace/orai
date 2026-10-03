@@ -13,7 +13,7 @@ import (
 	"github.com/oXpace/orai/internal/state"
 )
 
-const minimalConfig = "schema = 1\nsession = \"orai\"\n"
+const minimalConfig = "schema = 2\nsession = \"orai\"\n"
 
 // resolvePath mirrors the symlink+absolute resolution project.Locate/Load apply to a
 // root. Every test resolves t.TempDir() through it up front, because on macOS

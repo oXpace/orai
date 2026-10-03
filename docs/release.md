@@ -11,7 +11,7 @@ Orai는 Go 단일 실행 파일(`orai`)이다. 외부 도구(Codex, Claude Code,
 | 버전 | 형태 | 설치 명령 |
 |---|---|---|
 | 0.1.0 | Python 패키지 (AMQ 필요) | `mise use pypi:oXpace/orai@0.1.0` |
-| 0.2.0~ | Go 바이너리 (AMQ 불필요) | `mise use --pin github:oXpace/orai` (최신) 또는 `mise use github:oXpace/orai@0.3.0` |
+| 0.2.0~ | Go 바이너리 (AMQ 불필요) | `mise use --pin github:oXpace/orai` (최신) 또는 `mise use github:oXpace/orai@0.4.0` |
 
 ## 릴리스 절차
 
@@ -26,9 +26,9 @@ Orai는 Go 단일 실행 파일(`orai`)이다. 외부 도구(Codex, Claude Code,
 
 | 단계 | 내용 | 진입 조건 |
 |---|---|---|
-| 1. 공개 배포 | `github.com/oXpace/orai` 공개, Release | 완료 (0.1.0, 0.2.0, 0.3.0) |
+| 1. 공개 배포 | `github.com/oXpace/orai` 공개, Release | 완료 (0.1.0, 0.2.0, 0.3.0, 0.4.0) |
 | 2. 파일럿 | 격리된 파일럿 저장소에서 Codex↔Claude 실제 검증 ([운영 안내](operations.md#실제-파일럿-계정호스트-준비-후)) | 계정 동의가 필요해 사용자가 실행 |
-| 3. 소비 프로젝트 이전 | Pockets: `scripts/orai`와 `~/.local/bin/orai` 전역 링크 → 프로젝트 고정 `orai`, `.agents/orai.json` → `orai.toml`. 메일함 경로(`.agent-mail/orai`)는 같아서 기존 메일이 그대로 읽힌다 | 파일럿 통과. 별도 작업으로 진행하며 이 저장소는 Pockets를 수정하지 않음 |
+| 3. 소비 프로젝트 이전 | Pockets: `scripts/orai`와 `~/.local/bin/orai` 전역 링크 → 프로젝트 고정 `orai`, `.agents/orai.json` → `orai.toml`. 메일함 경로(`.agent-mail/orai`)는 같아서 기존 메일이 그대로 읽힌다 | 완료 (2026-10-03, 0.3.0). 파일럿 전에 사용자 요청으로 진행했다. 내용은 [이력](history.md#pockets-이전-2026-10-03) |
 | 4. 작업 목록 | 메일함 위에 역할 간 작업 배정·임대·의존성 | 설계 문서 합의 후 |
 
 ## 버전 정책

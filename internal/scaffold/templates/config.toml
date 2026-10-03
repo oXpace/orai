@@ -1,17 +1,18 @@
 # Orai project declaration — commit this file.
-# Local state (sessions, locks, wiki index) lives in .orai/ and is never shared.
-schema = 1
+# Local state (sessions, locks, shelf index) lives in .orai/ and is never shared.
+schema = 2
 session = "orai"            # mailbox name: .agent-mail/<session>/
 
 {{roles}}
-# Project wiki: the Markdown folders below, searchable from role sessions (MCP server
-# `wiki-<project>`). Needs QMD (`npm install -g @tobilu/qmd`). After editing documents:
-# `orai wiki stop && orai wiki refresh`. Guide: `orai wiki --help`. Remove this table to opt out.
-[integrations.wiki]
-collections = { docs = "docs" }   # name = folder; add more: { docs = "docs", notes = "notes" }
-# port = 18181              # optional; default is derived from the project path
-# embed_model = "hf:..."    # optional; read by the first `orai wiki init` only
-# [integrations.wiki.smoke]  # optional self-test for `orai doctor --deep`
+# Shelf: the Markdown folders below, searchable from role sessions (MCP server
+# `shelf`). Needs QMD (`npm install -g @tobilu/qmd`). After editing documents:
+# `orai shelf stop && orai shelf refresh`. Guide: `orai shelf --help`. Remove this table to opt out.
+[integrations.shelf]
+collections = { docs = "docs" }   # name = folder. To split a folder, give part of it a pattern:
+#   { core = { path = "docs", pattern = "*.md" }, adr = "docs/adr" }
+# port = 18181              # optional; fix it when the address is written in .mcp.json or .codex/config.toml
+# embed_model = "hf:..."    # optional; read by the first `orai shelf init` only
+# [integrations.shelf.smoke]  # optional self-test for `orai doctor --deep`
 # lex = "unique term"                        # keyword query only one document matches
 # vec = "a question that document answers"   # meaning-based query for the same document
 # expect = "docs/architecture.md"            # the document both searches must return

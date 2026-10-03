@@ -178,7 +178,7 @@ func (p *Project) Name() string {
 }
 
 // ID is path-derived: a copied or moved checkout is a different project and cannot
-// collide with the original's mail, ports or wiki server.
+// collide with the original's mail, ports or shelf server.
 func (p *Project) ID() string {
 	sum := sha256.Sum256([]byte(p.Root))
 	return Slug(p.Name()) + "-" + hex.EncodeToString(sum[:])[:10]

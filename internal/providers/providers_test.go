@@ -125,10 +125,10 @@ func TestQueueFailureReportsErrorAndKeepsMailForRetry(t *testing.T) {
 
 func TestCodexArgsInjectHookAndServers(t *testing.T) {
 	role := config.Role{Name: "lead", Provider: "codex", Effort: "medium"}
-	args := CodexArgs(role, "", "prompt", "hook cmd", "/root", map[string]map[string]any{"wiki-x": {"url": "u"}})
+	args := CodexArgs(role, "", "prompt", "hook cmd", "/root", map[string]map[string]any{"shelf-x": {"url": "u"}})
 	joined := strings.Join(args, "\n")
 	for _, want := range []string{`model_reasoning_effort="medium"`, `hooks.SessionStart=[{"hooks" = [{"command" = "hook cmd"`,
-		`mcp_servers.wiki-x={"url" = "u"}`, "--add-dir\n/root\nprompt"} {
+		`mcp_servers.shelf-x={"url" = "u"}`, "--add-dir\n/root\nprompt"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in %v", want, args)
 		}

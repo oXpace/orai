@@ -16,7 +16,7 @@ import (
 )
 
 func TestCodegraphNotConfigured(t *testing.T) {
-	p := writeProject(t, filepath.Join(t.TempDir(), "proj"), "schema = 1\nsession = \"orai\"\n")
+	p := writeProject(t, filepath.Join(t.TempDir(), "proj"), "schema = 2\nsession = \"orai\"\n")
 	checks := codegraph.Diagnose(p, false)
 	if len(checks) != 1 {
 		t.Fatalf("checks = %+v, want exactly one", checks)
@@ -168,7 +168,7 @@ func findCheck(t *testing.T, checks []doctor.Check, component string) doctor.Che
 // ---- SetupStep -----------------------------------------------------------------------
 
 func TestCodegraphStepNotConfigured(t *testing.T) {
-	p := writeProject(t, filepath.Join(t.TempDir(), "proj"), "schema = 1\nsession = \"orai\"\n")
+	p := writeProject(t, filepath.Join(t.TempDir(), "proj"), "schema = 2\nsession = \"orai\"\n")
 	if got := codegraph.SetupStep(p); got != "codegraph: not configured" {
 		t.Fatalf("SetupStep() = %q, want not configured", got)
 	}
@@ -181,7 +181,7 @@ func TestCodegraphStepSkippedWhenNotInstalled(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", empty)
-	p := writeProject(t, filepath.Join(tmp, "proj"), "schema = 1\nsession = \"orai\"\n\n[integrations.codegraph]\n")
+	p := writeProject(t, filepath.Join(tmp, "proj"), "schema = 2\nsession = \"orai\"\n\n[integrations.codegraph]\n")
 	if got := codegraph.SetupStep(p); !strings.Contains(got, "not installed") {
 		t.Fatalf("SetupStep() = %q, want mention of not installed", got)
 	}
@@ -189,7 +189,7 @@ func TestCodegraphStepSkippedWhenNotInstalled(t *testing.T) {
 
 func TestCodegraphStepIndexesOnce(t *testing.T) {
 	tmp := t.TempDir()
-	p := writeProject(t, filepath.Join(tmp, "p"), "schema = 1\nsession = \"orai\"\n\n[integrations.codegraph]\n")
+	p := writeProject(t, filepath.Join(tmp, "p"), "schema = 2\nsession = \"orai\"\n\n[integrations.codegraph]\n")
 	fakes := filepath.Join(tmp, "bin")
 	if err := os.MkdirAll(fakes, 0o755); err != nil {
 		t.Fatal(err)
@@ -213,7 +213,7 @@ mkdir -p "$2/.codegraph"
 
 func TestCodegraphStepInitFailureReportsStderrTail(t *testing.T) {
 	tmp := t.TempDir()
-	p := writeProject(t, filepath.Join(tmp, "p"), "schema = 1\nsession = \"orai\"\n\n[integrations.codegraph]\n")
+	p := writeProject(t, filepath.Join(tmp, "p"), "schema = 2\nsession = \"orai\"\n\n[integrations.codegraph]\n")
 	fakes := filepath.Join(tmp, "bin")
 	if err := os.MkdirAll(fakes, 0o755); err != nil {
 		t.Fatal(err)

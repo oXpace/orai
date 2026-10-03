@@ -13,7 +13,7 @@ func TestRenderListsFixesInOrderAndKeepsOptionalApart(t *testing.T) {
 		New("codegraph", Blocked, "codegraph status failed: env: node: No such file or directory", ""),
 		New("mail", NotConfigured, "no roles in orai.toml yet", "add a role"),
 		New("role.dev", Degraded, "missing role worktree: .worktrees/dev", "`git worktree add .worktrees/dev`"),
-		New("wiki.search", NotChecked, "search itself was not run", "`orai doctor --deep`"),
+		New("shelf.search", NotChecked, "search itself was not run", "`orai doctor --deep`"),
 	}
 	var out bytes.Buffer
 	code := Render(&out, checks, true, "Status")
@@ -22,15 +22,15 @@ func TestRenderListsFixesInOrderAndKeepsOptionalApart(t *testing.T) {
 		t.Fatalf("exit code %d", code)
 	}
 	for _, want := range []string{
-		"  ✓ project      orai.toml is valid\n",
-		"  ✗ tool.codex   blocked: codex is not on PATH\n",
-		"  - mail         not-configured: no roles in orai.toml yet\n",
+		"  ✓ project       orai.toml is valid\n",
+		"  ✗ tool.codex    blocked: codex is not on PATH\n",
+		"  - mail          not-configured: no roles in orai.toml yet\n",
 		// A problem without a known fix still counts and still gets a step.
 		"Status: blocked (3 to fix)\n",
 		"Next steps:\n  1. tool.codex: Install Codex CLI",
 		"  2. codegraph: No automatic fix is known.",
 		"  3. role.dev: `git worktree add .worktrees/dev`\n",
-		"Optional:\n  - mail: add a role\n  - wiki.search: `orai doctor --deep`\n",
+		"Optional:\n  - mail: add a role\n  - shelf.search: `orai doctor --deep`\n",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("output lacks %q:\n%s", want, text)

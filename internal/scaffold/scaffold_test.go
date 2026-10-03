@@ -41,7 +41,7 @@ func resolvePath(t *testing.T, p string) string {
 }
 
 const twoRoles = `
-schema = 1
+schema = 2
 session = "orai"
 
 [roles.lead]
@@ -536,7 +536,7 @@ func TestConflictAgentsMdBeginWithoutEnd(t *testing.T) {
 
 func TestConflictInvalidExistingConfig(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
-	if err := os.WriteFile(filepath.Join(root, project.ConfigName), []byte("schema = 2\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, project.ConfigName), []byte("schema = 99\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	conflict := mustConflict(t, root)
@@ -564,7 +564,7 @@ func TestConflictAgentsMdIsSymlink(t *testing.T) {
 
 func TestConflictsAreAllReportedTogether(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
-	if err := os.WriteFile(filepath.Join(root, project.ConfigName), []byte("schema = 2\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, project.ConfigName), []byte("schema = 99\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -682,8 +682,8 @@ func TestPresetConfigsParse(t *testing.T) {
 		if len(cfg.Roles) != len(preset.Roles) {
 			t.Errorf("preset %q declares roles %v, want %d", name, cfg.RoleNames(), len(preset.Roles))
 		}
-		if cfg.Wiki == nil || cfg.Codegraph == nil {
-			t.Errorf("preset %q lost the wiki or codegraph integration", name)
+		if cfg.Shelf == nil || cfg.Codegraph == nil {
+			t.Errorf("preset %q lost the shelf or codegraph integration", name)
 		}
 	}
 }

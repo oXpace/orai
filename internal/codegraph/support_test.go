@@ -43,7 +43,7 @@ func pathWith(directory string) string {
 	return directory + string(os.PathListSeparator) + os.Getenv("PATH")
 }
 
-const codegraphTOML = "schema = 1\nsession = \"orai\"\n\n[integrations.codegraph]\nsmoke_symbol = \"kickoff\"\n"
+const codegraphTOML = "schema = 2\nsession = \"orai\"\n\n[integrations.codegraph]\nsmoke_symbol = \"kickoff\"\n"
 
 func completeStatus() map[string]any {
 	return map[string]any{

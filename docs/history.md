@@ -42,7 +42,7 @@
 | AMQ 호출(`amq env/list/drain/read/send/reply/init`) | `internal/mail` | AMQ schema 1과 같은 디스크 형식의 자체 메일함. 2초 폴링 대신 파일 변경 이벤트(kqueue/inotify) + 보조 주기 |
 | `scripts/lib/orai_channel.py` | `internal/channel` (`orai _channel`) | 고정 역할 검사 → 이름 형식 검사. 메일함 변경 이벤트로 알림 |
 | `scripts/tests/test_orai_*.py` | `internal/{runtime,providers,channel,cli,mail}/*_test.go` | 계약을 그대로 유지하고 역할명을 일반화(`lead`/`dev`/`reviewer-2`). 실제 AMQ와의 양방향 호환 테스트 추가 |
-| `scripts/qmd-setup`, `scripts/test-qmd-setup.py` | `internal/wiki`, `orai wiki …` | 8181·`docs`·한국어 질의 고정 → 프로젝트별 포트·컬렉션·smoke 설정. `--index` 격리. `stop` 추가. `--install`(전역 npm 설치) 제거. 검증 단계를 doctor 진단 항목과 공유 |
+| `scripts/qmd-setup`, `scripts/test-qmd-setup.py` | `internal/shelf`, `orai shelf …` (0.3.0까지 `internal/wiki`, `orai wiki …`) | 8181·`docs`·한국어 질의 고정 → 프로젝트별 포트·컬렉션·smoke 설정. `--index` 격리. `stop` 추가. `--install`(전역 npm 설치) 제거. 검증 단계를 doctor 진단 항목과 공유 |
 | `scripts/setup-orai.py`, `test_orai_setup.py` | `internal/{scaffold,setup}`, `orai setup` | 사전 충돌 검사, dry-run/apply, 원자적 쓰기, 백업, 멱등성을 참고했다. Telegraphy 마이그레이션은 가져오지 않았다. AGENTS/.gitignore는 관리 블록만 바꾼다 |
 | `scripts/orai.md`, `.agents/skills/orai/**` | `docs/operations.md`, `internal/scaffold/templates/skill.md` | CLI 운영 문서와 에이전트용 메시지 액션을 분리했다. Pockets 고유 경로·Linear·TASKS 참조는 제거했다 |
 | `.agents/orai.json`, `PM.md`, `STAFF.md` | `internal/scaffold/templates/{pm-staff.toml,pm.md,staff.md}` (`--preset pm-staff`) | 모델과 effort를 고정하지 않는 선택형 예제로 일반화했다 |
@@ -79,7 +79,43 @@
 - **wiki 안내**: `orai wiki --help`(인자 없는 `orai wiki` 포함)에 준비 순서, 모델 다운로드 크기, 문서 갱신 방법, 설정 키를 넣었다. 생성되는 `orai.toml`과 `docs/README.md`에도 같은 내용을 적었다. 색인이 없는 프로젝트의 `orai wiki check`는 "connection refused" 대신 무엇을 실행할지 말한다. 색인을 만든 뒤 `collections`에 추가한 폴더는 `refresh`가 색인에 추가한다(이전에는 `.orai/wiki`의 설정 파일을 직접 고쳐야 했다).
 - **함께 고친 버그**: `orai setup --help`가 도움말을 보여주는 대신 setup을 실행했다. 파서가 `--help`를 기록만 하고 아무도 확인하지 않았다. 이제 모든 명령에 `--help`가 있고, 종단 테스트가 도움말이 파일을 만들지 않는지 확인한다.
 
+## Pockets 이전 (2026-10-03)
+
+Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용자 요청으로 Pockets 작업 트리에 직접 적용했고, 예전 문서와 스크립트 정리는 Pockets의 담당 역할이 따로 했다(oXpace/pockets#405).
+
+막힌 지점과 조치는 다음과 같다. Pockets에만 있던 배치라서 Orai 코드에는 넣지 않았다.
+
+| 막힌 지점 | 조치 |
+|---|---|
+| `mise.toml`의 `_.path = ["./scripts"]` 때문에 예전 `scripts/orai`가 설치한 바이너리보다 먼저 실행됐다 | `scripts/orai`를 지웠다 |
+| `.agents/skills/orai/SKILL.md`가 Pockets가 쓴 파일이라 `setup`이 충돌로 멈췄다 | 예전 스킬을 다른 이름으로 옮긴 뒤 `setup`을 실행했다 |
+| 설정이 `.agents/orai.json`에 있었다 | 같은 키로 `orai.toml`을 손으로 썼다. `--role`로 만들면 `guide` 경로와 model·effort가 빠진다 |
+| 대화 상태가 `.orai/<역할>.json`에 있었다(지금은 `.orai/roles/<역할>.json`) | 파일을 새 위치로 복사했다. 형식이 같아 같은 대화로 재개된다 |
+
+확인한 것: 메일함 파일 2,588개가 그대로였고 대기 메시지가 보였다. `orai doctor`에서 두 역할이 exact resume ready였고, `--dry-run`이 기존 대화 ID로 재개 명령을 만들었다. 문서 56개를 새로 색인했다. 실제 역할 세션을 띄워 대화가 이어지는지는 이 저장소에서 확인하지 않았다.
+
+## 문서 검색 개명과 묶음 나누기 (0.4.0 개발본)
+
+2026-10-03, Pockets에서 쓰면서 나온 요구를 반영했다.
+
+- **이름**: `wiki`를 `shelf`로 바꿨다. QMD는 문서를 찾아 주는 색인일 뿐 정돈된 지식을 담는 곳이 아니어서, 문서가 묶음별로 놓여 있고 거기서 찾아본다는 뜻의 이름을 골랐다. 정돈된 지식(KB)은 사용자가 따로 둘 계획이다. 명령(`orai shelf …`), 설정(`[integrations.shelf]`), 진단 항목(`shelf.*`), 상태 폴더(`.orai/shelf/`), 패키지(`internal/shelf`)가 함께 바뀌었다.
+- **MCP 서버 이름**: `wiki-<프로젝트>`에서 `shelf`로 바꿨다. 세션은 자기 프로젝트 서버에만 연결되므로 접미사가 필요 없었다. 접미사는 Pockets의 `qmd-pockets`에서 따라온 것이었다.
+- **호환**: `orai.toml`의 schema를 2로 올렸다. schema 1의 `[integrations.wiki]`도 그대로 읽고 doctor가 고칠 두 줄을 알려 준다. `orai wiki …`는 새 이름을 안내한다. 0.3이 만든 `.orai/wiki/`는 첫 `setup` 또는 `shelf recover`가 서버를 멈추고 옮긴다.
+- **묶음 나누기**: 묶음에 `{ path, pattern }`을 쓸 수 있다. QMD 2.8.3에서 `*.md`가 하위 폴더를 제외하는 것을 임시 색인으로 확인했다. QMD는 등록된 묶음의 패턴을 바꾸지 못하므로 `refresh`가 지우고 다시 등록한다. `orai.toml`에서 지운 묶음도 `refresh`가 색인에서 뺀다. 전에는 지운 묶음이 색인에 남아 계속 검색됐다.
+- **역할 밖 등록 진단**: `shelf.registration`이 `.mcp.json`과 `.codex/config.toml`을 읽어 `shelf`의 주소가 이 프로젝트 서버와 맞는지, 포트가 `orai.toml`에 고정돼 있는지 본다. 파일을 고치지는 않는다.
+- **확인하지 못한 것**: Claude Code에서 `--mcp-config`로 넘긴 서버와 같은 이름의 서버가 사용자·프로젝트·로컬 범위에 있을 때 어느 쪽이 쓰이는지는 공식 문서에 없다(보조 조사 결과). 실제로 확인하려면 사용자 전역 설정을 바꿔야 해서 하지 않았다. 대신 `orai doctor --deep`이 `claude mcp get shelf`로 다른 주소의 같은 이름을 찾아 알린다.
+
 ## 검증 기록
+
+### 2026-10-03, 0.4.0 개발본 (macOS 27.0 arm64)
+
+| 범위 | 결과 |
+|---|---|
+| 단위·통합·종단 테스트 (`mise run check`, race 검사기) | 통과 |
+| 이 저장소에서 0.3 색인 이전 | `.orai/wiki` 상태에서 doctor가 `orai shelf recover`를 안내했고, recover가 폴더를 옮긴 뒤 서버(18800)를 다시 시작했다. `orai doctor --deep`의 vector·lex+vec·본문 조회 healthy |
+| 임시 프로젝트, 실제 QMD 2.8.3으로 묶음 나누기 | `docs` 하나로 색인한 뒤 `core = { path = "docs", pattern = "*.md" }`와 `adr = "docs/adr"`로 바꿨다. `recover`는 차이를 알리고 멈췄고, `stop && refresh`가 두 묶음을 등록하고 `docs`를 색인에서 뺐다. `docs/adr`의 smoke 문서가 `adr` 묶음에서 검색됐다 |
+| 임시 프로젝트의 `shelf.registration` | `.codex/config.toml`의 포트가 다를 때 degraded와 고칠 값이 나왔고, 맞추면 healthy |
+| 미검증 | 실제 역할 세션에서 `shelf` 도구 호출, Claude Code의 같은 이름 서버 우선순위, Linux |
 
 ### 2026-10-03, 0.3.0 개발본 (macOS 27.0 arm64)
 

@@ -2,9 +2,10 @@
 // invocation goes through installSuccessMocks (a patched runCommand); reachability,
 // ownServerRunning and the MCP client are patched too. No test binds or connects to a
 // real QMD server or port 8181.
-package wiki
+package shelf
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -68,7 +69,8 @@ func TestInitRunsShowThenUpdateThenEmbedThenDaemonWithIndexPrefixedArgv(t *testi
 		}
 		subcommands = append(subcommands, call[3])
 	}
-	want := []string{"collection", "update", "embed", "mcp"}
+	// show (the declared collection), list (anything no longer declared), then the index.
+	want := []string{"collection", "collection", "update", "embed", "mcp"}
 	if !reflect.DeepEqual(subcommands, want) {
 		t.Fatalf("subcommands = %v, want %v", subcommands, want)
 	}
@@ -205,8 +207,8 @@ func TestRecoverWithMissingConfigOrDBRaisesPointingToInit(t *testing.T) {
 	lookPath = func(string) (string, error) { return "/usr/bin/qmd", nil }
 
 	err := Lifecycle(p, "recover", io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "orai wiki init") {
-		t.Fatalf("Lifecycle(recover) error = %v, want mention of `orai wiki init`", err)
+	if err == nil || !strings.Contains(err.Error(), "orai shelf init") {
+		t.Fatalf("Lifecycle(recover) error = %v, want mention of `orai shelf init`", err)
 	}
 }
 
@@ -227,7 +229,7 @@ func TestCollectionAddedLaterIsAddedOnRefreshOnly(t *testing.T) {
 	calls := installSuccessMocks(t, false, nil, "/usr/bin/qmd")
 	known := runCommand
 	runCommand = func(out io.Writer, argv []string, s *Settings, capture bool) (string, error) {
-		if capture {
+		if capture && argv[len(argv)-2] == "show" {
 			*calls = append(*calls, append([]string(nil), argv...))
 			return "", errors.New("Collection not found")
 		}
@@ -235,7 +237,7 @@ func TestCollectionAddedLaterIsAddedOnRefreshOnly(t *testing.T) {
 	}
 
 	err := Lifecycle(p, "recover", io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "orai wiki stop && orai wiki refresh") {
+	if err == nil || !strings.Contains(err.Error(), "orai shelf stop && orai shelf refresh") {
 		t.Fatalf("recover: %v", err)
 	}
 	*calls = nil
@@ -255,7 +257,7 @@ func TestInitRefusesWhileServerRunningAndRunsNoQMDCommands(t *testing.T) {
 	calls := installSuccessMocks(t, true, nil, "/usr/bin/qmd")
 
 	err := Lifecycle(p, "init", io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "orai wiki stop && orai wiki init") {
+	if err == nil || !strings.Contains(err.Error(), "orai shelf stop && orai shelf init") {
 		t.Fatalf("Lifecycle(init) error = %v, want the stop-then-init command", err)
 	}
 	if len(*calls) != 0 {
@@ -282,7 +284,7 @@ func TestRefreshRefusesWhileServerRunningAndRunsNoQMDCommands(t *testing.T) {
 
 	calls := installSuccessMocks(t, true, nil, "/usr/bin/qmd")
 	err = Lifecycle(p, "refresh", io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "orai wiki stop && orai wiki refresh") {
+	if err == nil || !strings.Contains(err.Error(), "orai shelf stop && orai shelf refresh") {
 		t.Fatalf("Lifecycle(refresh) error = %v, want the stop-then-refresh command", err)
 	}
 	if len(*calls) != 0 {
@@ -350,7 +352,7 @@ func TestVerifyRaisesWhenAnyCheckIsNotHealthy(t *testing.T) {
 	saved := probe
 	t.Cleanup(func() { probe = saved })
 	probe = func(*Settings, bool) []doctor.Check {
-		return []doctor.Check{doctor.New("wiki.server", doctor.Blocked, "connection refused", "")}
+		return []doctor.Check{doctor.New("shelf.server", doctor.Blocked, "connection refused", "")}
 	}
 
 	err := verify(s, io.Discard)
@@ -376,16 +378,16 @@ func TestStopRunsOnlyMcpStop(t *testing.T) {
 	}
 }
 
-// A wiki that was never built must say so (and how to get there), not report the
+// A shelf that was never built must say so (and how to get there), not report the
 // missing server as "connection refused".
-func TestCheckOnAnUninitializedWikiSaysWhatToRun(t *testing.T) {
+func TestCheckOnAnUninitializedShelfSaysWhatToRun(t *testing.T) {
 	p := makeQMDProject(t, filepath.Join(t.TempDir(), "proj"), 0)
 	saved, savedVerify := lookPath, verify
 	t.Cleanup(func() { lookPath, verify = saved, savedVerify })
 	verify = func(*Settings, io.Writer) error { t.Fatal("verify must not run"); return nil }
 
 	lookPath = func(string) (string, error) { return "/usr/bin/qmd", nil }
-	if err := Lifecycle(p, "check", io.Discard); err == nil || !strings.Contains(err.Error(), "orai wiki init") {
+	if err := Lifecycle(p, "check", io.Discard); err == nil || !strings.Contains(err.Error(), "orai shelf init") {
 		t.Fatalf("with qmd installed: %v", err)
 	}
 	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
@@ -397,7 +399,7 @@ func TestCheckOnAnUninitializedWikiSaysWhatToRun(t *testing.T) {
 // ---- check delegates to verify (real probe/ownServerRunning bypassed by "check") ---
 
 func TestCheckActionNeverInspectsQMDOnPath(t *testing.T) {
-	// "check" is read-only against an already-running server: once the project wiki
+	// "check" is read-only against an already-running server: once the project shelf
 	// has been initialized, it must not require qmd on PATH at all.
 	p := makeQMDProject(t, filepath.Join(t.TempDir(), "proj"), 0)
 	s := NewSettings(p)
@@ -460,7 +462,205 @@ func TestLifecycleRejectsConcurrentSetupCommandsViaTheSameLock(t *testing.T) {
 
 	installSuccessMocks(t, false, nil, "/usr/bin/qmd")
 	err = Lifecycle(p, "stop", io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "Another orai wiki command is running") {
+	if err == nil || !strings.Contains(err.Error(), "Another orai shelf command is running") {
 		t.Fatalf("Lifecycle(stop) error = %v, want mention of a concurrent command", err)
+	}
+}
+
+// ---- upgrade from 0.3 -----------------------------------------------------------
+
+// Orai 0.3 kept the index in .orai/wiki. The first lifecycle command after the upgrade
+// stops the server that index started, moves the folder as it is, and carries on: the
+// config and DB are the same bytes, and nothing is re-indexed.
+func TestRecoverAdoptsTheIndexOraiZeroThreeLeftInWiki(t *testing.T) {
+	p := makeQMDProject(t, filepath.Join(t.TempDir(), "proj"), 0)
+	s := NewSettings(p)
+	legacy := s.LegacyDirectory()
+	if filepath.Base(legacy) != "wiki" || filepath.Base(s.Directory) != "shelf" {
+		t.Fatalf("directories: %s %s", legacy, s.Directory)
+	}
+	if err := os.MkdirAll(legacy, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	config, _ := json.Marshal(s.configValue())
+	if err := os.WriteFile(filepath.Join(legacy, filepath.Base(s.ConfigFile)), config, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, filepath.Base(s.DB)), []byte("db-bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Doctor says what to run and changes nothing.
+	savedLookPath := lookPath
+	t.Cleanup(func() { lookPath = savedLookPath })
+	lookPath = func(string) (string, error) { return "/usr/bin/qmd", nil }
+	checks := Diagnose(p, false)
+	if len(checks) != 2 || checks[1].Component != "shelf.registration" || checks[0].Status != doctor.NotReady || !strings.Contains(checks[0].NextAction, "orai shelf recover") {
+		t.Fatalf("diagnosis before the move: %+v", checks)
+	}
+	if exists(s.Directory) {
+		t.Fatal("diagnosis moved the index")
+	}
+
+	calls := installSuccessMocks(t, false, nil, "/usr/bin/qmd")
+	var out bytes.Buffer
+	if err := Lifecycle(p, "recover", &out); err != nil {
+		t.Fatalf("Lifecycle(recover) = %v", err)
+	}
+	if exists(legacy) {
+		t.Fatal(".orai/wiki is still there")
+	}
+	db, _ := os.ReadFile(s.DB)
+	moved, _ := os.ReadFile(s.ConfigFile)
+	if string(db) != "db-bytes" || string(moved) != string(config) {
+		t.Fatalf("index changed while moving: %q %q", db, moved)
+	}
+	var subcommands []string
+	for _, call := range *calls {
+		subcommands = append(subcommands, strings.Join(call[3:], " "))
+	}
+	// The old server is stopped before the move; then recover starts it again.
+	if subcommands[0] != "mcp stop" || containsStr(subcommands, "update") || containsStr(subcommands, "embed") {
+		t.Fatalf("subcommands = %v", subcommands)
+	}
+	if !strings.Contains(out.String(), "Moving the index") {
+		t.Fatalf("output does not say the index was moved:\n%s", out.String())
+	}
+
+	// `stop` on a 0.3 index moves it and stops the server exactly once, so the documented
+	// `orai shelf stop && orai shelf refresh` does not break at the &&.
+	if err := os.Rename(s.Directory, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(s.Directory, 0o700); err != nil { // left by an interrupted move
+		t.Fatal(err)
+	}
+	*calls = nil
+	if err := Lifecycle(p, "stop", io.Discard); err != nil {
+		t.Fatalf("Lifecycle(stop) = %v", err)
+	}
+	if len(*calls) != 1 || strings.Join((*calls)[0][3:], " ") != "mcp stop" || !exists(s.DB) || exists(legacy) {
+		t.Fatalf("stop on a 0.3 index: calls %v, moved %v", *calls, exists(s.DB))
+	}
+
+	// An index already in .orai/shelf is never replaced by a stray .orai/wiki.
+	if err := os.MkdirAll(legacy, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if s.legacyOnly() {
+		t.Fatal("a second move would overwrite the current index")
+	}
+}
+
+// ---- collections follow orai.toml -----------------------------------------------
+
+func collectionProject(t *testing.T, collections string) (*Settings, *[][]string) {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "proj")
+	p := writeProject(t, root, "schema = 2\n[integrations.shelf]\ncollections = "+collections+"\n")
+	s := NewSettings(p)
+	for _, folder := range s.Collections {
+		if err := os.MkdirAll(folder, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(s.Directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{s.ConfigFile, s.DB} {
+		if err := os.WriteFile(file, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return s, installSuccessMocks(t, false, nil, "/usr/bin/qmd")
+}
+
+func joined(calls *[][]string) []string {
+	var lines []string
+	for _, call := range *calls {
+		lines = append(lines, strings.Join(call[3:], " "))
+	}
+	return lines
+}
+
+// Splitting `docs` into the folder itself and a subfolder: the index was built with
+// `docs` taking everything and a collection orai.toml no longer has. recover names the
+// difference; refresh re-registers what changed, removes what is gone, and re-indexes.
+func TestRefreshMakesTheIndexMatchTheDeclaredCollections(t *testing.T) {
+	s, calls := collectionProject(t, `{ core = { path = "docs", pattern = "*.md" }, adr = "docs/adr" }`)
+	if s.Patterns["core"] != "*.md" || s.Patterns["adr"] != "**/*.md" {
+		t.Fatalf("patterns: %v", s.Patterns)
+	}
+	indexed := runCommand
+	runCommand = func(out io.Writer, argv []string, s *Settings, capture bool) (string, error) {
+		last := argv[len(argv)-1]
+		switch {
+		case capture && last == "list":
+			*calls = append(*calls, append([]string(nil), argv...))
+			return "Collections (3):\n\nadr (qmd://adr/)\n  Pattern:  **/*.md\n\ncore (qmd://core/)\n  Pattern:  **/*.md\n\nnotes (qmd://notes/)\n  Files:    3\n", nil
+		case capture && last == "core":
+			*calls = append(*calls, append([]string(nil), argv...))
+			return "Collection: core\n  Path:     " + s.Collections["core"] + "\n  Pattern:  **/*.md\n", nil
+		}
+		return indexed(out, argv, s, capture)
+	}
+
+	err := Lifecycle(s.Project, "recover", io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "collection 'core'") || !strings.Contains(err.Error(), "orai shelf stop && orai shelf refresh") {
+		t.Fatalf("recover: %v", err)
+	}
+	if lines := joined(calls); containsStr(lines, "collection remove core") {
+		t.Fatalf("recover changed the index: %v", lines)
+	}
+
+	*calls = nil
+	var out bytes.Buffer
+	if err := Lifecycle(s.Project, "refresh", &out); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	lines := joined(calls)
+	add := "collection add " + s.Collections["core"] + " --name core --mask *.md"
+	remove, gone, update := indexOf(lines, "collection remove core"), indexOf(lines, "collection remove notes"), indexOf(lines, "update")
+	if remove < 0 || indexOf(lines, add) != remove+1 || gone < 0 || update < gone || containsStr(lines, "collection remove adr") {
+		t.Fatalf("refresh commands: %v", lines)
+	}
+	for _, want := range []string{"Re-registering: collection 'core'", "Removing collection 'notes'"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestOverlappingCollectionsAreNamed(t *testing.T) {
+	for collections, want := range map[string][]string{
+		`{ docs = "docs", adr = "docs/adr" }`:                                   {"docs and adr"},
+		`{ core = { path = "docs", pattern = "*.md" }, adr = "docs/adr" }`:      nil,
+		`{ a = "docs", b = "docs" }`:                                            {"a and b"},
+		`{ docs = "docs", design = "design" }`:                                  nil,
+		`{ adr = { path = "docs/adr", pattern = "**/*.md" }, guides = "docs" }`: {"guides and adr"},
+	} {
+		s, _ := collectionProject(t, collections)
+		if got := s.overlapping(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s: overlapping = %v, want %v", collections, got, want)
+		}
+	}
+}
+
+// With part of a folder in one collection and a subfolder in another, the smoke
+// document belongs to the deepest folder that holds it.
+func TestSmokeDocumentBelongsToTheDeepestCollection(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "proj")
+	p := writeProject(t, root, "schema = 2\n[integrations.shelf]\ncollections = { core = { path = \"docs\", pattern = \"*.md\" }, zadr = \"docs/adr\" }\n"+
+		"[integrations.shelf.smoke]\nlex = \"a\"\nvec = \"b\"\nexpect = \"docs/adr/0001.md\"\n")
+	if err := os.MkdirAll(filepath.Join(root, "docs/adr"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := NewSettings(p)
+	if got := expectedURI(s); got != "zadr/0001.md" {
+		t.Fatalf("expectedURI = %q", got)
+	}
+	s.Smoke.Expect = "docs/overview.md"
+	if got := expectedURI(s); got != "core/overview.md" {
+		t.Fatalf("expectedURI = %q", got)
 	}
 }
