@@ -94,7 +94,7 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 
 확인한 것: 메일함 파일 2,588개가 그대로였고 대기 메시지가 보였다. `orai doctor`에서 두 역할이 exact resume ready였고, `--dry-run`이 기존 대화 ID로 재개 명령을 만들었다. 문서 56개를 새로 색인했다. 실제 역할 세션을 띄워 대화가 이어지는지는 이 저장소에서 확인하지 않았다.
 
-## 문서 검색 개명과 묶음 나누기 (0.4.0 개발본)
+## 문서 검색 개명과 묶음 나누기 (0.4.0)
 
 2026-10-03, Pockets에서 쓰면서 나온 요구를 반영했다.
 
@@ -107,7 +107,7 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 
 ## 검증 기록
 
-### 2026-10-03, 0.4.0 개발본 (macOS 27.0 arm64)
+### 2026-10-03, 0.4.0 (macOS 27.0 arm64)
 
 | 범위 | 결과 |
 |---|---|
@@ -115,7 +115,9 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 | 이 저장소에서 0.3 색인 이전 | `.orai/wiki` 상태에서 doctor가 `orai shelf recover`를 안내했고, recover가 폴더를 옮긴 뒤 서버(18800)를 다시 시작했다. `orai doctor --deep`의 vector·lex+vec·본문 조회 healthy |
 | 임시 프로젝트, 실제 QMD 2.8.3으로 묶음 나누기 | `docs` 하나로 색인한 뒤 `core = { path = "docs", pattern = "*.md" }`와 `adr = "docs/adr"`로 바꿨다. `recover`는 차이를 알리고 멈췄고, `stop && refresh`가 두 묶음을 등록하고 `docs`를 색인에서 뺐다. `docs/adr`의 smoke 문서가 `adr` 묶음에서 검색됐다 |
 | 임시 프로젝트의 `shelf.registration` | `.codex/config.toml`의 포트가 다를 때 degraded와 고칠 값이 나왔고, 맞추면 healthy |
-| 미검증 | 실제 역할 세션에서 `shelf` 도구 호출, Claude Code의 같은 이름 서버 우선순위, Linux |
+| CI (223c650) | macOS 15, Ubuntu 24.04 통과. Release 0.4.0에 바이너리 4개 첨부 |
+| 설치와 0.3.0에서 올리기 (배포 후) | 빈 폴더에서 `mise use github:oXpace/orai@0.3.0` → `orai setup --role lead=codex --role dev=claude`(색인과 서버 생성) → `mise use github:oXpace/orai@0.4.0`. `orai doctor`가 schema 수정과 `orai shelf recover`를 안내했고, `orai setup`이 서버를 멈추고 `.orai/wiki`를 `.orai/shelf`로 옮긴 뒤 다시 시작했다. `orai.toml` 두 줄을 고치자 healthy. Claude 역할의 실행 계획에 MCP 서버가 `orai`와 `shelf`로 들어갔다 |
+| 미검증 | 실제 역할 세션에서 `shelf` 도구 호출, Claude Code의 같은 이름 서버 우선순위, Linux의 실제 QMD |
 
 ### 2026-10-03, 0.3.0 개발본 (macOS 27.0 arm64)
 
