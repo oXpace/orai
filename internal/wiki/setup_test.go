@@ -173,7 +173,7 @@ func TestDiagnoseNotReadyWhenIndexNotInitialized(t *testing.T) {
 	if len(checks) != 1 || checks[0].Status != doctor.NotReady {
 		t.Fatalf("Diagnose() = %+v, want a single not-ready check", checks)
 	}
-	if checks[0].NextAction != "orai wiki init" {
+	if !strings.Contains(checks[0].NextAction, "orai wiki init") {
 		t.Fatalf("next action = %q, want orai wiki init", checks[0].NextAction)
 	}
 }

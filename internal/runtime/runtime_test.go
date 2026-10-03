@@ -9,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/oXpace/orai/internal/config"
 	"github.com/oXpace/orai/internal/mail"
 	"github.com/oXpace/orai/internal/project"
+	"github.com/oXpace/orai/internal/scaffold"
 	"github.com/oXpace/orai/internal/state"
 )
 
@@ -123,7 +125,7 @@ func TestProviderResumeUsesExactIDAndRoleModel(t *testing.T) {
 		if i := index(args, "--model"); i < 0 || args[i+1] != role.Model {
 			t.Fatalf("%s model missing", name)
 		}
-		if index(args, "--last") >= 0 || !strings.Contains(args[len(args)-1], "기존 대화") {
+		if index(args, "--last") >= 0 || !strings.Contains(args[len(args)-1], "역할 세션을 다시 열었다") {
 			t.Fatalf("%s must resume exactly with a resume prompt", name)
 		}
 	}
@@ -220,13 +222,99 @@ func TestFreshPromptBootstrapsOnceAndChannelFollowsProvider(t *testing.T) {
 		role := f.p.Config.Roles[name]
 		args, _ := ProviderArgs(f.p, role, "")
 		prompt := args[len(args)-1]
-		if strings.Count(strings.Join(args, "\n"), "역할 지침을 읽고") != 1 || !strings.Contains(prompt, role.Guide) ||
-			!strings.Contains(prompt, SkillPath(f.p)) || !strings.Contains(prompt, "orai msg inbox") {
+		if strings.Count(strings.Join(args, "\n"), "위 문서를 읽는다") != 1 || !strings.Contains(prompt, "orai msg inbox") {
 			t.Fatalf("%s prompt %q", name, prompt)
+		}
+		// The basics, each on its own line: identity, the project root, then the three
+		// documents with paths relative to that root.
+		for _, line := range []string{
+			"- 역할: " + name,
+			"- 프로젝트 폴더: " + f.p.Root,
+			"- 프로젝트 지침: AGENTS.md",
+			"- 역할 지침: " + role.Guide,
+			"- 메시지 사용법: .agents/skills/orai/SKILL.md",
+		} {
+			if !strings.Contains(prompt, line+"\n") {
+				t.Fatalf("%s prompt lacks %q:\n%s", name, line, prompt)
+			}
 		}
 		if strings.Contains(prompt, "channel_ready") != (role.Provider == "claude") {
 			t.Fatalf("%s channel_ready mismatch", name)
 		}
+		// The project folder is the one absolute path; documents are relative.
+		if strings.Count(prompt, f.p.Root) != 1 {
+			t.Fatalf("%s prompt should name the project root exactly once:\n%s", name, prompt)
+		}
+		// A reopened session already knows who it is: a few lines, no reading list, and
+		// the documents only as a pointer for when something changed.
+		resumed := Kickoff(f.p, role, true)
+		if !strings.HasPrefix(resumed, "Orai `"+name+"` 역할 세션을 다시 열었다.\n") ||
+			strings.Contains(resumed, "## ") || strings.Contains(resumed, "문서를 읽는다") ||
+			!strings.Contains(resumed, "orai msg inbox") || !strings.Contains(resumed, "AGENTS.md, "+role.Guide) ||
+			strings.Count(resumed, f.p.Root) != 1 || strings.Count(resumed, "\n") > 7 || len(resumed) >= len(prompt) {
+			t.Fatalf("%s resumed prompt:\n%s", name, resumed)
+		}
+		if strings.Contains(resumed, "channel_ready") != (role.Provider == "claude") {
+			t.Fatalf("%s resumed channel_ready mismatch", name)
+		}
+	}
+	// Shared steps are always in the prompt. What only some roles need is in the role's
+	// guide: when the guide has a start section the prompt points at it, and a Claude
+	// role is told about channel_ready directly unless that section covers it.
+	dev, lead := f.p.Config.Roles["dev"], f.p.Config.Roles["lead"]
+	follow := `역할 지침의 "세션 시작" 절을 따른다.`
+	write := func(role config.Role, text string) {
+		path := filepath.Join(f.p.Root, role.Guide)
+		_ = os.MkdirAll(filepath.Dir(path), 0o755)
+		_ = os.WriteFile(path, []byte(text), 0o644)
+	}
+	write(dev, "# dev\n\n"+scaffold.StartHeading+"\n\n1. orai MCP의 `channel_ready` 도구를 호출한다.\n")
+	write(lead, "# lead\n\n## 책임\n")
+	for _, resumed := range []bool{false, true} {
+		prompt := Kickoff(f.p, dev, resumed)
+		if !strings.Contains(prompt, follow) || strings.Contains(prompt, "channel_ready") ||
+			!strings.Contains(prompt, "orai msg inbox") || strings.Index(prompt, follow) > strings.Index(prompt, "orai msg inbox") {
+			t.Fatalf("resumed=%v Claude prompt with a guide section:\n%s", resumed, prompt)
+		}
+		// A Codex role has nothing of its own: no pointer, only the shared steps.
+		prompt = Kickoff(f.p, lead, resumed)
+		if strings.Contains(prompt, follow) || strings.Contains(prompt, "channel_ready") || !strings.Contains(prompt, "orai msg inbox") {
+			t.Fatalf("resumed=%v Codex prompt:\n%s", resumed, prompt)
+		}
+	}
+	write(dev, "# dev\n\n"+scaffold.StartHeading+"\n\n1. 오늘 날짜의 작업 기록을 연다.\n")
+	if prompt := Kickoff(f.p, dev, true); !strings.Contains(prompt, "channel_ready") || !strings.Contains(prompt, follow) {
+		t.Fatalf("a Claude guide section without channel_ready must not be relied on for it:\n%s", prompt)
+	}
+	_ = os.Remove(filepath.Join(f.p.Root, dev.Guide))
+	_ = os.Remove(filepath.Join(f.p.Root, lead.Guide))
+
+	// A role in its own worktree gets the same project-relative paths (no "../.."), and
+	// the project root tells it where they resolve.
+	away := dev
+	away.Worktree = ".worktrees/dev"
+	_ = os.MkdirAll(filepath.Join(f.p.Root, away.Worktree), 0o755)
+	prompt := Kickoff(f.p, away, false)
+	for _, line := range []string{
+		"- 프로젝트 폴더: " + f.p.Root,
+		"## 문서 (경로는 프로젝트 폴더 기준)",
+		"- 프로젝트 지침: AGENTS.md",
+		"- 역할 지침: " + away.Guide,
+		"- 메시지 사용법: .agents/skills/orai/SKILL.md",
+	} {
+		if !strings.Contains(prompt, line+"\n") {
+			t.Fatalf("worktree prompt lacks %q:\n%s", line, prompt)
+		}
+	}
+	if strings.Contains(prompt, "../") || strings.Contains(RecoveryContext(f.p, away), "../") {
+		t.Fatalf("worktree prompt climbs out of the working folder:\n%s", prompt)
+	}
+
+	// A role without a guide says so instead of pointing at a file that is not there.
+	bare := f.p.Config.Roles["lead"]
+	bare.Guide = ""
+	if prompt := Kickoff(f.p, bare, false); !strings.Contains(prompt, "- 역할 지침: 없음") {
+		t.Fatalf("prompt without a guide:\n%s", prompt)
 	}
 }
 
@@ -255,7 +343,8 @@ func TestHookRestoresIdentityWithoutRepeatingBootstrap(t *testing.T) {
 		}
 		_ = json.Unmarshal([]byte(out), &hook)
 		text := hook.HookSpecificOutput.AdditionalContext
-		if !strings.Contains(text, "lead") || !strings.Contains(text, f.p.Root) || strings.Contains(text, "읽어라") ||
+		if !strings.Contains(text, "역할=lead") || !strings.Contains(text, "역할 지침=docs/lead.md") ||
+			strings.Count(text, f.p.Root) != 1 || strings.Contains(text, "읽어라") ||
 			len([]rune(text)) >= 300 {
 			t.Fatalf("%s context %q", source, text)
 		}
@@ -484,12 +573,25 @@ func TestDiagnoseReportsRolesMailAndMissingWorktree(t *testing.T) {
 	dir := t.TempDir()
 	_ = exec.Command("git", "init", "-q", "-b", "trunk", dir).Run()
 	p := writeProject(t, dir, strings.Replace(twoRoles, "worktree = \".\"\nguide = \"docs/dev.md\"", "worktree = \".worktrees/dev\"\nguide = \"docs/dev.md\"", 1))
-	checks := Diagnose(p)
-	byName := map[string]string{}
-	for _, c := range checks {
-		byName[c.Component] = c.Status + "|" + c.NextAction
+	diagnose := func() map[string]string {
+		byName := map[string]string{}
+		for _, c := range Diagnose(p) {
+			byName[c.Component] = c.Status + "|" + c.Reason + "|" + c.NextAction
+		}
+		return byName
 	}
+	// A declared guide that does not exist is reported: the role would be told to read it.
+	byName := diagnose()
+	if !strings.HasPrefix(byName["role.lead"], "degraded|role guide is missing: docs/lead.md|`orai setup`") {
+		t.Fatalf("missing guide: %v", byName)
+	}
+	_ = os.MkdirAll(filepath.Join(dir, "docs"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "docs/lead.md"), []byte("# lead\n"), 0o644)
+	byName = diagnose()
+	// Paths in reasons are relative to the project; the worktree step asks for the first
+	// commit because this repository has none.
 	if !strings.HasPrefix(byName["mail"], "not-ready") || !strings.HasPrefix(byName["role.lead"], "healthy") ||
+		!strings.HasPrefix(byName["role.dev"], "degraded|missing role worktree: .worktrees/dev|Make the first commit") ||
 		!strings.Contains(byName["role.dev"], "git worktree add .worktrees/dev") {
 		t.Fatalf("checks %v", byName)
 	}

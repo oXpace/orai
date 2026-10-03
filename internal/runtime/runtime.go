@@ -23,6 +23,7 @@ import (
 	"github.com/oXpace/orai/internal/mail"
 	"github.com/oXpace/orai/internal/project"
 	"github.com/oXpace/orai/internal/providers"
+	"github.com/oXpace/orai/internal/scaffold"
 	"github.com/oXpace/orai/internal/state"
 )
 
@@ -70,36 +71,101 @@ func CanonicalUUID(s string) (string, error) {
 	return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:32], nil
 }
 
-func SkillPath(p *project.Project) string {
-	return filepath.Join(p.Root, ".agents", "skills", "orai", "SKILL.md")
+// guideStart reports what the role's guide says about opening a session: whether it has
+// a "세션 시작" section at all, and whether it tells a Claude role to call
+// channel_ready. Without that call no notification arrives, so a guide that lacks it
+// (written by hand, or for another provider) is not relied on for it.
+func guideStart(p *project.Project, role config.Role) (section, channel bool) {
+	if role.Guide == "" {
+		return false, false
+	}
+	data, err := os.ReadFile(filepath.Join(p.Root, role.Guide))
+	if err != nil {
+		return false, false
+	}
+	text := string(data)
+	return strings.Contains(text, scaffold.StartHeading), strings.Contains(text, "channel_ready")
 }
 
+// Kickoff is the prompt a role session starts with. It carries only the basics; working
+// rules live in the documents it points at.
+//
+// A new conversation gets who it is, the project's root folder (the one absolute path,
+// so the session knows where the project lives), the documents to read (project instructions, the
+// role's guide from orai.toml, the messaging skill) and the start steps. A reopened one
+// already knows all that, so it gets the steps and one line of pointers.
+//
+// The steps every role shares are written here. What only some roles need (a Claude
+// role calling channel_ready) lives in the role's guide under "세션 시작", and the
+// prompt points at that section when the guide has one.
 func Kickoff(p *project.Project, role config.Role, resumed bool) string {
-	guide := ""
-	if role.Guide != "" {
-		guide = ", 역할 지침은 " + filepath.Join(p.Root, role.Guide)
+	// Document paths are relative to the project folder, exactly as orai.toml writes
+	// them; the project folder itself is the one absolute path in the prompt.
+	guide := role.Guide
+	agents := "AGENTS.md"
+	section, channel := guideStart(p, role)
+	var own []string
+	if role.Provider == "claude" && !(section && channel) {
+		own = append(own, "orai MCP의 `channel_ready`를 호출해 수신 준비를 알린다.")
 	}
-	reading := "AGENTS.md와 역할 지침을 읽고 작업에 필요한 원천만 추가로 확인하라. "
+	if section {
+		own = append(own, "역할 지침의 \"세션 시작\" 절을 따른다.")
+	}
+
 	if resumed {
-		reading = "기존 대화의 역할·작업 요약을 이어받고 지침 변경 또는 누락된 맥락에 해당하는 원문만 확인하라. "
+		docs := agents
+		if guide != "" {
+			docs += ", " + guide
+		}
+		steps := append(own,
+			"`orai msg inbox`로 받은 메시지를 확인한다.",
+			"메시지가 없으면 하던 작업을 이어간다. 할 일이 없으면 턴을 끝낸다.")
+		return numbered([]string{fmt.Sprintf("Orai `%s` 역할 세션을 다시 열었다.", role.Name), ""}, steps) +
+			"\n지침은 바뀌었거나 기억나지 않을 때만 다시 본다 (프로젝트 폴더 " + p.Root + " 기준): " + docs + "\n"
 	}
-	channel := ""
-	if role.Provider == "claude" {
-		channel = "orai MCP의 channel_ready를 호출해 수신 준비를 알리라. "
+
+	if guide == "" {
+		guide = "없음 (`orai.toml`의 `[roles." + role.Name + "]`에 `guide`를 적으면 연결된다)"
 	}
-	return fmt.Sprintf("당신은 %s 프로젝트의 %s 역할이다. 지침 기준 checkout은 %s%s이다. ", p.Name(), role.Name, p.Root, guide) +
-		"역할 worktree보다 이 기준 checkout의 지침을 우선한다. " + reading +
-		fmt.Sprintf("메시지 작업은 %s를 참고해 orai msg inbox로 시작하라. ", SkillPath(p)) +
-		"실행 대상이 없으면 전체 백로그를 조사하지 말고 턴을 종료하라. 새 메시지 알림은 오라이가 전달한다. " +
-		"보조가 본 세션 ID·메일 설정을 변경하지 않게 하라. " + channel
+	lines := []string{
+		"# Orai 역할 세션",
+		"",
+		"- 프로젝트: " + p.Name(),
+		"- 역할: " + role.Name,
+		"- 프로젝트 폴더: " + p.Root,
+		"",
+		"## 문서 (경로는 프로젝트 폴더 기준)",
+		"",
+		"- 프로젝트 지침: " + agents,
+		"- 역할 지침: " + guide,
+		"- 메시지 사용법: .agents/skills/orai/SKILL.md",
+		"",
+		"## 시작",
+		"",
+	}
+	steps := append([]string{"위 문서를 읽는다."}, own...)
+	steps = append(steps,
+		"`orai msg inbox`로 받은 메시지를 확인한다.",
+		"처리할 것이 없으면 다른 일을 찾지 말고 턴을 끝낸다. 새 메시지는 오라이가 알린다.")
+	return numbered(lines, steps)
 }
 
+// numbered appends steps to lines as a numbered list and joins everything.
+func numbered(lines, steps []string) string {
+	for i, step := range steps {
+		lines = append(lines, fmt.Sprintf("%d. %s", i+1, step))
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+// RecoveryContext is re-injected by the SessionStart hook (startup, resume, compact): a
+// one-line reminder of identity and where the documents are, never a second bootstrap.
 func RecoveryContext(p *project.Project, role config.Role) string {
 	guide := role.Guide
 	if guide == "" {
 		guide = "없음"
 	}
-	return fmt.Sprintf("오라이 역할=%s, 지침 기준=%s, 역할 지침=%s. 현재 작업·요약을 이어가고 문서 확인 범위는 AGENTS.md를 따른다.",
+	return fmt.Sprintf("Orai 역할 세션: 역할=%s, 프로젝트 폴더=%s, 프로젝트 지침=AGENTS.md, 역할 지침=%s (프로젝트 폴더 기준 경로). 하던 작업을 이어간다.",
 		role.Name, p.Root, guide)
 }
 

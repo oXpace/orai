@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/oXpace/orai/internal/config"
+	"github.com/oXpace/orai/internal/doctor"
 	"github.com/oXpace/orai/internal/project"
 )
 
@@ -28,7 +29,8 @@ const (
 	PortBase = 18200
 	PortSpan = 800
 
-	InstallHint = "Install QMD (docs/compatibility.md); Orai never installs it globally"
+	// InstallHint is the next step when the engine is missing. Orai never installs it.
+	InstallHint = doctor.InstallQMD
 )
 
 // DefaultPort derives a stable per-project port from the project id: deterministic, and

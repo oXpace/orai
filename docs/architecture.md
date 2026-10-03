@@ -85,7 +85,18 @@ orai run <role>
 
 **정확한 재개.** 기본 동작은 캡처된 UUID로 재개하는 것이다. provider, cwd, 기록된 transcript 파일이 모두 일치해야 한다. "가장 최근 대화"를 추측하거나 writer lock을 지워 복구하지 않는다. 새 대화는 `--fresh`로만 시작하며, 이때 이전 상태는 `history/`로 옮긴다.
 
-**부트스트랩 분리.** 새 세션 시작, 재개 안내, compact hook, 메시지 알림은 서로 다른 경로다. 새 세션만 역할 지침을 읽으라는 시작 프롬프트를 받는다. 재개는 요약을 이어받고 변경된 원문만 확인한다. 알림은 메시지 ID만 전달한다.
+**부트스트랩 분리.** 새 세션 시작, 재개 안내, compact hook, 메시지 알림은 서로 다른 경로다. 알림은 메시지 ID만 전달한다.
+
+시작 프롬프트는 기본 사항만 담는다. 프로젝트·역할·프로젝트 폴더, 읽을 문서 세 개의 경로(프로젝트 `AGENTS.md`, `orai.toml`의 `guide`가 가리키는 역할 지침, 메시지 스킬), 그리고 시작 단계다. 작업 규칙은 프롬프트가 아니라 그 문서들이 소유한다. 프로젝트 폴더만 루트의 절대 경로로 적고, 문서 경로는 모두 그 프로젝트 폴더 기준 상대 경로다(`AGENTS.md`, `.agents/roles/dev.md`). `orai.toml`에 적힌 값과 같고, 어느 폴더에서 일하는 역할이든 같은 경로를 받는다. 자기 worktree에서 일하는 역할이 worktree의 사본 대신 프로젝트 폴더의 문서를 읽어야 한다는 규칙은 `AGENTS.md`의 Orai 블록에 있다.
+
+시작 단계는 모든 역할에 공통인 것과 일부 역할에만 필요한 것으로 나뉜다.
+
+- **공통 (프롬프트에 적는다)**: 문서를 읽는다, `orai msg inbox`로 메시지를 확인한다, 처리할 것이 없으면 턴을 끝낸다.
+- **역할별 (역할 지침의 "세션 시작" 절에 적는다)**: 현재는 Claude 역할의 `channel_ready` 호출뿐이다. `setup`이 Claude 역할을 추가할 때 이 절을 지침에 써 넣는다. Codex 역할의 지침에는 이 절이 없다. 프로젝트가 역할마다 세션을 열 때 할 일을 더 정하고 싶으면 이 절에 적는다.
+
+프롬프트는 지침에 "세션 시작" 절이 있을 때만 "그 절을 따른다"는 단계를 넣는다. Claude 역할인데 지침에 `channel_ready`가 없으면(지침이 없거나, 이전 버전에서 만들었거나, 손으로 쓴 경우) 프롬프트가 그 호출을 직접 적는다. 이 호출이 빠지면 알림이 조용히 오지 않기 때문에 지침 내용에만 맡기지 않는다.
+
+다시 연 세션은 문서 목록 없이 같은 단계("문서를 읽는다" 제외, 마지막은 "하던 작업을 이어간다")와 지침 경로 한 줄만 받는다. SessionStart hook은 역할과 문서 위치를 한 줄로 다시 알려 줄 뿐 문서를 다시 읽게 하지 않는다. `orai run <역할> --dry-run`으로 실제 프롬프트를 볼 수 있다.
 
 ## 알림
 
@@ -108,7 +119,7 @@ orai run <role>
 
 ## 진단 모델
 
-`doctor`는 읽기 전용이다. 구성요소마다 `component`, `status`, `reason`, `next_action`, `checked_at`을 JSON으로 낸다.
+`doctor`는 읽기 전용이다. 구성요소마다 `component`, `status`, `reason`, `next_action`, `checked_at`을 낸다. 기본 출력은 사람이 읽는 표와 순서 있는 조치 목록이고, `--json`은 같은 내용에 `detail`을 더한 JSON이다. 두 출력의 종료 코드는 같다. `next_action`은 실행할 명령이나 전체 URL로 적는다. Orai를 쓰는 프로젝트에는 이 저장소의 문서가 없으므로 `docs/...` 같은 상대 경로로 안내하지 않는다.
 
 | status | 의미 |
 |---|---|
@@ -139,7 +150,7 @@ wiki 진단은 원인별로 나눈다. 연결 거부, 샌드박스 접근 거부
 | `internal/channel` | Claude MCP 채널 (`orai _channel`) |
 | `internal/wiki` | wiki 엔진(QMD) 수명주기·진단, 역할별 MCP 주입 |
 | `internal/codegraph` | CodeGraph 진단과 setup 단계 |
-| `internal/doctor` | 진단 상태 모델, 도구 capability·로그인 검사 |
+| `internal/doctor` | 진단 상태 모델, 사람용·JSON 출력, 설치 안내 문구, 도구 capability·로그인 검사 |
 | `internal/scaffold` | `orai setup`의 파일 계획·적용, 내장 템플릿(`go:embed`) |
 | `internal/setup` | `orai setup` 전체 흐름: 파일 → wiki → 코드 그래프 → 진단 |
 | `internal/version` | 버전 (릴리스 빌드 시 `-ldflags`로 주입) |

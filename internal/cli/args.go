@@ -16,11 +16,17 @@ func usagef(format string, args ...any) error { return &UsageError{fmt.Sprintf(f
 // options parses GNU-style flags interspersed with positionals: `--name value`,
 // `--name=value`, bool `--name`, and `--` to end flags. The standard flag package stops
 // at the first positional, which `orai msg send staff --body x` needs to get past.
+// `-h`/`--help` is accepted everywhere and recorded as the "help" bool.
 type options struct {
 	values map[string]string
+	lists  map[string][]string
 	bools  map[string]bool
 	args   []string
 }
+
+// repeatable flags collect every occurrence (options.lists) instead of rejecting a
+// second one.
+var repeatable = map[string]bool{"role": true}
 
 func (o options) has(name string) bool   { _, ok := o.values[name]; return ok || o.bools[name] }
 func (o options) get(name string) string { return o.values[name] }
@@ -39,7 +45,7 @@ func (o options) intValue(name string) (int, bool, error) {
 
 // spec maps flag names (without dashes) to whether they take a value.
 func parse(argv []string, spec map[string]bool) (options, error) {
-	o := options{values: map[string]string{}, bools: map[string]bool{}}
+	o := options{values: map[string]string{}, lists: map[string][]string{}, bools: map[string]bool{}}
 	for i := 0; i < len(argv); i++ {
 		token := argv[i]
 		if token == "--" {
@@ -75,6 +81,10 @@ func parse(argv []string, spec map[string]bool) (options, error) {
 			}
 			i++
 			value = argv[i]
+		}
+		if repeatable[name] {
+			o.lists[name] = append(o.lists[name], value)
+			continue
 		}
 		if _, dup := o.values[name]; dup {
 			return o, usagef("option --%s given twice", name)

@@ -188,7 +188,7 @@ func TestProbeHealthyIndexNotDeepMarksSearchNotChecked(t *testing.T) {
 	if last.Status != doctor.NotChecked {
 		t.Fatalf("status = %q, want not-checked", last.Status)
 	}
-	if last.NextAction != "orai doctor --deep" {
+	if !strings.Contains(last.NextAction, "orai doctor --deep") {
 		t.Fatalf("next action = %q, want orai doctor --deep", last.NextAction)
 	}
 	status, code := doctor.Overall(checks)

@@ -42,12 +42,13 @@ Run Codex and Claude Code as role sessions with exact resume, notifications and
 diagnostics. ` + "`orai <role>`" + ` is short for ` + "`orai run <role>`" + `.
 
 commands:
-  setup [--preset minimal|pm-staff] [--branch NAME] [--dry-run] [--no-tools]
-                        Set up this project (safe to re-run)
+  setup [--role NAME=PROVIDER ...] [--preset NAME] [--dry-run] [--no-tools]
+                        Set up this project, or add roles to it (safe to re-run)
   run <role> [--fresh] [--dry-run]
                         Start or exactly resume a role
   status                Role processes, delivery readiness, pending mail
-  doctor [--deep]       Read-only diagnosis as JSON
+  doctor [--deep] [--json]
+                        Read-only diagnosis with next steps
   msg inbox [ID] [--peek] [--limit N] [--as user]
   msg send <role|user> [--body TEXT | --file PATH] [--kind K] [--thread T] [--as user]
   msg reply <ID> [--body TEXT | --file PATH] [--kind K] [--as user]
@@ -58,8 +59,127 @@ commands:
 options:
   --project PATH        project directory (default: nearest orai.toml above the current directory)
   --version             print the version
-  -h, --help            show this help
+  -h, --help            show this help; ` + "`orai <command> --help`" + ` explains one command
 `
+
+const setupHelp = `usage: orai setup [--role NAME=PROVIDER[:WORKTREE] ...] [--preset minimal|pm-staff]
+                  [--branch NAME] [--dry-run] [--no-tools] [--project PATH]
+
+Set up the project in this folder: Git repository, orai.toml, agent instructions,
+mailboxes, project wiki and code graph, then a diagnosis. Safe to re-run: existing
+files are kept, and only what is missing is added.
+
+roles:
+  --role NAME=PROVIDER[:WORKTREE]
+                        Declare a role; repeat for more. PROVIDER is codex or claude.
+                        The project's first role works in the project folder; later
+                        ones default to their own worktree, .worktrees/NAME. Give
+                        :WORKTREE to choose (":." shares the project folder).
+                        Works on an existing project too: new roles are added to
+                        orai.toml with a guide in .agents/roles/NAME.md.
+  --preset pm-staff     Shorthand for --role pm=codex --role staff=claude, with
+                        guides written for that pair. Default: minimal (no roles).
+
+examples:
+  orai setup --role lead=codex --role dev=claude --role reviewer=claude
+  orai setup --role reviewer=claude        # add one role later
+  orai setup --dry-run                     # show what would change
+
+options:
+  --branch NAME         branch for a new repository (default trunk)
+  --dry-run             print the plan and change nothing
+  --no-tools            files only: skip the wiki index/server and the code graph
+`
+
+const runHelp = `usage: orai run <role> [--fresh] [--dry-run] [--project PATH]
+       orai <role> ...
+
+Start a role in this terminal, resuming exactly the conversation Orai captured for it.
+
+  --fresh               start a new conversation (the old one stays with the provider)
+  --dry-run             print the command, paths and mailbox; start nothing
+`
+
+const statusHelp = `usage: orai status [--project PATH]
+
+Print each role as JSON: provider, whether it is running, its saved session,
+whether notifications can be delivered, the last delivery error, pending mail.
+`
+
+const doctorHelp = `usage: orai doctor [--deep] [--json] [--project PATH]
+
+Check this project without changing anything, and list what to do next.
+
+  --deep                also run real wiki searches and the code graph symbol lookup
+                        (loads the search models; the first run may download them)
+  --json                machine-readable report (every field, including details)
+
+marks: ✓ healthy   ✗ blocked/unsupported   ! degraded/not-ready
+       - not configured (optional feature off)   · not checked in this mode
+
+exit codes: 0 healthy, 1 something needs attention, 2 usage or orai.toml error,
+3 a core component (provider CLI, login, mailboxes) is blocked.
+
+What --deep verifies is set in orai.toml:
+  [integrations.wiki.smoke]      lex / vec: two queries; expect: the document
+                                 (path from the project folder) both must return
+  [integrations.codegraph]       smoke_symbol: a symbol the index must contain
+Without them, --deep only checks that searches return something.
+`
+
+var msgHelp = `usage: orai msg inbox [ID] [--peek] [--limit N] [--as user]
+       orai msg send <role|user> [--body TEXT | --file PATH] [--kind K] [--thread T] [--as user]
+       orai msg reply <ID> [--body TEXT | --file PATH] [--kind K] [--as user]
+
+Messages between roles. Inside a role session the sender is that role. Outside one
+(your own terminal), add --as user. The body comes from --body, --file or piped stdin.
+
+  inbox                 receive pending messages (marks them read); --peek only lists
+  inbox ID              receive one message
+  --kind K              one of: ` + strings.Join(mail.Kinds, ", ") + `
+
+Output is JSON.
+`
+
+const wikiHelp = `usage: orai wiki init|recover|refresh|check|stop [--project PATH]
+
+The project wiki makes this project's Markdown documents searchable from role
+sessions (MCP server ` + "`wiki-<project>`" + `). The engine is QMD, run only for this project:
+its index lives in .orai/wiki and its server listens on 127.0.0.1.
+
+  init      first time: build the index and embeddings, start the server, verify
+  recover   start the server again (after a reboot) without rebuilding, verify
+  refresh   re-index after documents changed, then start and verify
+  check     verify the running server end to end; changes nothing
+  stop      stop this project's server
+
+first time:
+  1. Install QMD:  npm install -g @tobilu/qmd   (needs Node 22+)
+  2. Put Markdown under docs/ (or the folders in orai.toml).
+  3. orai wiki init
+     The first run downloads the embedding model (about 0.6 GB) into ~/.cache/qmd;
+     the first real search downloads the search models (about 2 GB). Projects share them.
+  ` + "`orai setup`" + ` does steps 2-3 for you when QMD is installed.
+
+after editing documents:
+  orai wiki stop && orai wiki refresh
+  (refresh refuses while the server runs, so a search in progress is never cut off)
+
+settings, in orai.toml under [integrations.wiki]:
+  collections = { docs = "docs", notes = "notes" }   name = folder, relative.
+                                After adding one: orai wiki stop && orai wiki refresh
+  port = 18181                  only if the derived port is taken by another server
+  embed_model = "hf:..."        read by the first ` + "`orai wiki init`" + ` only
+  [integrations.wiki.smoke]     lex, vec, expect: a query pair and the document they
+                                must return, checked by ` + "`orai doctor --deep`" + `
+
+More: ` + doctor.DocsURL + `/operations.md
+`
+
+// commandHelp is what `orai <command> --help` prints.
+var commandHelp = map[string]string{
+	"setup": setupHelp, "run": runHelp, "status": statusHelp, "doctor": doctorHelp, "msg": msgHelp, "wiki": wikiHelp,
+}
 
 func init() {
 	runtime.MCPServers = wiki.MCPServers
@@ -109,6 +229,10 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 		word = "run"
 	}
 	rest := append(append([]string{}, argv[:index]...), argv[index+1:]...)
+	if text, ok := commandHelp[word]; ok && wantsHelp(rest) {
+		fmt.Fprint(stdout, text)
+		return 0, nil
+	}
 	switch word {
 	case "setup":
 		return runSetup(rest, stdout)
@@ -123,9 +247,13 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 	case "msg":
 		return runMessage(rest, stdin, stdout)
 	case "wiki":
+		if o, err := parse(rest, map[string]bool{"project": true}); err == nil && len(o.args) == 0 {
+			fmt.Fprint(stdout, wikiHelp)
+			return exitUsage, nil
+		}
 		return withProject(rest, nil, func(p *project.Project, o options) (int, error) {
 			if len(o.args) != 1 || !wikiActions[o.args[0]] {
-				return exitUsage, usagef("usage: orai wiki init|recover|refresh|check|stop")
+				return exitUsage, usagef("usage: orai wiki init|recover|refresh|check|stop (`orai wiki --help` explains each)")
 			}
 			return 0, wiki.Lifecycle(p, o.args[0], stdout)
 		})
@@ -141,6 +269,15 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 		return 0, ch.Run(stdin, stdout)
 	}
 	return exitUsage, usagef("unknown command %s", word)
+}
+
+// wantsHelp reports whether argv asks for help: `-h`/`--help` in flag position (not
+// after `--`, and not as the value of the preceding flag, e.g. `--body --help`).
+func wantsHelp(argv []string) bool {
+	o, _ := parse(argv, map[string]bool{"project": true, "preset": true, "branch": true, "role": true, "as": true,
+		"limit": true, "body": true, "file": true, "kind": true, "thread": true,
+		"dry-run": false, "no-tools": false, "fresh": false, "deep": false, "json": false, "peek": false})
+	return o.flag("help")
 }
 
 func withProject(argv []string, spec map[string]bool, fn func(*project.Project, options) (int, error)) (int, error) {
@@ -166,7 +303,8 @@ func withProject(argv []string, spec map[string]bool, fn func(*project.Project, 
 }
 
 func runSetup(argv []string, stdout io.Writer) (int, error) {
-	o, err := parse(argv, map[string]bool{"project": true, "preset": true, "branch": true, "dry-run": false, "no-tools": false})
+	o, err := parse(argv, map[string]bool{"project": true, "preset": true, "branch": true, "role": true,
+		"dry-run": false, "no-tools": false})
 	if err != nil {
 		return exitUsage, err
 	}
@@ -185,9 +323,13 @@ func runSetup(argv []string, stdout io.Writer) (int, error) {
 		sort.Strings(names)
 		return exitUsage, usagef("--preset must be one of: %s", strings.Join(names, ", "))
 	}
-	branch := o.get("branch")
-	if branch == "" {
-		branch = scaffold.DefaultBranch
+	opts := scaffold.Options{Preset: preset, Branch: o.get("branch")}
+	for _, text := range o.lists["role"] {
+		role, err := scaffold.ParseRole(text)
+		if err != nil {
+			return exitUsage, usagef("%v", err)
+		}
+		opts.Roles = append(opts.Roles, role)
 	}
 	var root string
 	if explicit := o.get("project"); explicit != "" {
@@ -211,7 +353,7 @@ func runSetup(argv []string, stdout io.Writer) (int, error) {
 		func(p *project.Project) string { return wiki.SetupStep(p, stdout) },
 		codegraph.SetupStep,
 	}
-	return setup.Run(root, preset, o.flag("dry-run"), branch, !o.flag("no-tools"), stdout, steps,
+	return setup.Run(root, opts, o.flag("dry-run"), !o.flag("no-tools"), stdout, steps,
 		func(p *project.Project) []doctor.Check { return Diagnose(p, false) })
 }
 
@@ -235,7 +377,7 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 }
 
 func runDoctor(argv []string, stdout io.Writer) (int, error) {
-	o, err := parse(argv, map[string]bool{"project": true, "deep": false})
+	o, err := parse(argv, map[string]bool{"project": true, "deep": false, "json": false})
 	if err != nil {
 		return exitUsage, err
 	}
@@ -245,20 +387,33 @@ func runDoctor(argv []string, stdout io.Writer) (int, error) {
 			return 1, err
 		}
 	}
+	deep := o.flag("deep")
+	var checks []doctor.Check
+	context := map[string]any{}
+	header := "No Orai project here: " + target
 	p, err := project.Load(target)
-	if project.IsNotFound(err) {
-		return doctor.Report(stdout, []doctor.Check{
-			doctor.New("project", doctor.NotConfigured, err.Error(), "orai setup").WithCore()}, nil), nil
-	}
 	var cfgErr *config.Error
-	if errors.As(err, &cfgErr) {
-		return doctor.Report(stdout, []doctor.Check{
-			doctor.New("project", doctor.Blocked, err.Error(), "Fix orai.toml").WithCore()}, nil), nil
-	}
-	if err != nil {
+	switch {
+	case project.IsNotFound(err):
+		checks = []doctor.Check{doctor.New("project", doctor.NotConfigured, err.Error(),
+			"`orai setup` (add roles with --role NAME=PROVIDER; see `orai setup --help`)").WithCore()}
+	case errors.As(err, &cfgErr):
+		checks = []doctor.Check{doctor.New("project", doctor.Blocked, err.Error(),
+			"Fix orai.toml; the message names the key").WithCore()}
+	case err != nil:
 		return 1, err
+	default:
+		checks = Diagnose(p, deep)
+		context = map[string]any{"project": p.Root, "deep": deep}
+		header = "Orai project: " + p.Root
 	}
-	return doctor.Report(stdout, Diagnose(p, o.flag("deep")), map[string]any{"project": p.Root, "deep": o.flag("deep")}), nil
+	if o.flag("json") {
+		return doctor.Report(stdout, checks, context), nil
+	}
+	fmt.Fprintf(stdout, "%s (orai %s)\n\n", header, version.String())
+	code := doctor.Render(stdout, checks, true, "Status")
+	fmt.Fprintln(stdout, "\nDetails as JSON: `orai doctor --json`. What each mark means: `orai doctor --help`.")
+	return code, nil
 }
 
 func printJSON(out io.Writer, value any) error {

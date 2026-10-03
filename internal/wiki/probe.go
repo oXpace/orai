@@ -23,7 +23,7 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	}
 	s := NewSettings(p)
 	if _, err := lookPath("qmd"); err != nil {
-		return []doctor.Check{doctor.New("wiki", doctor.Blocked, "wiki engine qmd is not on PATH", InstallHint)}
+		return []doctor.Check{doctor.New("wiki", doctor.Blocked, "the wiki engine QMD (qmd) is not on PATH", InstallHint)}
 	}
 	var missing []string
 	for _, name := range s.collectionNames() {
@@ -35,10 +35,11 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	if len(missing) > 0 {
 		return []doctor.Check{doctor.New("wiki", doctor.NotReady,
 			fmt.Sprintf("collection folder(s) missing: %s", strings.Join(missing, ", ")),
-			"Create the folders or fix integrations.wiki.collections")}
+			"Create the folder(s) or fix integrations.wiki.collections in orai.toml")}
 	}
 	if !exists(s.ConfigFile) || !exists(s.DB) {
-		c := doctor.New("wiki", doctor.NotReady, "project index not initialized", "orai wiki init")
+		c := doctor.New("wiki", doctor.NotReady, "the wiki has not been built for this project yet",
+			"`orai wiki init` (the first run downloads the embedding model, about 0.6 GB)")
 		return []doctor.Check{c.WithDetail(map[string]any{"version": doctor.VersionOf("qmd")})}
 	}
 	return probe(s, deep)
@@ -59,10 +60,11 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 			"Run the check outside the sandbox; a result there applies only to that environment").WithDetail(detail)}
 	case "refused":
 		return []doctor.Check{doctor.New(c+".server", doctor.Blocked,
-			"connection refused: no server on the project port", "orai wiki recover").WithDetail(detail)}
+			"the wiki server is not running (it does not survive a reboot)", "`orai wiki recover`").WithDetail(detail)}
 	case "error":
 		return []doctor.Check{doctor.New(c+".server", doctor.Blocked,
-			fmt.Sprintf("port probe failed: %s", detailErr), "").WithDetail(detail)}
+			fmt.Sprintf("port probe failed: %s", detailErr),
+			fmt.Sprintf("Check that 127.0.0.1:%d is usable on this machine, or set integrations.wiki.port in orai.toml to another port", s.Port)).WithDetail(detail)}
 	}
 	checks := []doctor.Check{doctor.New(c+".server", doctor.Healthy, "port accepts connections", "").WithDetail(detail)}
 
@@ -74,7 +76,7 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 	status, err := handshake(client)
 	if err != nil {
 		checks = append(checks, doctor.New(c+".mcp", doctor.Blocked,
-			fmt.Sprintf("MCP handshake/status failed: %v", err), "Check the QMD log, then orai wiki recover"))
+			fmt.Sprintf("MCP handshake/status failed: %v", err), "Check the QMD log ("+withSuffix(s.PIDFile(), ".log")+"), then `orai wiki stop && orai wiki recover`"))
 		return checks
 	}
 	checks = append(checks, doctor.New(c+".mcp", doctor.Healthy, "MCP initialize and status succeeded", ""))
@@ -82,17 +84,19 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 	if mismatch := identity(status, s); mismatch != "" {
 		checks = append(checks, doctor.New(c+".identity", doctor.Blocked,
 			fmt.Sprintf("port %d serves another index: %s", s.Port, mismatch),
-			"Left untouched. Set integrations.wiki.port to a free port or stop that server"))
+			"That server is left untouched. Set integrations.wiki.port in orai.toml to a free port, then `orai wiki recover`"))
 		return checks
 	}
 	checks = append(checks, doctor.New(c+".identity", doctor.Healthy, "server indexes this project's collections", ""))
 
 	if !truthy(status["totalDocuments"]) {
-		checks = append(checks, doctor.New(c+".index", doctor.NotReady, "index is empty", "Add Markdown docs, then orai wiki refresh"))
+		checks = append(checks, doctor.New(c+".index", doctor.NotReady, "the wiki index has no documents",
+			"Add Markdown files under "+strings.Join(s.collectionNames(), ", ")+", then `orai wiki stop && orai wiki refresh`"))
 		return checks
 	}
 	if !truthy(status["hasVectorIndex"]) || truthy(status["needsEmbedding"]) {
-		chk := doctor.New(c+".index", doctor.Degraded, "embeddings missing or incomplete", "orai wiki refresh")
+		chk := doctor.New(c+".index", doctor.Degraded, "some documents are not embedded yet (edited since the last refresh)",
+			"`orai wiki stop && orai wiki refresh`")
 		checks = append(checks, chk.WithDetail(map[string]any{"needsEmbedding": status["needsEmbedding"]}))
 		return checks
 	}
@@ -101,7 +105,7 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 
 	if !deep {
 		checks = append(checks, doctor.New(c+".search", doctor.NotChecked,
-			"semantic search not exercised (loads models)", "orai doctor --deep"))
+			"search itself was not run (it loads the search models)", "`orai doctor --deep` runs real searches"))
 		return checks
 	}
 	checks = append(checks, searchChecks(client, s)...)
@@ -162,7 +166,7 @@ func searchChecks(client mcpClient, s *Settings) []doctor.Check {
 			fmt.Sprintf("vector search failed: %v", err), "Check model/GPU availability in the QMD log")}
 	}
 	if len(vector) == 0 {
-		return []doctor.Check{doctor.New(c+".vector", doctor.Degraded, "vector search returned no results", "orai wiki refresh")}
+		return []doctor.Check{doctor.New(c+".vector", doctor.Degraded, "vector search returned no results", "`orai wiki stop && orai wiki refresh`")}
 	}
 
 	var checks []doctor.Check
@@ -178,10 +182,10 @@ func searchChecks(client mcpClient, s *Settings) []doctor.Check {
 	if expect != "" && !matched {
 		chk := doctor.New(c+".vector", doctor.Degraded,
 			fmt.Sprintf("vector search missed the smoke document %s", expect),
-			"Review recall for this model (docs/operations.md)")
+			"Check [integrations.wiki.smoke] in orai.toml (vec should be a question that document answers); if it is right, the embedding model recalls poorly for these documents")
 		checks = append(checks, chk.WithDetail(map[string]any{"hits": vector}))
 	} else {
-		reason := "vector-only search returned results (no smoke fixture configured)"
+		reason := "vector-only search returned results (set [integrations.wiki.smoke] to check it returns the right document)"
 		if expect != "" {
 			reason = "vector-only search returned the smoke document"
 		}
@@ -210,13 +214,15 @@ func searchChecks(client mcpClient, s *Settings) []doctor.Check {
 	}
 	if err != nil {
 		checks = append(checks, doctor.New(c+".hybrid", doctor.Blocked,
-			fmt.Sprintf("lex+vec search or document read failed: %v", err), ""))
+			fmt.Sprintf("lex+vec search or document read failed: %v", err),
+			"Check the QMD log ("+withSuffix(s.PIDFile(), ".log")+"), then `orai wiki stop && orai wiki recover`"))
 		return checks
 	}
 	if strings.TrimSpace(body) != "" {
 		checks = append(checks, doctor.New(c+".hybrid", doctor.Healthy, "lex+vec search and document read succeeded", ""))
 	} else {
-		checks = append(checks, doctor.New(c+".hybrid", doctor.Degraded, "document read returned no text", ""))
+		checks = append(checks, doctor.New(c+".hybrid", doctor.Degraded, "document read returned no text",
+			"`orai wiki stop && orai wiki refresh` to rebuild the index from the current documents"))
 	}
 	return checks
 }

@@ -24,6 +24,15 @@ Go 의존성의 정본은 `go.mod`와 `go.sum`이다. mise는 Go 버전과 task�
 
 ## 외부 도구 (사용자 설치, Orai는 설치·업그레이드하지 않음)
 
+`orai doctor`가 없는 도구마다 아래 설치 명령을 안내한다.
+
+| 도구 | 설치 | 필요한 경우 |
+|---|---|---|
+| Codex CLI | `npm install -g @openai/codex` 또는 `brew install --cask codex`, 이후 `codex login` | provider가 `codex`인 역할이 있을 때 |
+| Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` 또는 `npm install -g @anthropic-ai/claude-code`, 이후 `claude auth login` | provider가 `claude`인 역할이 있을 때 |
+| QMD | `npm install -g @tobilu/qmd` (Node 22 이상) | `[integrations.wiki]`를 쓸 때 (선택) |
+| CodeGraph | `npm install -g @colbymchenry/codegraph` | `[integrations.codegraph]`를 쓸 때 (선택) |
+
 2026-09-25 macOS 27.0 arm64 호스트에서 확인했다.
 
 | 도구 | 확인 버전 | 설치 출처(확인) | Orai가 쓰는 capability | doctor 검사 |

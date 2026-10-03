@@ -55,7 +55,7 @@ func TestCodegraphNotInitialized(t *testing.T) {
 	if checks[0].Status != doctor.NotReady {
 		t.Fatalf("status = %q, want not-ready", checks[0].Status)
 	}
-	want := "codegraph init " + p.Root
+	want := "`codegraph init " + p.Root + "`"
 	if checks[0].NextAction != want {
 		t.Fatalf("next action = %q, want %q", checks[0].NextAction, want)
 	}

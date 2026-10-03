@@ -124,12 +124,13 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	binary, err := lookPath("codegraph")
 	if err != nil {
 		return []doctor.Check{doctor.New(Component, doctor.Blocked, "codegraph is not on PATH",
-			"Install colbymchenry/codegraph (npm @colbymchenry/codegraph); see docs/compatibility.md")}
+			doctor.InstallCodegraph)}
 	}
 	root := p.Root
 	raw, err := runJSON([]string{binary, "status", "--json", root}, root)
 	if err != nil {
-		return []doctor.Check{doctor.New(Component, doctor.Blocked, fmt.Sprintf("codegraph status failed: %v", err), "")}
+		return []doctor.Check{doctor.New(Component, doctor.Blocked, fmt.Sprintf("codegraph status failed: %v", err),
+			fmt.Sprintf(doctor.CannotRun, "codegraph"))}
 	}
 	status, _ := raw.(map[string]any)
 	detail := map[string]any{
@@ -139,7 +140,7 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 		"nodeCount":   status["nodeCount"],
 	}
 	if !truthy(status["initialized"]) {
-		c := doctor.New(Component, doctor.NotReady, "project is not indexed", "codegraph init "+root)
+		c := doctor.New(Component, doctor.NotReady, "the code graph has not been built for this project yet", "`codegraph init "+root+"`")
 		return []doctor.Check{c.WithDetail(detail)}
 	}
 	index, _ := status["index"].(map[string]any)
@@ -166,7 +167,8 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	if deep && cfg.SmokeSymbol != "" {
 		rawRows, err := runJSON([]string{binary, "query", cfg.SmokeSymbol, "--json", "--limit", "5", "--path", root}, root)
 		if err != nil {
-			checks = append(checks, doctor.New(Component+".query", doctor.Blocked, fmt.Sprintf("symbol query failed: %v", err), ""))
+			checks = append(checks, doctor.New(Component+".query", doctor.Blocked, fmt.Sprintf("symbol query failed: %v", err),
+				"Run `codegraph query "+cfg.SmokeSymbol+" --path "+root+"` to see the error; if the index is damaged, `codegraph index "+root+"`"))
 			return checks
 		}
 		rows, _ := rawRows.([]any)
@@ -199,7 +201,7 @@ func SetupStep(p *project.Project) string {
 	}
 	binary, err := lookPath("codegraph")
 	if err != nil {
-		return "codegraph: skipped (not installed; see docs/compatibility.md)"
+		return "codegraph: skipped (CodeGraph is not installed: `npm install -g @colbymchenry/codegraph`, then `orai setup`)"
 	}
 	if info, statErr := os.Stat(filepath.Join(p.Root, ".codegraph")); statErr == nil && info.IsDir() {
 		return "codegraph: already indexed"

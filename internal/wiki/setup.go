@@ -23,7 +23,7 @@ func SetupStep(p *project.Project, out io.Writer) string {
 		return "wiki: not configured"
 	}
 	if _, err := lookPath("qmd"); err != nil {
-		return "wiki: skipped (engine qmd is not installed; see docs/compatibility.md)"
+		return "wiki: skipped (the wiki engine QMD is not installed; `orai wiki --help` shows how to add it)"
 	}
 	s := NewSettings(p)
 	found := false
@@ -35,7 +35,7 @@ func SetupStep(p *project.Project, out io.Writer) string {
 		}
 	}
 	if !found {
-		return "wiki: skipped (no Markdown documents yet; add docs, then `orai wiki init`)"
+		return "wiki: skipped (no Markdown documents in " + strings.Join(s.collectionNames(), ", ") + " yet; add some, then `orai wiki init`)"
 	}
 	action := "init"
 	if exists(s.ConfigFile) && exists(s.DB) {

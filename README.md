@@ -8,7 +8,8 @@ Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**
 - **공통 메시지 액션**: `orai msg inbox`, `orai msg send`, `orai msg reply`
 - **프로젝트 wiki와 코드 그래프**: 프로젝트 문서 검색(wiki, 엔진 QMD)과 CodeGraph를 프로젝트별로 격리해 설정·진단·복구한다.
 - **한 번에 준비**: 빈 폴더에서 `orai setup` 한 번으로 저장소, 설정, 에이전트 지침, 메일함, wiki, 코드 그래프까지 준비한다.
-- **진단**: `orai doctor`가 구성요소별 상태와 안전한 다음 조치를 JSON으로 보고한다.
+- **역할은 프로젝트가 정한다**: 이름·개수·provider를 `orai setup --role lead=codex --role dev=claude`처럼 고르고, 나중에도 같은 명령으로 추가한다.
+- **진단**: `orai doctor`가 구성요소별 상태와, 남은 조치를 실행할 명령으로 순서대로 보여준다(`--json`은 기계용).
 
 대화는 각 provider가, 역할 조직과 업무 규칙은 각 프로젝트가 소유한다. Orai는 이 책임들을 다시 구현하지 않는다.
 
@@ -25,28 +26,78 @@ Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**
 
 메일함 디스크 형식(AMQ schema 1)만 그대로 유지한다. 그래서 AMQ로 쌓인 기존 메일함을 그대로 이어 쓰고, AMQ를 설치했다면 `amq`로 같은 메일함을 읽고 보낼 수 있다. 이 호환성은 CI에서 실제 `amq`와의 양방향 테스트로 확인한다.
 
-## 빠른 시작
+## 프로젝트에 추가하기
 
-Orai는 프로젝트마다 설치하고 버전을 고정한다([운영 안내](docs/operations.md#설치)).
+Orai는 프로젝트마다 설치하고 버전을 고정한다. 준비물은 [mise](https://mise.jdx.dev)와 Git이다. `<버전>`에는 [Releases](https://github.com/oXpace/orai/releases)의 최신 버전을 적는다.
+
+**새 프로젝트**
 
 ```sh
 mkdir my-app && cd my-app
-mise use github:oXpace/orai@<버전>   # 이 프로젝트에 Orai 설치·고정 (mise.toml)
-orai setup --preset pm-staff          # 저장소(trunk)·설정·지침·메일함·wiki·코드 그래프·진단
+mise use github:oXpace/orai@<버전>   # 이 프로젝트에 Orai 설치·고정 (mise.toml에 기록)
+orai setup --role lead=codex --role dev=claude
+```
 
+**이미 있는 프로젝트**
+
+```sh
+cd my-app                            # 저장소 루트
+mise use github:oXpace/orai@<버전>
+orai setup --dry-run --role lead=codex --role dev=claude   # 바뀔 내용만 먼저 확인
+orai setup --role lead=codex --role dev=claude
+```
+
+기존 파일은 덮어쓰지 않는다. Git 저장소와 커밋은 건드리지 않는다. 충돌이 하나라도 있으면 아무것도 바꾸지 않고 목록을 보여준다.
+
+**setup이 프로젝트에 넣는 것** (새 프로젝트와 기존 프로젝트 모두)
+
+| 파일 | 내용 | 커밋 |
+|---|---|---|
+| `orai.toml` | 역할과 wiki·코드 그래프 설정. 없을 때만 만들고, 있으면 `--role`로 요청한 역할만 덧붙인다 | 한다 |
+| `AGENTS.md` | Orai 설명 블록(역할, 메시지, 진단, 문서 검색, 커밋하지 않는 것). `orai:begin`~`orai:end` 사이만 관리하고 나머지는 그대로 둔다 | 한다 |
+| `CLAUDE.md` | 없을 때만 `@AGENTS.md` 한 줄로 만든다 | 한다 |
+| `.agents/skills/orai/SKILL.md`, `.claude/skills/orai` | 에이전트가 메시지를 주고받는 방법을 담은 스킬과, Claude Code용 링크 | 한다 |
+| `.gitignore` | Orai 블록: `/.orai/`, `/.agent-mail/`, `/.codegraph/`, 역할 작업 폴더 | 한다 |
+| `.agents/.gitignore` | Orai 블록: `/roles/` (역할 지침을 저장소에 넣지 않는다) | 한다 |
+| `.agents/roles/<역할>.md` | 역할 지침. 이 컴퓨터에서 고쳐 쓴다 | 안 한다 |
+| `.orai/`, `.agent-mail/` | 로컬 상태(세션, wiki 색인, 백업)와 메일함 | 안 한다 |
+| `docs/README.md` | wiki 폴더가 없을 때만 만드는 시작 페이지 | 한다 |
+
+`AGENTS.md`와 두 `.gitignore`의 원본은 바꾸기 전에 `.orai/backups/`에 보관한다.
+
+**setup이 끝난 뒤**
+
+`setup`은 마지막에 남은 조치를 실행할 명령으로 보여준다(`orai doctor`로 다시 볼 수 있다). 보통 다음이 남는다.
+
+```sh
+git add -A && git commit -m "Set up Orai"   # 위 표에서 "한다"인 파일과 mise.toml이 커밋된다
+git worktree add .worktrees/dev             # 프로젝트 폴더를 쓰지 않는 역할의 작업 폴더
+orai doctor                                 # Status: healthy 확인
+```
+
+Codex CLI, Claude Code, QMD, CodeGraph가 없으면 설치 명령이 함께 나온다. wiki와 코드 그래프는 선택 기능이라, 쓰지 않으려면 `orai.toml`에서 해당 `[integrations.*]` 표를 지운다.
+
+**같은 저장소를 받은 사람**은 `mise install` 뒤 `orai setup`을 한 번 실행한다. 버전은 `mise.toml`에, 역할과 설정은 `orai.toml`에 이미 있으므로 그 컴퓨터의 로컬 상태(메일함, 역할 지침의 틀, wiki 색인, 코드 그래프)만 만들어진다. 역할 작업 폴더(`git worktree add`)도 컴퓨터마다 만든다.
+
+## 사용
+
+```sh
 # 역할 실행 (역할마다 터미널 하나)
-orai pm            # = orai run pm, 기본은 정확한 재개
-orai staff --fresh # 새 대화
+orai lead          # = orai run lead, 기본은 정확한 재개
+orai dev --fresh   # 새 대화
 
 # 메시지와 wiki
-orai msg send staff --as user --kind todo --body '요청 내용'
-orai wiki refresh  # docs를 고친 뒤 색인 갱신
+orai msg send dev --as user --kind todo --body '요청 내용'
+orai wiki stop && orai wiki refresh   # docs를 고친 뒤 색인 갱신
 orai status && orai doctor
 ```
 
-`--dry-run`은 바꿀 내용만 보여준다. `setup`은 여러 번 실행해도 안전하다.
+- 역할 이름과 개수는 자유다. `--role 이름=codex|claude`를 필요한 만큼 붙인다. 역할 없이 시작했다가 나중에 `orai setup --role reviewer=claude`로 추가해도 된다. `--preset pm-staff`는 `--role pm=codex --role staff=claude`의 줄임이다.
+- `setup`은 여러 번 실행해도 안전하다.
+- 명령마다 `--help`가 있다. wiki 설정은 `orai wiki --help`, 진단 표시와 종료 코드는 `orai doctor --help`에 정리돼 있다.
+- Orai 버전을 올릴 때는 `mise use github:oXpace/orai@<새 버전>` 뒤 `orai setup`을 다시 실행해 생성 파일을 갱신한다.
 
-필요한 외부 도구와 확인된 버전은 [호환성](docs/compatibility.md)에 정리돼 있다.
+자세한 절차는 [운영 안내](docs/operations.md)에, 필요한 외부 도구와 확인된 버전은 [호환성](docs/compatibility.md)에 정리돼 있다.
 
 ## 상태
 

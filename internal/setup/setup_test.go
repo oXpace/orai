@@ -55,7 +55,7 @@ var noSteps []func(*project.Project) string
 func TestEmptyFolderBecomesATrunkRepositoryWithNoTools(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
 	var out bytes.Buffer
-	rc, _ := setup.Run(root, "minimal", false, scaffold.DefaultBranch, false, &out, noSteps, noDiagnose)
+	rc, _ := setup.Run(root, scaffold.Options{}, false, false, &out, noSteps, noDiagnose)
 	if rc != 0 {
 		t.Fatalf("Run() = %d, want 0; output:\n%s", rc, out.String())
 	}
@@ -131,7 +131,7 @@ func TestSetupIsIdempotentAndDryRunWritesNothing(t *testing.T) {
 	before := tree(t, root)
 
 	var out1 bytes.Buffer
-	if rc, err := setup.Run(root, "minimal", true, scaffold.DefaultBranch, false, &out1, noSteps, noDiagnose); rc != 0 || err != nil {
+	if rc, err := setup.Run(root, scaffold.Options{}, true, false, &out1, noSteps, noDiagnose); rc != 0 || err != nil {
 		t.Fatalf("dry-run Run() = %d, want 0; output:\n%s", rc, out1.String())
 	}
 	if after := tree(t, root); !sameTree(t, before, after) {
@@ -142,12 +142,12 @@ func TestSetupIsIdempotentAndDryRunWritesNothing(t *testing.T) {
 	}
 
 	var out2 bytes.Buffer
-	if rc, err := setup.Run(root, "minimal", false, scaffold.DefaultBranch, false, &out2, noSteps, noDiagnose); rc != 0 || err != nil {
+	if rc, err := setup.Run(root, scaffold.Options{}, false, false, &out2, noSteps, noDiagnose); rc != 0 || err != nil {
 		t.Fatalf("apply Run() = %d, want 0; output:\n%s", rc, out2.String())
 	}
 
 	var out3 bytes.Buffer
-	if rc, err := setup.Run(root, "minimal", true, scaffold.DefaultBranch, false, &out3, noSteps, noDiagnose); rc != 0 || err != nil {
+	if rc, err := setup.Run(root, scaffold.Options{}, true, false, &out3, noSteps, noDiagnose); rc != 0 || err != nil {
 		t.Fatalf("second dry-run Run() = %d, want 0; output:\n%s", rc, out3.String())
 	}
 	if !strings.Contains(out3.String(), "Already current.") {
@@ -162,7 +162,7 @@ func TestCliInitTwicePrintsAlreadyCurrent(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
 
 	var out1 bytes.Buffer
-	rc1, _ := setup.Run(root, "minimal", false, scaffold.DefaultBranch, false, &out1, noSteps, noDiagnose)
+	rc1, _ := setup.Run(root, scaffold.Options{}, false, false, &out1, noSteps, noDiagnose)
 	if rc1 != 0 {
 		t.Fatalf("first Run() = %d, want 0", rc1)
 	}
@@ -171,7 +171,7 @@ func TestCliInitTwicePrintsAlreadyCurrent(t *testing.T) {
 	}
 
 	var out2 bytes.Buffer
-	rc2, _ := setup.Run(root, "minimal", false, scaffold.DefaultBranch, false, &out2, noSteps, noDiagnose)
+	rc2, _ := setup.Run(root, scaffold.Options{}, false, false, &out2, noSteps, noDiagnose)
 	if rc2 != 0 {
 		t.Fatalf("second Run() = %d, want 0", rc2)
 	}
@@ -189,7 +189,7 @@ func TestAFailedToolStepMakesSetupExitNonzero(t *testing.T) {
 		func(*project.Project) string { return "codegraph: indexed" },
 	}
 	var out bytes.Buffer
-	rc, _ := setup.Run(root, "minimal", false, scaffold.DefaultBranch, true, &out, steps, noDiagnose)
+	rc, _ := setup.Run(root, scaffold.Options{}, false, true, &out, steps, noDiagnose)
 	if rc != 1 {
 		t.Fatalf("Run() = %d, want 1; output:\n%s", rc, out.String())
 	}
@@ -207,7 +207,7 @@ func TestToolsDisabledSkipsStepsEntirely(t *testing.T) {
 		func(*project.Project) string { called = true; return "wiki: init failed: boom" },
 	}
 	var out bytes.Buffer
-	rc, _ := setup.Run(root, "minimal", false, scaffold.DefaultBranch, false, &out, steps, noDiagnose)
+	rc, _ := setup.Run(root, scaffold.Options{}, false, false, &out, steps, noDiagnose)
 	if rc != 0 {
 		t.Fatalf("Run() = %d, want 0 (a step that would fail must not run with --no-tools)", rc)
 	}
@@ -220,8 +220,8 @@ func TestToolsDisabledSkipsStepsEntirely(t *testing.T) {
 }
 
 // TestDiagnosisReportsOnlyProblems confirms the problem-line filter: healthy,
-// not-configured and not-checked checks are silent; anything else prints with the
-// right-aligned status, component, reason and an optional next-action hint.
+// not-configured and not-checked checks are silent; anything else prints its
+// component, status and reason, and its next action as a numbered step.
 func TestDiagnosisReportsOnlyProblems(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
 	checks := []doctor.Check{
@@ -232,21 +232,21 @@ func TestDiagnosisReportsOnlyProblems(t *testing.T) {
 	}
 	diagnose := func(*project.Project) []doctor.Check { return checks }
 	var out bytes.Buffer
-	rc, _ := setup.Run(root, "minimal", false, scaffold.DefaultBranch, false, &out, noSteps, diagnose)
+	rc, _ := setup.Run(root, scaffold.Options{}, false, false, &out, noSteps, diagnose)
 	if rc != 0 {
 		t.Fatalf("Run() = %d, want 0 (a diagnosis problem alone must not fail setup)", rc)
 	}
 	text := out.String()
-	for _, unwanted := range []string{"ok:", "skip:", "unchecked:"} {
+	for _, unwanted := range []string{" ok ", " skip ", " unchecked "} {
 		if strings.Contains(text, unwanted) {
 			t.Fatalf("output unexpectedly reports a non-problem check (%q):\n%s", unwanted, text)
 		}
 	}
-	if !strings.Contains(text, "broken: missing binary") || !strings.Contains(text, "install it") {
+	if !strings.Contains(text, "✗ broken  blocked: missing binary") || !strings.Contains(text, "1. broken: install it") {
 		t.Fatalf("output missing the problem line for 'broken':\n%s", text)
 	}
 	status, _ := doctor.Overall(checks)
-	if !strings.Contains(text, "Diagnosis: "+status) {
+	if !strings.Contains(text, "Diagnosis: "+status+" (1 to fix)") {
 		t.Fatalf("output missing 'Diagnosis: %s':\n%s", status, text)
 	}
 }

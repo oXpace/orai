@@ -85,6 +85,52 @@ func TestSetupTwiceIsANoOpWithEmbeddedTemplates(t *testing.T) {
 	}
 }
 
+func TestHelpForACommandChangesNothing(t *testing.T) {
+	project := filepath.Join(t.TempDir(), "app")
+	_ = os.Mkdir(project, 0o755)
+	for _, argv := range [][]string{{"setup", "--help"}, {"setup", "-h"}, {"doctor", "--help"}, {"wiki", "--help"},
+		{"msg", "--help"}, {"msg", "send", "--help"}, {"run", "--help"}, {"status", "--help"}} {
+		out, errOut, code := orai(t, project, "", "", argv...)
+		if code != 0 || !strings.HasPrefix(out, "usage: orai "+argv[0]) {
+			t.Fatalf("%v: %d %q %q", argv, code, out, errOut)
+		}
+	}
+	if entries, _ := os.ReadDir(project); len(entries) != 0 {
+		t.Fatalf("--help created files: %v", entries)
+	}
+}
+
+func TestRolesChosenAtSetupAndAddedLater(t *testing.T) {
+	project := filepath.Join(t.TempDir(), "app")
+	_ = os.Mkdir(project, 0o755)
+	out, errOut, code := orai(t, project, "", "", "setup", "--role", "lead=codex", "--role", "dev=claude", "--no-tools")
+	if code != 0 {
+		t.Fatalf("setup: %d %s %s", code, out, errOut)
+	}
+	// What is left is spelled out as commands, in order.
+	for _, want := range []string{"Diagnosis: ", "Next steps:", "git worktree add .worktrees/dev"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("setup output lacks %q:\n%s", want, out)
+		}
+	}
+	out, errOut, code = orai(t, project, "", "", "setup", "--role", "reviewer=claude", "--no-tools")
+	if code != 0 || !strings.Contains(out, "Add role(s) reviewer to orai.toml") {
+		t.Fatalf("adding a role: %d %s %s", code, out, errOut)
+	}
+	status, _, _ := orai(t, project, "", "", "status")
+	for _, role := range []string{"lead", "dev", "reviewer"} {
+		if !strings.Contains(status, `"role": "`+role+`"`) {
+			t.Fatalf("status lacks %s: %s", role, status)
+		}
+	}
+	if _, errOut, code := orai(t, project, "", "", "setup", "--role", "dev=gpt"); code != 2 || !strings.Contains(errOut, "NAME=PROVIDER") {
+		t.Fatalf("bad --role: %d %s", code, errOut)
+	}
+	if _, errOut, code := orai(t, project, "", "", "setup", "--role", "dev=codex", "--no-tools"); code != 2 || !strings.Contains(errOut, "already declared") {
+		t.Fatalf("conflicting --role: %d %s", code, errOut)
+	}
+}
+
 func TestDryRunHookPointsAtThisBinaryAndNotTheCheckout(t *testing.T) {
 	project := filepath.Join(t.TempDir(), "app")
 	_ = os.Mkdir(project, 0o755)
@@ -119,7 +165,7 @@ func TestMessagesAndDoctorFromTheBinary(t *testing.T) {
 	if !strings.Contains(out, `"pending": 1`) {
 		t.Fatalf("status %s", out)
 	}
-	out, _, code := orai(t, project, "", "", "doctor")
+	out, _, code := orai(t, project, "", "", "doctor", "--json")
 	var report struct {
 		Status string
 		Checks []struct{ Component string }
@@ -138,6 +184,24 @@ func TestMessagesAndDoctorFromTheBinary(t *testing.T) {
 	}
 	if code == 0 {
 		t.Fatal("providers are not on PATH here, so doctor must not report success")
+	}
+	// The default output is for people: marks, a status line and numbered next steps.
+	text, _, textCode := orai(t, project, "", "", "doctor")
+	if textCode != code {
+		t.Fatalf("exit code differs between formats: %d vs %d", textCode, code)
+	}
+	for _, want := range []string{"Orai project: ", "✓ project", "Status: " + report.Status, "Next steps:\n  1. "} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("doctor output lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "docs/compatibility.md)") || strings.Contains(text, "(docs/operations.md)") {
+		t.Fatalf("doctor points at a document this project does not have:\n%s", text)
+	}
+	empty := t.TempDir()
+	out, _, code = orai(t, empty, "", "", "doctor")
+	if code != 1 || !strings.Contains(out, "No Orai project here") || !strings.Contains(out, "orai setup") {
+		t.Fatalf("doctor outside a project: %d %s", code, out)
 	}
 }
 

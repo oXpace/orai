@@ -28,15 +28,15 @@ import (
 // returns one report line. When tools is false, a single fixed line is printed instead
 // and steps is not called.
 func Run(
-	root, preset string,
+	root string,
+	opts scaffold.Options,
 	dryRun bool,
-	branch string,
 	tools bool,
 	out io.Writer,
 	steps []func(*project.Project) string,
 	diagnose func(*project.Project) []doctor.Check,
 ) (int, error) {
-	actions, notes, err := scaffold.Plan(root, preset, branch)
+	actions, notes, err := scaffold.Plan(root, opts)
 	if err != nil {
 		return 1, err
 	}
@@ -87,18 +87,18 @@ func Run(
 		fmt.Fprintln(out, "Note: "+note)
 	}
 
+	// The same view as `orai doctor`, limited to what still needs attention.
+	fmt.Fprintln(out)
 	checks := diagnose(proj)
-	status, _ := doctor.Overall(checks)
-	fmt.Fprintf(out, "\nDiagnosis: %s\n", status)
-	for _, check := range checks {
-		if check.Status == doctor.Healthy || check.Status == doctor.NotConfigured || check.Status == doctor.NotChecked {
-			continue
+	doctor.Render(out, checks, false, "Diagnosis")
+	if status, _ := doctor.Overall(checks); status != doctor.Healthy {
+		fmt.Fprintln(out, "\nSetup is done; the steps above are what is left. Check again with `orai doctor`.")
+	} else {
+		if names := proj.Config.RoleNames(); len(names) > 0 {
+			fmt.Fprintf(out, "\nReady. Start a role in its own terminal: `orai %s`\n", names[0])
+		} else {
+			fmt.Fprintln(out, "\nReady. No roles yet: add them with `orai setup --role NAME=PROVIDER` (for example --role lead=codex --role dev=claude).")
 		}
-		hint := ""
-		if check.NextAction != "" {
-			hint = "  → " + check.NextAction
-		}
-		fmt.Fprintf(out, "  %9s  %s: %s%s\n", check.Status, check.Component, check.Reason, hint)
 	}
 
 	for _, line := range lines {

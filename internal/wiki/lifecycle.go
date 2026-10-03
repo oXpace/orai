@@ -70,22 +70,30 @@ var ownServerRunning = func(s *Settings) (bool, error) {
 // untouched.
 func Lifecycle(p *project.Project, action string, out io.Writer) error {
 	if p.Config.Wiki == nil {
-		return errors.New("Wiki is not configured: add [integrations.wiki] to orai.toml")
+		return errors.New("Wiki is not configured: add [integrations.wiki] to orai.toml (`orai wiki --help` lists the settings)")
 	}
 	s := NewSettings(p)
 	for _, name := range s.collectionNames() {
 		path := s.Collections[name]
 		info, err := os.Stat(path)
 		if err != nil || !info.IsDir() {
-			return fmt.Errorf("collection '%s' folder is missing: %s", name, path)
+			return fmt.Errorf("collection '%s' folder is missing: %s. Create it or fix integrations.wiki.collections in orai.toml", name, path)
 		}
 	}
 	if action == "check" {
+		// check only talks to the server, so it never needs the engine on PATH. A project
+		// that was never initialized should hear that, though, not "connection refused".
+		if !exists(s.ConfigFile) || !exists(s.DB) {
+			if _, err := lookPath("qmd"); err != nil {
+				return errors.New("The wiki is not set up yet and its engine QMD is not installed. " + InstallHint)
+			}
+			return errors.New("The wiki is not set up yet. Run `orai wiki init`.")
+		}
 		return verify(s, out)
 	}
 	qmd, err := lookPath("qmd")
 	if err != nil {
-		return errors.New("wiki engine qmd is not on PATH. " + InstallHint)
+		return errors.New("The wiki engine QMD is not installed. " + InstallHint)
 	}
 	if err := state.PrivateDirs(s.Directory); err != nil {
 		return err
@@ -117,8 +125,8 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 		return err
 	}
 	if running && (action == "init" || action == "refresh") {
-		return errors.New("This project's wiki server is running. Run `orai wiki stop` at a safe " +
-			"boundary (no search in progress), then retry.")
+		return fmt.Errorf("This project's wiki server is running. When no search is in progress, run "+
+			"`orai wiki stop && orai wiki %s`.", action)
 	}
 	if !exists(s.ConfigFile) {
 		// Exclusive creation: an existing config (model, collections) is never overwritten.
@@ -130,7 +138,16 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 		path := s.Collections[name]
 		shown, err := runCommand(out, s.Argv(qmd, "collection", "show", name), s, true)
 		if err != nil {
-			return err
+			// A collection declared in orai.toml after the index was created. Adding it
+			// leaves the existing collections, model and DB as they are.
+			if action == "recover" {
+				return fmt.Errorf("collection '%s' is in orai.toml but not in the wiki index yet. Run "+
+					"`orai wiki stop && orai wiki refresh` to add it", name)
+			}
+			if _, err := runCommand(out, s.Argv(qmd, "collection", "add", path, "--name", name, "--mask", "**/*.md"), s, false); err != nil {
+				return err
+			}
+			continue
 		}
 		var paths []string
 		for _, line := range strings.Split(shown, "\n") {
@@ -196,14 +213,21 @@ func createConfigExclusive(s *Settings) error {
 var verify = func(s *Settings, out io.Writer) error {
 	checks := probe(s, true)
 	var failed []string
+	next := ""
 	for _, c := range checks {
 		fmt.Fprintf(out, "%9s  %s: %s\n", c.Status, c.Component, c.Reason)
 		if c.Status != doctor.Healthy {
 			failed = append(failed, c.Component+" "+c.Status)
+			if next == "" {
+				next = c.NextAction
+			}
 		}
 	}
 	if len(failed) > 0 {
-		return errors.New("Wiki is not verified: " + strings.Join(failed, "; "))
+		if next != "" {
+			next = ". Next: " + next
+		}
+		return errors.New("Wiki is not verified: " + strings.Join(failed, "; ") + next)
 	}
 	fmt.Fprintf(out, "Ready: %s (MCP server name: %s)\n", s.Endpoint, s.ServerName)
 	return nil

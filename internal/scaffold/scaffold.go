@@ -45,6 +45,8 @@ const InstallSpec = "github:oXpace/orai"
 const (
 	// Skill is the project-owned copy of the messaging skill Orai regenerates.
 	Skill = ".agents/skills/orai/SKILL.md"
+	// AgentsIgnore keeps the role guides (.agents/roles/) untracked.
+	AgentsIgnore = ".agents/.gitignore"
 	// ClaudeSkillLink is the Claude Code skill symlink Orai maintains for Skill.
 	ClaudeSkillLink = ".claude/skills/orai"
 	// ClaudeSkillTarget is ClaudeSkillLink's relative link target.
@@ -54,16 +56,53 @@ const (
 // miseFiles are the mise config files checked for an Orai pin, in lookup order.
 var miseFiles = []string{"mise.toml", ".mise.toml", "mise.local.toml"}
 
-// Presets maps a preset name to the relative paths it creates; each value names the
-// embedded template that fills it. project.ConfigName is always present and, when the
-// project has no orai.toml yet, becomes the project's initial configuration.
-var Presets = map[string]map[string]string{
-	"minimal": {project.ConfigName: "minimal.toml"},
+// RoleSpec is one role `orai setup` should declare: `--role NAME=PROVIDER[:WORKTREE]`.
+// An empty Worktree means the default: the project root for the project's first role,
+// `.worktrees/<name>` for every later one.
+type RoleSpec struct{ Name, Provider, Worktree string }
+
+// ParseRole reads a `--role` value. Names and providers are checked here so a typo is
+// reported as a usage error before anything is planned.
+func ParseRole(text string) (RoleSpec, error) {
+	name, rest, ok := strings.Cut(text, "=")
+	provider, worktree, _ := strings.Cut(rest, ":")
+	spec := RoleSpec{Name: name, Provider: provider, Worktree: worktree}
+	known := false
+	for _, p := range config.Providers {
+		known = known || p == provider
+	}
+	switch {
+	case !ok || !known:
+		return spec, fmt.Errorf("--role %q: expected NAME=PROVIDER[:WORKTREE] with provider %s",
+			text, strings.Join(config.Providers, " or "))
+	case !config.NamePattern.MatchString(name) || config.Reserved[name]:
+		return spec, fmt.Errorf("--role %q: the name must match %s and not be a reserved word", text, config.NamePattern)
+	}
+	return spec, nil
+}
+
+// Preset is a named starting set of roles. Guides names the embedded template for a
+// role's guide file; a role without one gets the generic role.md.
+type Preset struct {
+	Roles  []RoleSpec
+	Guides map[string]string
+}
+
+// Presets are shorthands for `--role` lists: `--preset pm-staff` equals
+// `--role pm=codex --role staff=claude` with role guides written for that pair.
+var Presets = map[string]Preset{
+	"minimal": {},
 	"pm-staff": {
-		project.ConfigName:       "pm-staff.toml",
-		".agents/roles/pm.md":    "pm.md",
-		".agents/roles/staff.md": "staff.md",
+		Roles:  []RoleSpec{{"pm", "codex", ""}, {"staff", "claude", ""}},
+		Guides: map[string]string{"pm": "pm.md", "staff": "staff.md"},
 	},
+}
+
+// Options selects what Plan sets up beyond the files every project gets.
+type Options struct {
+	Preset string     // "" means "minimal"
+	Branch string     // "" means DefaultBranch; used only when a repository is created
+	Roles  []RoleSpec // roles to declare, after the preset's
 }
 
 // PresetNames returns the known preset names in sorted order.
@@ -74,6 +113,80 @@ func PresetNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+const rolesPlaceholder = "{{roles}}\n"
+
+// noRoles is the roles section of a new orai.toml that declares none.
+const noRoles = `# Roles: one resident agent session each, started with ` + "`orai <name>`" + `. Any name and count works.
+# Add one with ` + "`orai setup --role NAME=PROVIDER`" + ` (for example --role lead=codex --role dev=claude),
+# or by hand:
+# [roles.lead]
+# provider = "codex"        # codex | claude
+# worktree = "."            # relative to this file; sibling worktrees like "../repo-lead" also work
+# guide = ".agents/roles/lead.md"
+# model = "..."             # optional; the provider's default otherwise
+# effort = "..."            # optional
+# branch = "trunk"          # optional; refuse to start on another branch
+`
+
+const rolesHeader = `# Roles: one resident agent session each, started with ` + "`orai <name>`" + `. Any name and count works.
+# Add one with ` + "`orai setup --role NAME=PROVIDER`" + ` or by editing this file. Optional keys per role:
+# model = "...", effort = "..." (the provider's defaults otherwise), branch = "trunk" (refuse another branch).
+`
+
+// guidePath is where setup writes a new role's guide.
+func guidePath(name string) string { return ".agents/roles/" + name + ".md" }
+
+// roleTable renders one [roles.<name>] table.
+func roleTable(role RoleSpec) string {
+	hint := ""
+	if role.Worktree != "." {
+		hint = "   # create with: git worktree add " + role.Worktree
+	}
+	return fmt.Sprintf("[roles.%s]\nprovider = %q\nworktree = %q%s\nguide = %q\n",
+		role.Name, role.Provider, role.Worktree, hint, guidePath(role.Name))
+}
+
+// newConfig is the orai.toml of a project that has none yet.
+func newConfig(roles []RoleSpec) string {
+	section := noRoles
+	if len(roles) > 0 {
+		tables := make([]string, len(roles))
+		for i, role := range roles {
+			tables[i] = roleTable(role)
+		}
+		section = rolesHeader + strings.Join(tables, "\n")
+	}
+	section += "\n"
+	return strings.Replace(Template("config.toml"), rolesPlaceholder, section, 1)
+}
+
+// StartHeading opens the section of a role guide that holds what this role must do
+// every time its session opens, beyond the steps every role shares. The session's
+// prompt lists the shared steps and points at this section (see runtime.Kickoff).
+const StartHeading = "## 세션 시작"
+
+// startSection is the provider-specific part of a session's start, written into a new
+// role's guide followed by a blank line; empty when the provider needs nothing beyond
+// the shared steps (Codex).
+func startSection(provider string) string {
+	if provider != "claude" {
+		return ""
+	}
+	return StartHeading + "\n\n세션을 새로 시작하거나 다시 열 때마다 한다.\n\n" +
+		"1. orai MCP의 `channel_ready` 도구를 호출해 수신 준비를 알린다. 호출하기 전에는 새 메시지 알림이 오지 않는다.\n\n"
+}
+
+// roleGuide renders the guide file for a role from the preset's template, or the
+// generic one, with the start routine of the role's provider.
+func roleGuide(preset Preset, role RoleSpec) string {
+	name, ok := preset.Guides[role.Name]
+	if !ok {
+		name = "role.md"
+	}
+	return strings.NewReplacer("{{name}}", role.Name, "{{worktree}}", role.Worktree,
+		"{{start}}", startSection(role.Provider)).Replace(Template(name))
 }
 
 // marker is one style's begin/end pair.
@@ -316,7 +429,7 @@ func misePinNote(root string) string {
 			}
 		}
 	}
-	return fmt.Sprintf("This project does not pin Orai. Pin it with `mise use %s@<version>` (docs/operations.md)", InstallSpec)
+	return fmt.Sprintf("This project does not pin Orai. Pin it with `mise use %s@<version>` so everyone on it runs the same version", InstallSpec)
 }
 
 func resolveRoot(root string) (string, error) {
@@ -333,21 +446,31 @@ func resolveRoot(root string) (string, error) {
 // Plan returns every action `orai setup` would take on root, in application order, plus
 // advisory notes. It writes nothing. When any conflict is found, it returns a *Conflict
 // listing every one found (not just the first) and no actions.
-func Plan(root, preset, branch string) ([]Action, []string, error) {
+//
+// Roles (the preset's, then opts.Roles) are declared in a new orai.toml, or appended to
+// an existing one as new [roles.<name>] tables; a role the file already declares is
+// left as it is. Each newly declared role gets a guide file unless one exists.
+func Plan(root string, opts Options) ([]Action, []string, error) {
 	root, err := resolveRoot(root)
 	if err != nil {
 		return nil, nil, err
 	}
-	presetFiles, ok := Presets[preset]
+	if opts.Preset == "" {
+		opts.Preset = "minimal"
+	}
+	if opts.Branch == "" {
+		opts.Branch = DefaultBranch
+	}
+	preset, ok := Presets[opts.Preset]
 	if !ok {
-		return nil, nil, &Conflict{[]string{fmt.Sprintf("Unknown preset %q; choose from %s", preset, strings.Join(PresetNames(), ", "))}}
+		return nil, nil, &Conflict{[]string{fmt.Sprintf("Unknown preset %q; choose from %s", opts.Preset, strings.Join(PresetNames(), ", "))}}
 	}
 
 	var actions []Action
 	var notes []string
 	var conflicts []string
 
-	if initialize := gitAction(root, branch); initialize != nil {
+	if initialize := gitAction(root, opts.Branch); initialize != nil {
 		actions = append(actions, *initialize)
 	}
 
@@ -364,43 +487,83 @@ func Plan(root, preset, branch string) ([]Action, []string, error) {
 		return p, true
 	}
 
+	// Existing declaration, if any. An invalid one is a conflict; nothing is added to it.
 	configPath := filepath.Join(root, project.ConfigName)
-	var configText string
+	var existingText string
+	var existing *config.Config
+	hasConfig := false
 	if info, err := os.Stat(configPath); err == nil && !info.IsDir() {
 		data, rerr := os.ReadFile(configPath)
 		if rerr != nil {
 			return nil, nil, rerr
 		}
-		configText = string(data)
-		if _, perr := config.Parse(data); perr != nil {
-			conflicts = append(conflicts, fmt.Sprintf("%s is invalid: %v", project.ConfigName, perr))
+		hasConfig, existingText = true, string(data)
+		if existing, err = config.Parse(data); err != nil {
+			conflicts = append(conflicts, fmt.Sprintf("%s is invalid: %v", project.ConfigName, err))
 		}
-		if preset != "minimal" {
-			notes = append(notes, fmt.Sprintf("%s exists; preset %q only adds missing role guides", project.ConfigName, preset))
-		}
-	} else {
-		configText = Template(presetFiles[project.ConfigName])
 	}
 
-	presetRels := make([]string, 0, len(presetFiles))
-	for rel := range presetFiles {
-		presetRels = append(presetRels, rel)
+	// Resolve the requested roles against what is already declared.
+	rootTaken := false
+	if existing != nil {
+		for _, role := range existing.Roles {
+			rootTaken = rootTaken || role.Worktree == "."
+		}
 	}
-	sort.Strings(presetRels)
-	for _, rel := range presetRels {
-		name := presetFiles[rel]
-		p, ok := regular(rel)
-		if !ok {
+	var added []RoleSpec
+	seen := map[string]bool{}
+	for _, role := range append(append([]RoleSpec{}, preset.Roles...), opts.Roles...) {
+		if seen[role.Name] {
+			conflicts = append(conflicts, fmt.Sprintf("role %s is requested twice", role.Name))
 			continue
 		}
-		if _, err := os.Stat(p); err != nil {
-			var data []byte
-			if rel == project.ConfigName {
-				data = []byte(configText)
-			} else {
-				data = []byte(Template(name))
+		seen[role.Name] = true
+		if existing != nil {
+			if declared, ok := existing.Roles[role.Name]; ok {
+				if declared.Provider != role.Provider {
+					conflicts = append(conflicts, fmt.Sprintf("role %s is already declared with provider %s; edit %s to change it",
+						role.Name, declared.Provider, project.ConfigName))
+				}
+				continue
 			}
-			actions = append(actions, Action{Description: "Create " + rel, Path: p, Data: data, Mode: 0o644})
+		}
+		if role.Worktree == "" {
+			role.Worktree = ".worktrees/" + role.Name
+			if !rootTaken {
+				role.Worktree = "."
+			}
+		}
+		rootTaken = rootTaken || role.Worktree == "."
+		added = append(added, role)
+	}
+
+	configText := existingText
+	switch {
+	case !hasConfig:
+		configText = newConfig(added)
+		if p, ok := regular(project.ConfigName); ok {
+			actions = append(actions, Action{Description: "Create " + project.ConfigName, Path: p, Data: []byte(configText), Mode: 0o644})
+		}
+	case existing != nil && len(added) > 0:
+		names := make([]string, len(added))
+		for i, role := range added {
+			configText = strings.TrimRight(configText, "\n") + "\n\n" + roleTable(role)
+			names[i] = role.Name
+		}
+		if _, err := config.Parse([]byte(configText)); err != nil {
+			conflicts = append(conflicts, fmt.Sprintf("cannot add role(s) %s to %s automatically (%v); declare them by hand",
+				strings.Join(names, ", "), project.ConfigName, err))
+			configText = existingText
+		} else if p, ok := regular(project.ConfigName); ok {
+			actions = append(actions, Action{
+				Description: fmt.Sprintf("Add role(s) %s to %s", strings.Join(names, ", "), project.ConfigName),
+				Path:        p, Data: []byte(configText), Mode: 0o644, Backup: true,
+			})
+		}
+	}
+	if !hasConfig {
+		if _, err := config.Parse([]byte(configText)); err != nil {
+			conflicts = append(conflicts, fmt.Sprintf("cannot declare the requested roles: %v", err))
 		}
 	}
 
@@ -437,6 +600,34 @@ func Plan(root, preset, branch string) ([]Action, []string, error) {
 
 	cfg := parsedConfig(configText)
 
+	// A guide for every declared role that names one and lacks the file: the roles just
+	// added, and any the user declared or renamed by hand. Existing guides are never
+	// rewritten.
+	if cfg != nil {
+		fromPreset := map[string]bool{}
+		for _, role := range added {
+			fromPreset[role.Name] = true
+		}
+		for _, name := range cfg.RoleNames() {
+			role := cfg.Roles[name]
+			if role.Guide == "" {
+				continue
+			}
+			p, ok := regular(role.Guide)
+			if !ok {
+				continue
+			}
+			if _, err := os.Stat(p); err != nil {
+				chosen := Preset{}
+				if fromPreset[name] {
+					chosen = preset
+				}
+				spec := RoleSpec{Name: name, Provider: role.Provider, Worktree: role.Worktree}
+				actions = append(actions, Action{Description: "Create " + role.Guide, Path: p, Data: []byte(roleGuide(chosen, spec)), Mode: 0o644})
+			}
+		}
+	}
+
 	if cfg != nil && cfg.Wiki != nil {
 		folderSet := map[string]bool{}
 		for _, folder := range cfg.Wiki.Collections {
@@ -470,6 +661,9 @@ func Plan(root, preset, branch string) ([]Action, []string, error) {
 	blocks := []struct{ Rel, Body, Style string }{
 		{"AGENTS.md", Template("agents-block.md"), "md"},
 		{".gitignore", strings.Join(ignoreLines(cfg), "\n"), "hash"},
+		// Role guides are written per machine and stay out of the repository; the skill
+		// next to them is shared.
+		{AgentsIgnore, "/roles/", "hash"},
 	}
 	for _, block := range blocks {
 		p, ok := regular(block.Rel)

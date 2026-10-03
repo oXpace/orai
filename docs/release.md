@@ -34,7 +34,7 @@ Orai는 Go 단일 실행 파일(`orai`)이다. 외부 도구(Codex, Claude Code,
 ## 버전 정책
 
 - `0.x` 동안은 minor 버전에서 호환성이 깨질 수 있다. 깨지는 변경은 릴리스 노트에 명시한다.
-- 호환 계약에 포함되는 것: CLI 명령과 옵션, 종료 코드, `doctor`·`status`·`msg`·`--dry-run`의 JSON 필드, `orai.toml` schema, 로컬 상태 구조, 메일함 디스크 형식(AMQ schema 1 호환), 알림 문구.
+- 호환 계약에 포함되는 것: CLI 명령과 옵션, 종료 코드, `doctor --json`·`status`·`msg`·`--dry-run`의 JSON 필드, `orai.toml` schema, 로컬 상태 구조, 메일함 디스크 형식(AMQ schema 1 호환), 알림 문구.
 - `orai.toml` schema가 바뀌면 `schema` 번호를 올리고, 이전 schema를 명시적으로 가져오는 경로를 제공한다.
 
 ## 결정된 항목 (2026-09-25)

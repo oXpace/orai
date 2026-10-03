@@ -6,6 +6,7 @@ package wiki
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -209,6 +210,44 @@ func TestRecoverWithMissingConfigOrDBRaisesPointingToInit(t *testing.T) {
 	}
 }
 
+// A collection declared in orai.toml after the index was created is added on refresh
+// (existing collections untouched); recover, which never re-indexes, says what to run.
+func TestCollectionAddedLaterIsAddedOnRefreshOnly(t *testing.T) {
+	p := makeQMDProject(t, filepath.Join(t.TempDir(), "proj"), 0)
+	s := NewSettings(p)
+	if err := os.MkdirAll(s.Directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{s.ConfigFile, s.DB} {
+		if err := os.WriteFile(file, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	name := s.collectionNames()[0]
+	calls := installSuccessMocks(t, false, nil, "/usr/bin/qmd")
+	known := runCommand
+	runCommand = func(out io.Writer, argv []string, s *Settings, capture bool) (string, error) {
+		if capture {
+			*calls = append(*calls, append([]string(nil), argv...))
+			return "", errors.New("Collection not found")
+		}
+		return known(out, argv, s, capture)
+	}
+
+	err := Lifecycle(p, "recover", io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "orai wiki stop && orai wiki refresh") {
+		t.Fatalf("recover: %v", err)
+	}
+	*calls = nil
+	if err := Lifecycle(p, "refresh", io.Discard); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	want := []string{"/usr/bin/qmd", "--index", s.Index, "collection", "add", s.Collections[name], "--name", name, "--mask", "**/*.md"}
+	if len(*calls) < 2 || !reflect.DeepEqual((*calls)[1], want) {
+		t.Fatalf("calls = %v, want the second to be %v", *calls, want)
+	}
+}
+
 // ---- refresh/init refuse while our server is running -----------------------------
 
 func TestInitRefusesWhileServerRunningAndRunsNoQMDCommands(t *testing.T) {
@@ -216,8 +255,8 @@ func TestInitRefusesWhileServerRunningAndRunsNoQMDCommands(t *testing.T) {
 	calls := installSuccessMocks(t, true, nil, "/usr/bin/qmd")
 
 	err := Lifecycle(p, "init", io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "safe boundary") {
-		t.Fatalf("Lifecycle(init) error = %v, want mention of a safe boundary", err)
+	if err == nil || !strings.Contains(err.Error(), "orai wiki stop && orai wiki init") {
+		t.Fatalf("Lifecycle(init) error = %v, want the stop-then-init command", err)
 	}
 	if len(*calls) != 0 {
 		t.Fatalf("calls = %v, want none", *calls)
@@ -243,8 +282,8 @@ func TestRefreshRefusesWhileServerRunningAndRunsNoQMDCommands(t *testing.T) {
 
 	calls := installSuccessMocks(t, true, nil, "/usr/bin/qmd")
 	err = Lifecycle(p, "refresh", io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "safe boundary") {
-		t.Fatalf("Lifecycle(refresh) error = %v, want mention of a safe boundary", err)
+	if err == nil || !strings.Contains(err.Error(), "orai wiki stop && orai wiki refresh") {
+		t.Fatalf("Lifecycle(refresh) error = %v, want the stop-then-refresh command", err)
 	}
 	if len(*calls) != 0 {
 		t.Fatalf("calls = %v, want none", *calls)
@@ -337,13 +376,39 @@ func TestStopRunsOnlyMcpStop(t *testing.T) {
 	}
 }
 
+// A wiki that was never built must say so (and how to get there), not report the
+// missing server as "connection refused".
+func TestCheckOnAnUninitializedWikiSaysWhatToRun(t *testing.T) {
+	p := makeQMDProject(t, filepath.Join(t.TempDir(), "proj"), 0)
+	saved, savedVerify := lookPath, verify
+	t.Cleanup(func() { lookPath, verify = saved, savedVerify })
+	verify = func(*Settings, io.Writer) error { t.Fatal("verify must not run"); return nil }
+
+	lookPath = func(string) (string, error) { return "/usr/bin/qmd", nil }
+	if err := Lifecycle(p, "check", io.Discard); err == nil || !strings.Contains(err.Error(), "orai wiki init") {
+		t.Fatalf("with qmd installed: %v", err)
+	}
+	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
+	if err := Lifecycle(p, "check", io.Discard); err == nil || !strings.Contains(err.Error(), "npm install -g @tobilu/qmd") {
+		t.Fatalf("without qmd: %v", err)
+	}
+}
+
 // ---- check delegates to verify (real probe/ownServerRunning bypassed by "check") ---
 
 func TestCheckActionNeverInspectsQMDOnPath(t *testing.T) {
-	// "check" is read-only against an already-running server: it must not require qmd
-	// on PATH at all.
+	// "check" is read-only against an already-running server: once the project wiki
+	// has been initialized, it must not require qmd on PATH at all.
 	p := makeQMDProject(t, filepath.Join(t.TempDir(), "proj"), 0)
 	s := NewSettings(p)
+	if err := os.MkdirAll(s.Directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{s.ConfigFile, s.DB} {
+		if err := os.WriteFile(file, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	saved := verify
 	t.Cleanup(func() { verify = saved })
 	called := false

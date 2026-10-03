@@ -136,7 +136,7 @@ func backupFiles(t *testing.T, root string) string {
 
 func mustPlan(t *testing.T, root, preset, branch string) ([]scaffold.Action, []string) {
 	t.Helper()
-	actions, notes, err := scaffold.Plan(root, preset, branch)
+	actions, notes, err := scaffold.Plan(root, scaffold.Options{Preset: preset, Branch: branch})
 	if err != nil {
 		t.Fatalf("Plan(%s): %v", root, err)
 	}
@@ -164,7 +164,7 @@ func findAction(actions []scaffold.Action, path string) *scaffold.Action {
 func TestPlanPreviewWritesNothing(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
 	before := snapshot(t, root)
-	actions, _, err := scaffold.Plan(root, "minimal", scaffold.DefaultBranch)
+	actions, _, err := scaffold.Plan(root, scaffold.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,7 +454,7 @@ func TestGeneratedSkillOutdatedIsUpdatedWithBackup(t *testing.T) {
 func mustConflict(t *testing.T, root string) *scaffold.Conflict {
 	t.Helper()
 	before := snapshot(t, root)
-	_, _, err := scaffold.Plan(root, "minimal", scaffold.DefaultBranch)
+	_, _, err := scaffold.Plan(root, scaffold.Options{})
 	if err == nil {
 		t.Fatal("expected a Conflict error")
 	}
@@ -648,9 +648,9 @@ func TestPlanRebindActionAndNoteWhenProjectMoved(t *testing.T) {
 // --- template/loader drift -------------------------------------------------------------
 
 func TestTemplateFilesExistAsEmbeddedResources(t *testing.T) {
-	names := map[string]bool{"skill.md": true, "agents-block.md": true}
-	for _, mapping := range scaffold.Presets {
-		for _, name := range mapping {
+	names := map[string]bool{"skill.md": true, "agents-block.md": true, "config.toml": true, "role.md": true, "docs-readme.md": true}
+	for _, preset := range scaffold.Presets {
+		for _, name := range preset.Guides {
 			names[name] = true
 		}
 	}
@@ -668,11 +668,268 @@ func TestTemplateFilesExistAsEmbeddedResources(t *testing.T) {
 	}
 }
 
-func TestPresetConfigTemplatesParse(t *testing.T) {
-	for presetName, mapping := range scaffold.Presets {
-		text := scaffold.Template(mapping[project.ConfigName])
-		if _, err := config.Parse([]byte(text)); err != nil {
-			t.Errorf("preset %q config template does not parse: %v", presetName, err)
+// Every preset must produce an orai.toml that parses and declares exactly its roles.
+func TestPresetConfigsParse(t *testing.T) {
+	for name, preset := range scaffold.Presets {
+		root := resolvePath(t, t.TempDir())
+		actions, _ := mustPlan(t, root, name, scaffold.DefaultBranch)
+		mustApply(t, root, actions)
+		cfg, err := config.Load(filepath.Join(root, project.ConfigName))
+		if err != nil {
+			t.Errorf("preset %q: %v", name, err)
+			continue
+		}
+		if len(cfg.Roles) != len(preset.Roles) {
+			t.Errorf("preset %q declares roles %v, want %d", name, cfg.RoleNames(), len(preset.Roles))
+		}
+		if cfg.Wiki == nil || cfg.Codegraph == nil {
+			t.Errorf("preset %q lost the wiki or codegraph integration", name)
+		}
+	}
+}
+
+// --- roles chosen at setup --------------------------------------------------------------
+
+func planRoles(t *testing.T, root string, roles ...string) ([]scaffold.Action, error) {
+	t.Helper()
+	var opts scaffold.Options
+	for _, text := range roles {
+		role, err := scaffold.ParseRole(text)
+		if err != nil {
+			t.Fatalf("ParseRole(%q): %v", text, err)
+		}
+		opts.Roles = append(opts.Roles, role)
+	}
+	actions, _, err := scaffold.Plan(root, opts)
+	return actions, err
+}
+
+func TestParseRole(t *testing.T) {
+	if got, err := scaffold.ParseRole("dev=claude:../repo-dev"); err != nil || got != (scaffold.RoleSpec{Name: "dev", Provider: "claude", Worktree: "../repo-dev"}) {
+		t.Fatalf("ParseRole = %+v, %v", got, err)
+	}
+	for _, bad := range []string{"dev", "dev=gpt", "Dev=claude", "setup=codex", "=codex", "user=claude"} {
+		if _, err := scaffold.ParseRole(bad); err == nil {
+			t.Errorf("ParseRole(%q) accepted", bad)
+		}
+	}
+}
+
+func TestRolesAreDeclaredInANewProject(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, err := planRoles(t, root, "lead=codex", "dev=claude", "reviewer=claude:.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustApply(t, root, actions)
+	cfg, err := config.Load(filepath.Join(root, project.ConfigName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][2]string{"lead": {"codex", "."}, "dev": {"claude", ".worktrees/dev"}, "reviewer": {"claude", "."}}
+	for name, w := range want {
+		role, ok := cfg.Roles[name]
+		if !ok || role.Provider != w[0] || role.Worktree != w[1] || role.Guide != ".agents/roles/"+name+".md" {
+			t.Errorf("role %s = %+v, want provider %s worktree %s", name, role, w[0], w[1])
+		}
+	}
+	if len(cfg.Roles) != 3 {
+		t.Fatalf("roles %v", cfg.RoleNames())
+	}
+	guide, err := os.ReadFile(filepath.Join(root, ".agents/roles/dev.md"))
+	if err != nil || !strings.Contains(string(guide), "`dev` 역할") || !strings.Contains(string(guide), ".worktrees/dev") {
+		t.Fatalf("dev guide: %v\n%s", err, guide)
+	}
+	for _, handle := range []string{"lead", "dev", "reviewer", "user"} {
+		if _, err := os.Stat(filepath.Join(root, project.MailName, "orai", "agents", handle, "inbox", "new")); err != nil {
+			t.Errorf("mailbox for %s: %v", handle, err)
+		}
+	}
+	ignore, _ := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if !strings.Contains(string(ignore), "/.worktrees/dev/") {
+		t.Fatalf(".gitignore: %s", ignore)
+	}
+	if again, err := planRoles(t, root, "lead=codex", "dev=claude", "reviewer=claude:."); err != nil || len(again) != 0 {
+		t.Fatalf("second plan: %d actions, %v", len(again), err)
+	}
+}
+
+func TestRolesAreAddedToAnExistingProjectWithoutTouchingTheRest(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, _ := mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	configPath := filepath.Join(root, project.ConfigName)
+	original, _ := os.ReadFile(configPath)
+	edited := strings.Replace(string(original), `session = "orai"`, `session = "mine"`, 1) + "\n# my own note\n"
+	if err := os.WriteFile(configPath, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	actions, err := planRoles(t, root, "lead=codex", "dev=claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustApply(t, root, actions)
+	data, _ := os.ReadFile(configPath)
+	if !strings.HasPrefix(string(data), strings.TrimRight(edited, "\n")) {
+		t.Fatalf("existing content was rewritten:\n%s", data)
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Session != "mine" || cfg.Roles["lead"].Worktree != "." || cfg.Roles["dev"].Worktree != ".worktrees/dev" {
+		t.Fatalf("config %+v", cfg)
+	}
+	if _, err := os.Stat(filepath.Join(root, project.MailName, "mine", "agents", "dev")); err != nil {
+		t.Fatalf("mailbox: %v", err)
+	}
+	backups, _ := filepath.Glob(filepath.Join(root, project.StateName, "backups", "*", project.ConfigName))
+	if len(backups) != 1 {
+		t.Fatalf("orai.toml backup: %v", backups)
+	}
+
+	// A later role does not take the project folder: lead already works there.
+	actions, err = planRoles(t, root, "reviewer=claude", "dev=claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustApply(t, root, actions)
+	cfg, _ = config.Load(configPath)
+	if cfg.Roles["reviewer"].Worktree != ".worktrees/reviewer" || len(cfg.Roles) != 3 {
+		t.Fatalf("config %+v", cfg.Roles)
+	}
+}
+
+func TestRoleConflictsChangeNothing(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, _ := planRoles(t, root, "dev=claude")
+	mustApply(t, root, actions)
+	before, _ := os.ReadFile(filepath.Join(root, project.ConfigName))
+	for _, roles := range [][]string{{"dev=codex"}, {"qa=claude", "qa=claude"}} {
+		_, err := planRoles(t, root, roles...)
+		var conflict *scaffold.Conflict
+		if !errors.As(err, &conflict) {
+			t.Fatalf("%v: err = %v, want a conflict", roles, err)
+		}
+	}
+	after, _ := os.ReadFile(filepath.Join(root, project.ConfigName))
+	if string(before) != string(after) {
+		t.Fatal("orai.toml changed despite the conflict")
+	}
+}
+
+// Role guides stay out of the repository: setup writes .agents/.gitignore with a managed
+// block, keeps what the user already had in that file, and leaves the skill tracked.
+func TestRoleGuidesAreIgnoredByGitAndTheSkillIsNot(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	if err := os.MkdirAll(filepath.Join(root, ".agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ignorePath := filepath.Join(root, scaffold.AgentsIgnore)
+	if err := os.WriteFile(ignorePath, []byte("scratch/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	actions, err := planRoles(t, root, "lead=codex", "dev=claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustApply(t, root, actions)
+	data, _ := os.ReadFile(ignorePath)
+	if text := string(data); !strings.HasPrefix(text, "scratch/\n") || !strings.Contains(text, "# orai:begin") || !strings.Contains(text, "\n/roles/\n") {
+		t.Fatalf("%s:\n%s", scaffold.AgentsIgnore, text)
+	}
+	ignored := func(rel string) bool {
+		cmd := exec.Command("git", "check-ignore", "-q", rel)
+		cmd.Dir = root
+		return cmd.Run() == nil
+	}
+	for rel, want := range map[string]bool{
+		".agents/roles/lead.md": true, ".agents/roles/dev.md": true, ".orai/project.json": true,
+		scaffold.Skill: false, scaffold.AgentsIgnore: false, "orai.toml": false, "AGENTS.md": false,
+	} {
+		if ignored(rel) != want {
+			t.Errorf("git ignores %s = %v, want %v", rel, !want, want)
+		}
+	}
+}
+
+// Renaming a role by hand leaves its guide file behind; the next setup writes a starter
+// guide for the new name and never touches an existing one.
+func TestMissingGuideOfAHandDeclaredRoleIsCreated(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, _ := mustPlan(t, root, "pm-staff", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	configPath := filepath.Join(root, project.ConfigName)
+	data, _ := os.ReadFile(configPath)
+	renamed := strings.NewReplacer("[roles.pm]", "[roles.lead]", ".agents/roles/pm.md", ".agents/roles/lead.md").Replace(string(data))
+	if err := os.WriteFile(configPath, []byte(renamed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	staffBefore, _ := os.ReadFile(filepath.Join(root, ".agents/roles/staff.md"))
+
+	actions, _ = mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	guide, err := os.ReadFile(filepath.Join(root, ".agents/roles/lead.md"))
+	if err != nil || !strings.Contains(string(guide), "`lead` 역할") {
+		t.Fatalf("lead guide: %v\n%s", err, guide)
+	}
+	staffAfter, _ := os.ReadFile(filepath.Join(root, ".agents/roles/staff.md"))
+	if string(staffBefore) != string(staffAfter) {
+		t.Fatal("an existing guide was rewritten")
+	}
+	if _, err := os.Stat(filepath.Join(root, project.MailName, "orai", "agents", "lead")); err != nil {
+		t.Fatalf("mailbox for the renamed role: %v", err)
+	}
+}
+
+// The pm-staff preset now also adds its roles to a project that was set up without any.
+func TestPresetAddsRolesToAnExistingProject(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, _ := mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	actions, _ = mustPlan(t, root, "pm-staff", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	cfg, err := config.Load(filepath.Join(root, project.ConfigName))
+	if err != nil || cfg.Roles["pm"].Provider != "codex" || cfg.Roles["staff"].Worktree != ".worktrees/staff" {
+		t.Fatalf("config %+v, %v", cfg, err)
+	}
+	guide, _ := os.ReadFile(filepath.Join(root, ".agents/roles/pm.md"))
+	if !strings.HasPrefix(string(guide), "# PM 역할") || strings.Contains(string(guide), "{{") {
+		t.Fatalf("pm guide is not the preset's:\n%s", guide)
+	}
+}
+
+// Only what differs by provider goes into a guide's start section: a Claude role must
+// call channel_ready. A Codex role needs nothing beyond the shared steps the prompt
+// lists, so its guide has no such section.
+func TestRoleGuideCarriesOnlyTheProviderSpecificStart(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, err := planRoles(t, root, "lead=codex", "dev=claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustApply(t, root, actions)
+	preset := resolvePath(t, t.TempDir())
+	actions, _ = mustPlan(t, preset, "pm-staff", scaffold.DefaultBranch)
+	mustApply(t, preset, actions)
+	for file, claude := range map[string]bool{
+		filepath.Join(root, ".agents/roles/lead.md"):    false,
+		filepath.Join(root, ".agents/roles/dev.md"):     true,
+		filepath.Join(preset, ".agents/roles/pm.md"):    false,
+		filepath.Join(preset, ".agents/roles/staff.md"): true,
+	} {
+		data, err := os.ReadFile(file)
+		text := string(data)
+		if err != nil || strings.Contains(text, "{{") || strings.Contains(text, "\n\n\n") || !strings.Contains(text, "\n\n## 책임\n") {
+			t.Fatalf("%s: %v\n%s", file, err, text)
+		}
+		if strings.Contains(text, scaffold.StartHeading+"\n") != claude || strings.Contains(text, "channel_ready") != claude {
+			t.Errorf("%s: start section present = %v, want %v\n%s", file, !claude, claude, text)
+		}
+		// Shared steps are the prompt's, not repeated per role.
+		if strings.Contains(text, "orai msg inbox") {
+			t.Errorf("%s repeats a shared step", file)
 		}
 	}
 }
@@ -720,7 +977,7 @@ func repoRoot(t *testing.T) string {
 // result, then remove this skip.
 func TestThisRepositoryIsSetupCurrent(t *testing.T) {
 	repo := repoRoot(t)
-	actions, _, err := scaffold.Plan(repo, "minimal", scaffold.DefaultBranch)
+	actions, _, err := scaffold.Plan(repo, scaffold.Options{})
 	if err != nil {
 		t.Fatalf("Plan(%s): %v", repo, err)
 	}
@@ -742,7 +999,7 @@ func TestThisRepositoryIsSetupCurrent(t *testing.T) {
 		}
 	}
 	if len(pending) != 0 {
-		t.Skipf("TODO(scaffold): repo root is not setup-current, pending actions: %v", pending)
+		t.Fatalf("this repository's generated files are stale; run `go run ./cmd/orai setup --no-tools`. Pending: %v", pending)
 	}
 }
 
