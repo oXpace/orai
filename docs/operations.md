@@ -16,7 +16,7 @@ orai setup                         # 기본 세팅
 
 - mise github backend는 `oXpace/orai`의 GitHub Release에서 현재 플랫폼(darwin/linux, arm64/amd64)의 `orai_<버전>_<os>_<arch>.tar.gz`를 받는다. 실행에 Go나 다른 런타임은 필요 없다. 게시 전 변경은 Orai checkout에서 `go run ./cmd/orai --project <경로> setup`으로 시험한다.
 - `setup`은 프로젝트에 Orai 고정이 없으면 `mise use` 안내를 출력한다.
-- mise에 `minimum_release_age` 설정이 있으면 새 Release가 버전 목록(`mise ls-remote`)에서 한동안 숨겨진다. `--pin`이 예전 버전을 고르면 `@0.3.0`처럼 버전을 명시한다.
+- 새 Release는 mise의 버전 목록(`mise ls-remote github:oXpace/orai`)에 한동안 나타나지 않을 수 있다. 이때 `--pin`은 이전 버전을 고르므로 `@0.3.0`처럼 번호를 명시한다. 번호를 명시한 설치는 배포 직후에도 된다. 0.3.0 배포 직후 mise 2026.10.0에서 관찰했고, `minimum_release_age` 설정이 없고 캐시를 지운 상태에서도 그랬다. 목록에 나타나기까지 걸리는 시간과 원인은 확인하지 못했다.
 - PATH에 다른 `orai`(예: 예전 전역 링크)가 있어도, mise가 활성화된 셸에서는 프로젝트에 고정한 버전이 먼저 선택된다.
 
 Codex, Claude Code, QMD, CodeGraph는 사용자가 설치한다. Orai는 이 도구들을 설치하거나 업그레이드하지 않는다. AMQ는 필요 없다(메일함은 Orai가 관리하며 형식만 AMQ와 호환된다). 필요한 버전은 [호환성](compatibility.md)에 있다.

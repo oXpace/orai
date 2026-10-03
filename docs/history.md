@@ -93,7 +93,8 @@
 | 빈 폴더 흐름 | 통과: 도구가 없는 PATH와 도구가 모두 있는 PATH에서 `setup --role` → 커밋 → `git worktree add` → `doctor` healthy |
 | 기존 저장소에 추가, 복제본에서 `setup` | 통과: 기존 `AGENTS.md`·`.gitignore` 보존, 브랜치·커밋 불변, 복제본에는 로컬 상태만 생성 |
 | 시작 프롬프트 | `orai <역할> --dry-run` 출력으로만 확인. **실제 Codex·Claude 세션에서는 미검증** |
-| 설치 | `mise use --pin github:oXpace/orai`가 최신 릴리스를 고정하는 것을 0.2.0으로 확인. 0.3.0 설치는 배포 후 확인 |
+| 설치 (배포 후) | 통과: 빈 폴더에서 `mise use github:oXpace/orai@0.3.0` → `orai --version` 0.3.0 → `orai setup --role lead=codex --role dev=claude` → 커밋 → `git worktree add` → `orai doctor` healthy. Release에 4개 플랫폼 바이너리 첨부, CI(macOS·Linux) 통과 |
+| `mise use --pin` (버전 생략) | 배포 직후에는 0.2.0을 골랐다. mise 버전 목록에 0.3.0이 아직 없었고 원인은 미확인. 번호를 명시하면 설치된다 |
 
 | 이미 받은 메시지의 재수신 표시 | 통과: 전체 수신 뒤 `orai msg inbox <ID>`가 본문 없이 `already_received`를 돌려준다(CLI와 테스트). 실제 Codex 세션에서 중복 처리가 사라지는지는 미검증 |
 
