@@ -1,5 +1,9 @@
 # Orai
 
+[![release](https://img.shields.io/github/v/release/oXpace/orai)](https://github.com/oXpace/orai/releases/latest)
+[![ci](https://github.com/oXpace/orai/actions/workflows/ci.yml/badge.svg?branch=trunk)](https://github.com/oXpace/orai/actions/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/oXpace/orai)](LICENSE)
+
 Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**으로 실행하고, 역할끼리 메시지로 협업하게 하는 프로젝트 하네스다. Go 단일 실행 파일이며 프로젝트마다 설치한다.
 
 - **정확한 재개**: 역할마다 캡처한 대화 UUID로만 재개한다. "가장 최근 대화"를 추측하지 않는다.
@@ -15,26 +19,17 @@ Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**
 
 ### AMQ와의 관계
 
-0.1.0은 [AMQ](https://github.com/avivsinai/agent-message-queue)의 `amq coop`으로 메일함을 만들고 역할을 실행했다. 0.2.0부터는 AMQ를 실행하지 않는다.
-
-| 0.1.0 (AMQ 사용) | 0.2.0~ (내장) |
-|---|---|
-| `amq coop init`: `.amqrc`, 메일함 생성 | `orai setup`이 메일함 생성 |
-| `amq coop exec`: 역할 신원 설정, provider 실행 | `orai run`이 신원·잠금·환경을 정하고 provider 실행 |
-| `amq send`·`drain`·`reply` | `orai msg send`·`inbox`·`reply` |
-| 2초 주기로 `amq` 호출해 새 메시지 확인 | 파일 변경 이벤트로 즉시 감지 |
-
-메일함 디스크 형식(AMQ schema 1)만 그대로 유지한다. 그래서 AMQ로 쌓인 기존 메일함을 그대로 이어 쓰고, AMQ를 설치했다면 `amq`로 같은 메일함을 읽고 보낼 수 있다. 이 호환성은 CI에서 실제 `amq`와의 양방향 테스트로 확인한다.
+Orai는 [AMQ](https://github.com/avivsinai/agent-message-queue)를 실행하지 않으며 설치할 필요도 없다. 메일함의 디스크 형식(AMQ schema 1)만 같게 유지한다. 그래서 AMQ로 쌓인 메일함을 그대로 이어 쓸 수 있고, AMQ를 설치했다면 `amq`로 같은 메일함을 읽고 보낼 수 있다. 이 호환성은 테스트에서 실제 `amq`와 메시지를 주고받아 확인한다.
 
 ## 프로젝트에 추가하기
 
-Orai는 프로젝트마다 설치하고 버전을 고정한다. 준비물은 [mise](https://mise.jdx.dev)와 Git이다. `<버전>`에는 [Releases](https://github.com/oXpace/orai/releases)의 최신 버전을 적는다.
+Orai는 프로젝트마다 설치하고 버전을 고정한다. 준비물은 [mise](https://mise.jdx.dev)와 Git이다. 아래 명령은 최신 릴리스를 받아 그 버전을 프로젝트의 `mise.toml`에 적는다. 특정 버전을 쓰려면 `mise use github:oXpace/orai@0.3.0`처럼 `v` 없이 번호를 붙인다.
 
 **새 프로젝트**
 
 ```sh
 mkdir my-app && cd my-app
-mise use github:oXpace/orai@<버전>   # 이 프로젝트에 Orai 설치·고정 (mise.toml에 기록)
+mise use --pin github:oXpace/orai    # 이 프로젝트에 Orai 설치·고정 (mise.toml에 기록)
 orai setup --role lead=codex --role dev=claude
 ```
 
@@ -42,7 +37,7 @@ orai setup --role lead=codex --role dev=claude
 
 ```sh
 cd my-app                            # 저장소 루트
-mise use github:oXpace/orai@<버전>
+mise use --pin github:oXpace/orai
 orai setup --dry-run --role lead=codex --role dev=claude   # 바뀔 내용만 먼저 확인
 orai setup --role lead=codex --role dev=claude
 ```
@@ -95,31 +90,40 @@ orai status && orai doctor
 - 역할 이름과 개수는 자유다. `--role 이름=codex|claude`를 필요한 만큼 붙인다. 역할 없이 시작했다가 나중에 `orai setup --role reviewer=claude`로 추가해도 된다. `--preset pm-staff`는 `--role pm=codex --role staff=claude`의 줄임이다.
 - `setup`은 여러 번 실행해도 안전하다.
 - 명령마다 `--help`가 있다. wiki 설정은 `orai wiki --help`, 진단 표시와 종료 코드는 `orai doctor --help`에 정리돼 있다.
-- Orai 버전을 올릴 때는 `mise use github:oXpace/orai@<새 버전>` 뒤 `orai setup`을 다시 실행해 생성 파일을 갱신한다.
 
 자세한 절차는 [운영 안내](docs/operations.md)에, 필요한 외부 도구와 확인된 버전은 [호환성](docs/compatibility.md)에 정리돼 있다.
 
+## 버전 올리기
+
+```sh
+mise use --pin github:oXpace/orai    # 최신 릴리스로 고정을 바꾼다
+orai setup                           # 스킬, AGENTS.md 블록, .gitignore 블록을 새 버전에 맞게 갱신
+orai doctor
+```
+
+저장된 대화와 메일함은 그대로 남고, 역할 세션은 다시 열면 된다. 버전마다 따로 해야 할 일은 [운영 안내의 마이그레이션](docs/operations.md#버전-올리기와-마이그레이션)에, 바뀐 내용은 [릴리스 노트](https://github.com/oXpace/orai/releases)에 있다.
+
 ## 상태
 
-`0.2.0` — pre-alpha, Go. 2026-09-25 기준:
+pre-alpha다. 최신 버전은 위 배지와 [Releases](https://github.com/oXpace/orai/releases)에서 확인한다.
 
 | 범위 | 상태 |
 |---|---|
-| 단위·통합 테스트(race 검사기), 빌드한 바이너리를 checkout 밖에서 실행하는 종단 테스트 | 통과 (`mise run check`, CI macOS·Linux) |
-| 메일함의 실제 AMQ 0.80.1 양방향 호환 (Orai ↔ `amq` 전송·수신·답장) | 통과 |
-| 호스트 도구 capability·로그인 진단 (Codex 0.157.0, Claude Code 2.1.282) | healthy (`orai doctor`) |
-| 이 저장소 문서의 실제 QMD 2.8.3 색인·의미 검색, 서버 다운 감지와 `recover` | 통과 (`orai doctor --deep`) |
-| 실제 CodeGraph 1.5.0 색인·심볼 조회 | 통과 |
-| Codex↔Claude 실제 요청·회신, 종료 후 동일 UUID 복구 | **미검증** — [실제 파일럿](docs/operations.md#실제-파일럿-계정호스트-준비-후) 대기 |
+| 단위·통합 테스트(race 검사기), 빌드한 바이너리를 checkout 밖에서 실행하는 종단 테스트 | 통과 (`mise run check`, CI는 위 배지) |
+| 메일함의 실제 AMQ 양방향 호환 (Orai ↔ `amq` 전송·수신·답장) | 통과 |
+| 호스트 도구(Codex, Claude Code) capability·로그인 진단 | 통과 (`orai doctor`) |
+| 이 저장소 문서의 실제 wiki 색인·의미 검색, 서버 다운 감지와 `recover` | 통과 (`orai doctor --deep`) |
+| 실제 CodeGraph 색인·심볼 조회 | 통과 |
+| Codex↔Claude 실제 요청·회신, 종료 후 동일 대화 복구 | **미검증** — [실제 파일럿](docs/operations.md#실제-파일럿-계정호스트-준비-후) 대기 |
 
-자세한 기록은 [이력](docs/history.md#검증-기록)에 있다.
+확인한 도구 버전은 [호환성](docs/compatibility.md)에, 날짜별 검증 기록은 [이력](docs/history.md#검증-기록)에 있다.
 
 ## 문서
 
 | 문서 | 내용 |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | 책임 경계, 식별·상태 모델, 세션·알림·연동 흐름, 진단 모델 |
-| [docs/operations.md](docs/operations.md) | 설치, 초기화, 실행·중지, 진단, QMD/CodeGraph 운영, 복구, 검증 |
+| [docs/operations.md](docs/operations.md) | 설치, 버전 올리기와 마이그레이션, 초기화, 실행·중지, 진단, wiki·CodeGraph 운영, 복구, 검증 |
 | [docs/compatibility.md](docs/compatibility.md) | 지원 플랫폼, 도구 버전·capability·설치 출처, 라이선스 |
 | [docs/history.md](docs/history.md) | Pockets 추출 원천, 알려진 장애, 변환 내역, 검증 기록 |
 | [docs/release.md](docs/release.md) | 배포 단계, 버전 정책, 릴리스 점검 |

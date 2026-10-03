@@ -149,6 +149,27 @@ func TestSendPeekReceiveReplyFlow(t *testing.T) {
 	if direct.code != 0 || !strings.Contains(direct.out, "파일 본문") {
 		t.Fatalf("direct %+v", direct)
 	}
+	// A notification that arrives after the message was received must not hand the body
+	// over again: the repeat read shows the header and a flag, and --again shows it all.
+	repeat := run("", "msg", "inbox", target)
+	var flagged struct {
+		AlreadyReceived bool   `json:"already_received"`
+		ReceivedAt      string `json:"received_at"`
+		Notice          string
+		Header          struct{ ID string }
+	}
+	if err := json.Unmarshal([]byte(repeat.out), &flagged); err != nil || repeat.code != 0 || !flagged.AlreadyReceived ||
+		flagged.ReceivedAt == "" || flagged.Header.ID != target || strings.Contains(repeat.out, "파일 본문") ||
+		!strings.Contains(flagged.Notice, "--again") {
+		t.Fatalf("repeat read %+v", repeat)
+	}
+	if again := run("", "msg", "inbox", target, "--again"); again.code != 0 || !strings.Contains(again.out, "파일 본문") ||
+		!strings.Contains(again.out, `"already_received": true`) {
+		t.Fatalf("--again %+v", again)
+	}
+	if r := run("", "msg", "inbox", "--again"); r.code != 2 {
+		t.Fatalf("--again without an ID: %+v", r)
+	}
 	var remaining []map[string]any
 	_ = json.Unmarshal([]byte(run("", "msg", "inbox", "--peek").out), &remaining)
 	if len(remaining) != 1 || remaining[0]["id"] == target {

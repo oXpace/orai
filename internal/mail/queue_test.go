@@ -97,6 +97,11 @@ func TestReadByIDReceivesOnlyThatMessage(t *testing.T) {
 	if len(pending) != 1 || pending[0] != second.ID {
 		t.Fatalf("pending %v", pending)
 	}
+	// Reading it again still works, and says it is a repeat with the time of receipt.
+	if again, err := root.Read("dev", first.ID); err != nil || !again.AlreadyReceived || again.ReceivedAt == "" ||
+		again.Body != got.Body || got.AlreadyReceived {
+		t.Fatalf("repeat read: %+v, %v (first read flagged: %v)", again, err, got.AlreadyReceived)
+	}
 	if _, err := root.Read("dev", first.ID); err != nil {
 		t.Fatal("an already received message is still readable:", err)
 	}

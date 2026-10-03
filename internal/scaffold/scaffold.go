@@ -429,7 +429,7 @@ func misePinNote(root string) string {
 			}
 		}
 	}
-	return fmt.Sprintf("This project does not pin Orai. Pin it with `mise use %s@<version>` so everyone on it runs the same version", InstallSpec)
+	return fmt.Sprintf("This project does not pin Orai. Pin it with `mise use --pin %s` so everyone on it runs the same version", InstallSpec)
 }
 
 func resolveRoot(root string) (string, error) {

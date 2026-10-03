@@ -321,9 +321,24 @@ func (r Root) Drain(me string, limit int, includeBody bool) (DrainResult, error)
 type ReadResult struct {
 	Body   string `json:"body"`
 	Header Header `json:"header"`
+	// AlreadyReceived marks a message that had been received before this call (by an
+	// earlier read or drain). A notification can arrive after the message it names was
+	// drained, so a caller following notifications must be able to tell a first read
+	// from a repeat.
+	AlreadyReceived bool   `json:"already_received,omitempty"`
+	ReceivedAt      string `json:"received_at,omitempty"`
 }
 
-// Read returns one message by ID and receives it if it was still new.
+// receivedAt returns when the handle received the message, from its drained receipt;
+// empty when no receipt is readable.
+func (r Root) receivedAt(me, id string) string {
+	receipt, _ := state.ReadJSON(filepath.Join(r.box(me, "receipts"), id+"__"+me+"__drained.json"))
+	at, _ := receipt["emitted_at"].(string)
+	return at
+}
+
+// Read returns one message by ID and receives it if it was still new. A message that
+// was already received is returned too, flagged as such.
 func (r Root) Read(me, id string) (ReadResult, error) {
 	path, box, err := r.find(me, id)
 	if err != nil {
@@ -338,7 +353,11 @@ func (r Root) Read(me, id string) (ReadResult, error) {
 			return ReadResult{}, err
 		}
 	}
-	return ReadResult{Body: msg.Body, Header: msg.Header}, nil
+	result := ReadResult{Body: msg.Body, Header: msg.Header}
+	if box == "cur" {
+		result.AlreadyReceived, result.ReceivedAt = true, r.receivedAt(me, msg.Header.ID)
+	}
+	return result, nil
 }
 
 // Watch calls wake whenever the handle's inbox/new changes, and at least every

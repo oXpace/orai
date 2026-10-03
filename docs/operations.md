@@ -8,14 +8,15 @@ Orai는 **프로젝트 단위**로 설치한다. 프로젝트마다 `mise.toml`�
 
 ```sh
 mkdir my-app && cd my-app
-mise use github:oXpace/orai@<버전>  # GitHub Release의 바이너리를 받아 mise.toml에 고정
+mise use --pin github:oXpace/orai  # 최신 GitHub Release의 바이너리를 받아 그 버전을 mise.toml에 고정
 orai setup                         # 기본 세팅
 ```
 
+특정 버전을 쓰려면 `mise use github:oXpace/orai@0.3.0`처럼 번호를 붙인다. Release 태그에 `v`가 없으므로 `@v0.3.0`이 아니라 `@0.3.0`이다.
+
 - mise github backend는 `oXpace/orai`의 GitHub Release에서 현재 플랫폼(darwin/linux, arm64/amd64)의 `orai_<버전>_<os>_<arch>.tar.gz`를 받는다. 실행에 Go나 다른 런타임은 필요 없다. 게시 전 변경은 Orai checkout에서 `go run ./cmd/orai --project <경로> setup`으로 시험한다.
-- 0.1.0(Python)은 `pypi:oXpace/orai@0.1.0`으로 고정돼 있다. 0.2.0부터는 `github:` 백엔드를 쓴다.
 - `setup`은 프로젝트에 Orai 고정이 없으면 `mise use` 안내를 출력한다.
-- mise에 `minimum_release_age` 설정이 있으면 새 Release가 버전 목록(`mise ls-remote`)에서 한동안 숨겨진다. 이때도 `@0.2.0`처럼 버전을 명시하면 설치된다.
+- mise에 `minimum_release_age` 설정이 있으면 새 Release가 버전 목록(`mise ls-remote`)에서 한동안 숨겨진다. `--pin`이 예전 버전을 고르면 `@0.3.0`처럼 버전을 명시한다.
 - PATH에 다른 `orai`(예: 예전 전역 링크)가 있어도, mise가 활성화된 셸에서는 프로젝트에 고정한 버전이 먼저 선택된다.
 
 Codex, Claude Code, QMD, CodeGraph는 사용자가 설치한다. Orai는 이 도구들을 설치하거나 업그레이드하지 않는다. AMQ는 필요 없다(메일함은 Orai가 관리하며 형식만 AMQ와 호환된다). 필요한 버전은 [호환성](compatibility.md)에 있다.
@@ -26,6 +27,58 @@ Orai 자체를 개발하는 checkout에서는 다음과 같이 준비한다.
 mise install && mise run setup    # Go pin, go mod download
 mise run build                    # dist/orai
 ```
+
+## 버전 올리기와 마이그레이션
+
+모든 버전에 공통인 절차는 다음과 같다. 무엇이 바뀌었는지는 [릴리스 노트](https://github.com/oXpace/orai/releases)에 있고, 이 절은 올릴 때 **해야 할 일**만 적는다.
+
+```sh
+mise use --pin github:oXpace/orai   # 고정 버전을 최신 릴리스로 바꾼다 (또는 @<버전>)
+orai setup --dry-run                # 바뀔 파일 확인
+orai setup                          # 스킬, AGENTS.md 블록, .gitignore 블록을 새 버전에 맞게 갱신
+orai doctor                         # 남은 조치 확인
+git add -A && git commit -m "Update Orai"
+```
+
+- `setup`은 자기가 만든 부분(생성 표식이 있는 스킬, `orai:begin`~`orai:end` 블록)만 갱신하고, 바꾸기 전 원본을 `.orai/backups/`에 둔다. `orai.toml`, 역할 지침, 블록 밖 내용은 고치지 않는다.
+- 저장된 대화, 메일함, wiki 색인은 그대로 남는다. 실행 중인 역할 세션은 예전 버전으로 계속 돌므로, 끝낸 뒤 `orai <역할>`로 다시 연다. 같은 대화로 이어진다.
+- 같은 저장소를 쓰는 다른 사람은 변경을 받은 뒤 `mise install`과 `orai setup`을 실행한다.
+- 되돌리려면 `mise.toml`의 버전을 이전 번호로 바꾸고 `orai setup`을 다시 실행한다.
+
+### 0.2.x → 0.3.0
+
+| 대상 | 해야 할 일 |
+|---|---|
+| `orai doctor` 출력을 JSON으로 읽는 스크립트 | `orai doctor --json`으로 바꾼다. 필드와 종료 코드는 같다 |
+| 저장소에 커밋돼 있는 `.agents/roles/` | `git rm -r --cached .agents/roles` 뒤 커밋한다. 파일은 남고 추적만 해제된다. 팀이 같은 지침을 공유하려면 대신 `orai.toml`의 `guide`를 `docs/roles/dev.md`처럼 저장소에 넣는 경로로 옮긴다 |
+| 이전 버전이 만든 역할 지침 | 그대로 써도 된다. "세션 시작" 절이 없으면 프롬프트가 시작 절차를 직접 알려 준다. 새 형식에 맞추려면 Claude 역할의 지침에 아래 절을 넣는다 |
+| `pm-staff`로 만든 역할 구성 | 바꾸지 않아도 된다. 다른 구성으로 바꾸려면 `orai.toml`의 `[roles.*]`를 고치거나 지우고 `orai setup`을 실행한다([역할 정하기](#프로젝트-준비-orai-setup)) |
+| 받은 메시지를 `orai msg inbox <ID>`로 다시 읽는 스크립트 | 이미 받은 메시지는 본문 없이 `already_received`만 나온다. 본문이 필요하면 `--again`을 붙인다 |
+| `orai.toml` | 바꿀 것이 없다(`schema = 1` 그대로) |
+
+Claude 역할의 지침에 넣는 절:
+
+```markdown
+## 세션 시작
+
+세션을 새로 시작하거나 다시 열 때마다 한다.
+
+1. orai MCP의 `channel_ready` 도구를 호출해 수신 준비를 알린다. 호출하기 전에는 새 메시지 알림이 오지 않는다.
+```
+
+### 0.1.0 → 0.2.0 이상
+
+0.1.0은 Python 패키지였고 AMQ가 필요했다. 0.2.0부터는 실행 파일 하나이며 AMQ가 필요 없다.
+
+| 대상 | 해야 할 일 |
+|---|---|
+| 설치 원천 | `mise.toml`의 `"pypi:oXpace/orai"` 줄을 지우고 `mise use --pin github:oXpace/orai`를 실행한다 |
+| `.amqrc` | 더 쓰지 않는다. 지워도 된다 |
+| AMQ | 지워도 된다. 계속 설치해 두면 `amq`로 같은 메일함을 읽고 보낼 수 있다 |
+| 메일함(`.agent-mail/<session>`) | 위치와 형식이 같아 기존 메시지가 그대로 읽힌다. `orai setup`이 빠진 폴더만 채운다 |
+| 명령과 `orai.toml` | 바꿀 것이 없다 |
+
+Orai가 독립 프로젝트가 되기 전의 방식(Pockets의 `scripts/orai`와 `.agents/orai.json`)에서 옮기는 일은 [배포 계획](release.md#단계)의 "소비 프로젝트 이전" 단계가 다룬다.
 
 ## 프로젝트 준비 (`orai setup`)
 
@@ -91,10 +144,12 @@ orai status                # 실행 여부, 세션 ID, 알림 준비, 미처리 
 ## 메시지
 
 ```sh
-orai msg inbox [<ID>] [--peek] [--limit N]
+orai msg inbox [<ID>] [--again] [--peek] [--limit N]
 orai msg send <role|user> [--kind K] [--thread T] (--body 텍스트 | --file 경로 | 표준 입력)
 orai msg reply <받은-ID> (--body | --file | 표준 입력)
 ```
+
+이미 받은 메시지를 ID로 다시 읽으면 본문 없이 머리말과 `"already_received": true`, 받은 시각만 나온다. 알림은 보낸 뒤 회수할 수 없어서, 에이전트가 전체 수신으로 먼저 받은 메시지의 알림이 뒤늦게 도착할 수 있다. 이때 같은 일을 두 번 하지 않게 하기 위해서다. 일부러 다시 읽으려면 `--again`을 붙인다.
 
 역할 세션 밖(Desktop)에서는 사용자 권한으로 `--as user`를 붙인다. 역할 세션 안에서는 `--as`를 쓸 수 없다. 본문 없이 대화형 터미널에서 실행하면 기다리지 않고 바로 오류를 낸다. 결과는 JSON으로 출력한다(형태는 AMQ의 `send`/`list`/`drain`/`read`/`reply` 출력과 같다). 성공 0, 실패 1, 사용법 오류 2로 끝난다.
 
@@ -251,7 +306,7 @@ mise run test            # race 검사기, 빌드한 바이너리를 checkout �
 
 격리된 작은 파일럿 저장소에서 수행한다. Orai 저장소와 Pockets에서는 하지 않는다.
 
-1. 빈 폴더에서 `mise use github:oXpace/orai@<버전>`, `orai setup --preset pm-staff`, 첫 커밋, `git worktree add .worktrees/staff`, `orai doctor`.
+1. 빈 폴더에서 `mise use --pin github:oXpace/orai`, `orai setup --role pm=codex --role staff=claude`, 첫 커밋, `git worktree add .worktrees/staff`, `orai doctor`.
 2. 두 터미널에서 `orai pm`, `orai staff`를 실행한다. Codex `/hooks` 신뢰와 Claude channel에 동의한다.
 3. 요청과 회신을 주고받는다(`send` → 알림 → `inbox <ID>` → `reply`). 작업 중 알림, 유휴 알림, 수신자가 꺼져 있을 때의 적재, 재접속 후 알림을 각각 확인한다.
 4. 역할을 종료한 뒤 다시 실행해 같은 UUID로 재개되고 메시지를 받는지 확인한다. 중복 실행이 거부되는지 확인한다.

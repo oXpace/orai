@@ -16,7 +16,7 @@ Orai는 Go 단일 실행 파일이다. 릴리스는 darwin/linux × arm64/amd64�
 
 | 도구 | 버전 | 출처 |
 |---|---|---|
-| mise | 2026.9.13 이상 (`min_version` 2026.9.0) | 사용자 설치 |
+| mise | 2026.10.0에서 확인 (`min_version` 2026.9.0) | 사용자 설치 |
 | Go | 1.27.1 | `core:go`, `mise.lock` |
 | Orai (소비 프로젝트) | 프로젝트 `mise.toml` 고정 | `github:oXpace/orai` (mise github backend, GitHub Release의 바이너리) |
 
@@ -33,21 +33,21 @@ Go 의존성의 정본은 `go.mod`와 `go.sum`이다. mise는 Go 버전과 task�
 | QMD | `npm install -g @tobilu/qmd` (Node 22 이상) | `[integrations.wiki]`를 쓸 때 (선택) |
 | CodeGraph | `npm install -g @colbymchenry/codegraph` | `[integrations.codegraph]`를 쓸 때 (선택) |
 
-2026-09-25 macOS 27.0 arm64 호스트에서 확인했다.
+2026-10-03 macOS 27.0 arm64 호스트에서 확인했다.
 
 | 도구 | 확인 버전 | 설치 출처(확인) | Orai가 쓰는 capability | doctor 검사 |
 |---|---|---|---|---|
-| Codex CLI | 0.157.0 | Homebrew cask `codex` | `resume <UUID>`, `queue --thread --message`, `-c hooks.SessionStart`, `-c mcp_servers.*`, `--add-dir` | 도움말 + `codex login status` |
-| Claude Code | 2.1.282 | 네이티브 설치 (`~/.local/share/claude/versions`) | `--session-id`, `--resume`, `--settings`, `--mcp-config`, `--dangerously-load-development-channels server:orai`, `--name`, `--effort` | 도움말 + `claude auth status` (channel 플래그는 도움말에 없어 실행 시 확인) |
+| Codex CLI | 0.160.0 | Homebrew cask `codex` | `resume <UUID>`, `queue --thread --message`, `-c hooks.SessionStart`, `-c mcp_servers.*`, `--add-dir` | 도움말 + `codex login status` |
+| Claude Code | 2.1.288 | 네이티브 설치 (`~/.local/share/claude/versions`) | `--session-id`, `--resume`, `--settings`, `--mcp-config`, `--dangerously-load-development-channels server:orai`, `--name`, `--effort` | 도움말 + `claude auth status` (channel 플래그는 도움말에 없어 실행 시 확인) |
 | QMD | 2.8.3 | npm `@tobilu/qmd` (mise Node 24.21.0 전역) | `--index`, `QMD_CONFIG_DIR`/`INDEX_PATH`, `collection show`, `update`, `embed`, `mcp --http --daemon --host --port`, `mcp stop`, MCP `status`/`query`/`get` | 포트·MCP·식별·색인, `--deep`에서 검색 |
-| CodeGraph | 1.5.0 (upstream 최신 1.6.0) | 번들 설치 `~/.codegraph/versions/v1.5.0` (npm 설치 아님) | `status --json`, `query --json --path`, `init`, `sync`, `install --print-config`, `--location local` | `status --json`, `--deep`에서 심볼 조회 |
-| Git | 2.55.0 | Homebrew | `worktree list --porcelain`, `rev-parse --show-toplevel` | 없음 |
+| CodeGraph | 1.6.0 | 번들 설치 `~/.codegraph/versions/v1.6.0` (npm 설치 아님) | `status --json`, `query --json --path`, `init`, `sync`, `install --print-config`, `--location local` | `status --json`, `--deep`에서 심볼 조회 |
+| Git | 2.56.0 | Homebrew | `worktree list --porcelain`, `rev-parse --show-toplevel` | 없음 |
 
 과거 기록(Pockets 문서): AMQ 0.77.3, Codex 0.154.0, Claude Code 2.1.268. 현재 지원 버전과 같다고 가정하지 않는다.
 
 ### AMQ (선택, 필요 없음)
 
-0.2.0부터 Orai는 메일함을 직접 관리하므로 AMQ가 필요 없다. 디스크 형식은 AMQ schema 1과 같다. 그래서 AMQ를 설치했다면 `amq`로 같은 메일함을 읽고 쓸 수 있고, 역할 세션에는 이를 위한 `AM_ROOT`·`AM_ME`·`AM_SESSION`이 설정된다. 호환성은 AMQ 0.80.1(Homebrew `avivsinai/tap/amq`)과 양방향 테스트로 확인했다(Orai → `amq drain`·`amq reply`, `amq send` → Orai 수신·답장). AMQ가 이 형식을 바꾸면 이 호환성은 깨질 수 있다.
+0.2.0부터 Orai는 메일함을 직접 관리하므로 AMQ가 필요 없다. 디스크 형식은 AMQ schema 1과 같다. 그래서 AMQ를 설치했다면 `amq`로 같은 메일함을 읽고 쓸 수 있고, 역할 세션에는 이를 위한 `AM_ROOT`·`AM_ME`·`AM_SESSION`이 설정된다. 호환성은 AMQ 0.85.0(Homebrew `avivsinai/tap/amq`, 이전에는 0.80.1)과 양방향 테스트로 확인했다(Orai → `amq drain`·`amq reply`, `amq send` → Orai 수신·답장). AMQ가 이 형식을 바꾸면 이 호환성은 깨질 수 있다.
 
 ### 설치 방식 선택 근거
 

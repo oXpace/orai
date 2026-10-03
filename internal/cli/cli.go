@@ -49,7 +49,7 @@ commands:
   status                Role processes, delivery readiness, pending mail
   doctor [--deep] [--json]
                         Read-only diagnosis with next steps
-  msg inbox [ID] [--peek] [--limit N] [--as user]
+  msg inbox [ID] [--again] [--peek] [--limit N] [--as user]
   msg send <role|user> [--body TEXT | --file PATH] [--kind K] [--thread T] [--as user]
   msg reply <ID> [--body TEXT | --file PATH] [--kind K] [--as user]
                         Messages; the body defaults to piped stdin
@@ -127,7 +127,10 @@ What --deep verifies is set in orai.toml:
 Without them, --deep only checks that searches return something.
 `
 
-var msgHelp = `usage: orai msg inbox [ID] [--peek] [--limit N] [--as user]
+// alreadyReceivedNotice is what `orai msg inbox <ID>` says for a message received before.
+const alreadyReceivedNotice = "This message was already received, so it is not shown again and must not be processed a second time. To read it again on purpose: orai msg inbox <ID> --again"
+
+var msgHelp = `usage: orai msg inbox [ID] [--again] [--peek] [--limit N] [--as user]
        orai msg send <role|user> [--body TEXT | --file PATH] [--kind K] [--thread T] [--as user]
        orai msg reply <ID> [--body TEXT | --file PATH] [--kind K] [--as user]
 
@@ -135,7 +138,10 @@ Messages between roles. Inside a role session the sender is that role. Outside o
 (your own terminal), add --as user. The body comes from --body, --file or piped stdin.
 
   inbox                 receive pending messages (marks them read); --peek only lists
-  inbox ID              receive one message
+  inbox ID              receive one message. If it was already received (for
+                        example by an earlier ` + "`orai msg inbox`" + `), only its header and
+                        "already_received": true are printed, so a late notification
+                        does not cause the same work twice; --again shows the body
   --kind K              one of: ` + strings.Join(mail.Kinds, ", ") + `
 
 Output is JSON.
@@ -276,7 +282,7 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 func wantsHelp(argv []string) bool {
 	o, _ := parse(argv, map[string]bool{"project": true, "preset": true, "branch": true, "role": true, "as": true,
 		"limit": true, "body": true, "file": true, "kind": true, "thread": true,
-		"dry-run": false, "no-tools": false, "fresh": false, "deep": false, "json": false, "peek": false})
+		"dry-run": false, "no-tools": false, "fresh": false, "deep": false, "json": false, "peek": false, "again": false})
 	return o.flag("help")
 }
 
@@ -472,7 +478,7 @@ func runMessage(argv []string, stdin io.Reader, stdout io.Writer) (int, error) {
 	spec := map[string]bool{"project": true, "as": true}
 	switch action {
 	case "inbox":
-		spec["peek"], spec["limit"] = false, true
+		spec["peek"], spec["limit"], spec["again"] = false, true, false
 	case "send":
 		spec["body"], spec["file"], spec["kind"], spec["thread"] = true, true, true, true
 	case "reply":
@@ -533,7 +539,10 @@ func runMessage(argv []string, stdin io.Reader, stdout io.Writer) (int, error) {
 	switch action {
 	case "inbox":
 		if len(o.args) > 1 {
-			return exitUsage, usagef("usage: orai msg inbox [ID] [--peek] [--limit N]")
+			return exitUsage, usagef("usage: orai msg inbox [ID] [--again] [--peek] [--limit N]")
+		}
+		if o.flag("again") && len(o.args) == 0 {
+			return exitUsage, usagef("--again needs a message ID")
 		}
 		if len(o.args) == 1 {
 			if o.flag("peek") || hasLimit {
@@ -542,6 +551,16 @@ func runMessage(argv []string, stdin io.Reader, stdout io.Writer) (int, error) {
 			result, err := root.Read(me, o.args[0])
 			if err != nil {
 				return 1, err
+			}
+			if result.AlreadyReceived && !o.flag("again") {
+				// A late notification for a message that was already drained: say so
+				// instead of handing the body over as if it were new work.
+				return 0, printJSON(stdout, struct {
+					AlreadyReceived bool        `json:"already_received"`
+					ReceivedAt      string      `json:"received_at,omitempty"`
+					Notice          string      `json:"notice"`
+					Header          mail.Header `json:"header"`
+				}{true, result.ReceivedAt, alreadyReceivedNotice, result.Header})
 			}
 			return 0, printJSON(stdout, result)
 		}
