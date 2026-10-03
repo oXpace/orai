@@ -117,6 +117,7 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 | 임시 프로젝트의 `shelf.registration` | `.codex/config.toml`의 포트가 다를 때 degraded와 고칠 값이 나왔고, 맞추면 healthy |
 | CI (223c650) | macOS 15, Ubuntu 24.04 통과. Release 0.4.0에 바이너리 4개 첨부 |
 | 설치와 0.3.0에서 올리기 (배포 후) | 빈 폴더에서 `mise use github:oXpace/orai@0.3.0` → `orai setup --role lead=codex --role dev=claude`(색인과 서버 생성) → `mise use github:oXpace/orai@0.4.0`. `orai doctor`가 schema 수정과 `orai shelf recover`를 안내했고, `orai setup`이 서버를 멈추고 `.orai/wiki`를 `.orai/shelf`로 옮긴 뒤 다시 시작했다. `orai.toml` 두 줄을 고치자 healthy. Claude 역할의 실행 계획에 MCP 서버가 `orai`와 `shelf`로 들어갔다 |
+| `mise ls-remote github:oXpace/orai` (배포 후) | 0.2.0만 나오고 "2 newer github:oXpace/orai releases hidden by minimum_release_age" 경고가 나왔다. 0.3.0 때 원인을 모르던 버전 목록 지연이 이것이다. 설정값은 없었다(mise 2026.10.0의 기본 동작) |
 | 미검증 | 실제 역할 세션에서 `shelf` 도구 호출, Claude Code의 같은 이름 서버 우선순위, Linux의 실제 QMD |
 
 ### 2026-10-03, 0.3.0 개발본 (macOS 27.0 arm64)
