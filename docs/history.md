@@ -141,7 +141,9 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 | 이 저장소 | `docs`에 설명을 선언하고 `orai shelf recover`로 적용했다(서버 18800 유지). `shelf.context` healthy |
 | 임시 프로젝트의 로컬 설정 | `orai.local.toml`에 역할 모델, shelf 포트, 폴더 설명을 적었다. `orai shelf recover`가 로컬 포트(18647)에서 서버를 시작하고 로컬 설명을 적용했다. `orai doctor`의 `project`가 로컬 파일이 정한 키 세 개를 나열했고, `orai status`와 `orai dev --dry-run`에 로컬 모델이 나왔다. 파일을 지우자 `project`가 원래 문구로 돌아왔다 |
 | provider 전달 범위 | Claude Code 2.1.289(`claude -p`, `--strict-mcp-config`)는 `context`를 포함한 구조화된 결과와 `get` 본문을 봤다. Codex CLI 0.160.0(`codex exec`)은 검색에서 글만 봤고 `get`·`multi_get`에서는 아무것도 보지 못했다(세 번). `--json` 이벤트에는 본문이 있었다 |
-| 미검증 | 역할 세션(TUI)에서의 전달 범위, 설명이 문서 선택과 읽기 횟수에 주는 효과, Linux의 실제 QMD |
+| CI (f2fa50e) | macOS 15, Ubuntu 24.04 통과. Release 0.5.0에 바이너리 4개 첨부 |
+| 설치와 0.4.0에서 올리기 (배포 후) | 빈 폴더에서 `mise use github:oXpace/orai@0.4.0` → `orai setup --role lead=codex --role dev=claude --no-tools` → 커밋 → `mise use github:oXpace/orai@0.5.0` → `orai setup --no-tools`. `AGENTS.md`와 `.gitignore`의 Orai 블록만 바뀌었고 `orai.toml`은 그대로였다. 작업 폴더를 만들지 않은 `role.dev`가 Optional로 나왔다. `orai.local.toml`에 `lead`의 모델을 적자 `project`가 그 키를 나열했고 `orai status`에 로컬 모델이 나왔으며, 파일은 `git status`에 잡히지 않았다 |
+| 미검증 | 역할 세션(TUI)에서의 전달 범위, 설명이 문서 선택과 읽기 횟수에 주는 효과, 저장된 대화를 다른 모델로 재개할 때의 provider 동작, Linux의 실제 QMD |
 
 ### 2026-10-03, 0.4.0 (macOS 27.0 arm64)
 
