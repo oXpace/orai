@@ -111,6 +111,9 @@ func registration(s *Settings, deep bool) doctor.Check {
 	const component = "shelf.registration"
 	entries, unreadable := localEntries(s.Project.Root)
 	pinned := s.Project.Config.Shelf.Port != 0
+	// A port set in orai.local.toml moves this computer's server away from the address
+	// the committed settings name; the shared files are right, so they are not the fix.
+	moved := s.Project.Config.FromLocal("integrations.shelf.port")
 	pin := fmt.Sprintf("set `port = %d` under [integrations.shelf] in orai.toml so the address is the same in every checkout", s.Port)
 
 	var registered, problems, fixes []string
@@ -120,6 +123,9 @@ func registration(s *Settings, deep bool) doctor.Check {
 		switch {
 		case e.Name == ServerName && sameEndpoint(e.URL, s.Port):
 			registered = append(registered, e.File)
+		case e.Name == ServerName && moved:
+			problems = append(problems, fmt.Sprintf("%s has `%s` at %s, but orai.local.toml moves this computer's shelf to %s", e.File, e.Name, orNone(e.URL), s.Endpoint))
+			fixes = append(fixes, fmt.Sprintf("Sessions that read %s reach nothing here: drop `port` from orai.local.toml, or use the shelf from role sessions only", e.File))
 		case e.Name == ServerName:
 			problems = append(problems, fmt.Sprintf("%s has `%s` at %s, but this project's shelf is %s", e.File, e.Name, orNone(e.URL), s.Endpoint))
 			fixes = append(fixes, fmt.Sprintf("In %s set the url of `%s` to %s", e.File, ServerName, s.Endpoint))

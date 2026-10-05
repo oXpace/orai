@@ -156,7 +156,7 @@ func Load(path string) (*Project, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := config.Load(filepath.Join(root, ConfigName))
+	cfg, err := config.LoadWithLocal(filepath.Join(root, ConfigName), filepath.Join(root, config.LocalName))
 	if err != nil {
 		return nil, err
 	}

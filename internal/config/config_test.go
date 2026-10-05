@@ -2,6 +2,7 @@
 package config_test
 
 import (
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -270,4 +271,198 @@ func TestCollectionsTakeAFolderOrAPathWithAPattern(t *testing.T) {
 	} {
 		contains(t, mustFail(t, base+"[integrations.shelf]\ncollections = "+text+"\n"), want)
 	}
+}
+
+// A context says what the documents under a folder are for. It is keyed by folder, so
+// it must touch a collection, and it is one line because that is how the engine lists it.
+func TestContextDescribesFoldersOfTheCollections(t *testing.T) {
+	if cfg := mustParse(t, base+"[integrations.shelf]\n"); cfg.Shelf.Context != nil {
+		t.Fatalf("context without a table = %v, want nil", cfg.Shelf.Context)
+	}
+	if cfg := mustParse(t, base+"[integrations.shelf.context]\n"); cfg.Shelf.Context == nil || len(cfg.Shelf.Context) != 0 {
+		t.Fatalf("an empty table = %v, want an empty declaration", cfg.Shelf.Context)
+	}
+	cfg := mustParse(t, base+"[integrations.shelf]\ncollections = { adr = \"docs/adr\", notes = \"notes\" }\n"+
+		"[integrations.shelf.context]\n\".\" = \" everything \"\n\"docs\" = \"documents\"\n\"docs/adr/\" = \"decisions\"\n\"notes/2024\" = \"this year\"\n")
+	want := map[string]string{".": "everything", "docs": "documents", "docs/adr": "decisions", "notes/2024": "this year"}
+	if got := cfg.Shelf.Context; len(got) != len(want) {
+		t.Fatalf("context = %v, want %v", got, want)
+	}
+	for folder, text := range want {
+		if cfg.Shelf.Context[folder] != text {
+			t.Fatalf("context[%q] = %q, want %q", folder, cfg.Shelf.Context[folder], text)
+		}
+	}
+	plan := cfg.Shelf.ContextPlan()
+	if plan["adr"][""] != "everything / documents / decisions" || plan["notes"][""] != "everything" || plan["notes"]["2024"] != "this year" || len(plan["adr"]) != 1 {
+		t.Fatalf("plan = %v", plan)
+	}
+	for text, want := range map[string]string{
+		`"design" = "x"`:                      `integrations.shelf.context.design is not part of any collection`,
+		`"../docs" = "x"`:                     "must stay inside the project root",
+		`"/docs" = "x"`:                       "must be relative to the project root",
+		`"docs" = ""`:                         "must be a non-empty string",
+		`"docs" = 3`:                          "must be a non-empty string",
+		`"docs" = "one\ntwo"`:                 "must be one line of text",
+		`"docs" = "- a list item"`:            "must be one line of text",
+		"\"docs\" = \"a\"\n\"docs/\" = \"b\"": "a second time",
+	} {
+		contains(t, mustFail(t, base+"[integrations.shelf.context]\n"+text+"\n"), want)
+	}
+	contains(t, mustFail(t, base+"[integrations.shelf]\ncontext = \"docs\"\n"), "must map folders to one-line descriptions")
+}
+
+// --- config: orai.local.toml over orai.toml -----------------------------------------
+
+const sharedRoles = base + `
+[roles.pm]
+provider = "codex"
+worktree = "."
+guide = "docs/pm.md"
+model = "shared-model"
+
+[integrations.shelf]
+collections = { docs = "docs" }
+port = 18300
+
+[integrations.shelf.context]
+"docs" = "shared words"
+`
+
+func overlay(t *testing.T, shared, local string) *config.Config {
+	t.Helper()
+	cfg, err := config.Overlay([]byte(shared), []byte(local))
+	if err != nil {
+		t.Fatalf("Overlay: %v", err)
+	}
+	return cfg
+}
+
+// The local file is laid over the shared one key by key: a value replaces the shared
+// value and leaves its neighbours alone, and a table that is only local is added.
+func TestLocalFileReplacesValuesAndAddsTables(t *testing.T) {
+	cfg := overlay(t, sharedRoles, `
+[roles.pm]
+model = "my-model"
+effort = "high"
+
+[roles.scratch]
+provider = "claude"
+worktree = ".worktrees/scratch"
+
+[integrations.shelf]
+port = 18401
+
+[integrations.shelf.collections]
+notes = "notes"
+
+[integrations.shelf.context]
+"docs" = "my words"
+"notes" = "my notes"
+
+[integrations.codegraph]
+`)
+	pm := cfg.Roles["pm"]
+	if pm.Model != "my-model" || pm.Effort != "high" || pm.Provider != "codex" || pm.Worktree != "." || pm.Guide != "docs/pm.md" {
+		t.Fatalf("pm = %+v", pm)
+	}
+	if cfg.Roles["scratch"].Provider != "claude" || len(cfg.Roles) != 2 {
+		t.Fatalf("roles = %+v", cfg.Roles)
+	}
+	shelf := cfg.Shelf
+	if shelf.Port != 18401 || shelf.Collections["docs"] != "docs" || shelf.Collections["notes"] != "notes" ||
+		shelf.Context["docs"] != "my words" || shelf.Context["notes"] != "my notes" || cfg.Codegraph == nil {
+		t.Fatalf("integrations = %+v %+v", shelf, cfg.Codegraph)
+	}
+	want := []string{"integrations.codegraph", "integrations.shelf.collections.notes", "integrations.shelf.context.docs",
+		"integrations.shelf.context.notes", "integrations.shelf.port", "roles.pm.effort", "roles.pm.model", "roles.scratch"}
+	if strings.Join(cfg.LocalKeys, " ") != strings.Join(want, " ") {
+		t.Fatalf("local keys = %v, want %v", cfg.LocalKeys, want)
+	}
+	if !cfg.FromLocal("roles.pm.model") || !cfg.FromLocal("roles.scratch.provider") || cfg.FromLocal("roles.pm.provider") || cfg.FromLocal("roles.p") {
+		t.Fatalf("FromLocal disagrees with %v", cfg.LocalKeys)
+	}
+	if got := cfg.LocalUnder("roles.pm"); strings.Join(got, " ") != "effort model" {
+		t.Fatalf("LocalUnder(roles.pm) = %v", got)
+	}
+	if got := cfg.LocalUnder("roles.scratch"); len(got) != 1 || got[0] != "." {
+		t.Fatalf("LocalUnder(roles.scratch) = %v", got)
+	}
+}
+
+// An empty local file, or one that only opens tables, changes nothing and sets nothing.
+func TestLocalFileThatSetsNothingChangesNothing(t *testing.T) {
+	alone := mustParse(t, sharedRoles)
+	for _, local := range []string{"", "# nothing yet\n", "[roles.pm]\n[integrations.shelf]\n"} {
+		cfg := overlay(t, sharedRoles, local)
+		if len(cfg.LocalKeys) != 0 || cfg.Roles["pm"] != alone.Roles["pm"] || cfg.Shelf.Port != alone.Shelf.Port ||
+			cfg.Session != alone.Session || len(cfg.Roles) != len(alone.Roles) {
+			t.Fatalf("local %q changed the result: %+v keys %v", local, cfg, cfg.LocalKeys)
+		}
+	}
+}
+
+// What the local file may not do, each refused with the file named: set the project's
+// identity, use an unknown key, produce an invalid declaration, or stand in for a shared
+// file that is invalid by itself.
+func TestLocalFileErrorsNameTheFile(t *testing.T) {
+	for local, want := range map[string]string{
+		`session = "mine"`:                                 "orai.local.toml: `session` belongs in orai.toml",
+		`name = "mine"`:                                    "orai.local.toml: `name` belongs in orai.toml",
+		`schema = 2`:                                       "orai.local.toml: `schema` belongs in orai.toml",
+		`colour = "red"`:                                   "orai.local.toml: unknown key(s) colour",
+		"[roles.pm]\nnickname = \"boss\"":                  "orai.local.toml, applied over orai.toml: roles.pm: unknown key(s) nickname",
+		"[roles.scratch]\nmodel = \"x\"":                   "orai.local.toml, applied over orai.toml: roles.scratch.provider must be one of",
+		"[roles.pm]\nprovider = \"chatgpt\"":               "orai.local.toml, applied over orai.toml: roles.pm.provider",
+		"[integrations.shelf]\nport = 80":                  "orai.local.toml, applied over orai.toml: integrations.shelf.port",
+		"[integrations.shelf.context]\n\"design\" = \"x\"": "is not part of any collection",
+		"[roles.pm":                                        "orai.local.toml: ",
+	} {
+		_, err := config.Overlay([]byte(sharedRoles), []byte(local))
+		if err == nil {
+			t.Fatalf("local %q was accepted", local)
+		}
+		contains(t, err, want)
+	}
+	// A local file cannot repair or hide a shared file that is invalid alone.
+	_, err := config.Overlay([]byte(base+"[roles.pm]\nworktree = \".\"\n"), []byte("[roles.pm]\nprovider = \"codex\"\n"))
+	if err == nil || strings.Contains(err.Error(), "orai.local.toml") {
+		t.Fatalf("an invalid shared file: %v", err)
+	}
+	contains(t, err, "roles.pm.provider")
+	// Schema 1 has another table name for the shelf; the local file is for schema 2.
+	_, err = config.Overlay([]byte("schema = 1\n"), []byte(""))
+	contains(t, err, "orai.local.toml needs `schema = 2` in orai.toml")
+}
+
+// A project without the local file loads exactly as before, and an error in the local
+// file points at the file that was read.
+func TestLoadWithLocalTreatsAMissingFileAsNormal(t *testing.T) {
+	dir := t.TempDir()
+	shared, local := dir+"/orai.toml", dir+"/orai.local.toml"
+	if err := os.WriteFile(shared, []byte(sharedRoles), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	alone, err := config.Load(shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.LoadWithLocal(shared, local)
+	if err != nil || cfg.LocalFile != "" || len(cfg.LocalKeys) != 0 || cfg.Roles["pm"] != alone.Roles["pm"] || cfg.Shelf.Port != alone.Shelf.Port {
+		t.Fatalf("without a local file: %v %+v", err, cfg)
+	}
+	if err := os.WriteFile(local, []byte("[roles.pm]\nmodel = \"mine\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err = config.LoadWithLocal(shared, local); err != nil || cfg.LocalFile != local || cfg.Roles["pm"].Model != "mine" {
+		t.Fatalf("with a local file: %v %+v", err, cfg)
+	}
+	if err := os.WriteFile(local, []byte("session = \"x\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = config.LoadWithLocal(shared, local)
+	if err == nil {
+		t.Fatal("an invalid local file was accepted")
+	}
+	contains(t, err, local+": `session` belongs in orai.toml")
 }

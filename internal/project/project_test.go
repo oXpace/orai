@@ -335,3 +335,34 @@ func TestSetupTargetPrefersThisRepositoryOverConfigsAboveIt(t *testing.T) {
 		t.Fatalf("SetupTarget(repo/src) after setup = %q, want %q", got, existing.Root)
 	}
 }
+
+// This computer's settings live next to orai.toml in the main checkout, uncommitted, so
+// a role worktree has no copy of them. Loading from the worktree still applies them:
+// the project is the main checkout.
+func TestLocalSettingsOfTheMainCheckoutApplyFromARoleWorktree(t *testing.T) {
+	tmp := resolvePath(t, t.TempDir())
+	mainRoot := filepath.Join(tmp, "repo")
+	writeProject(t, mainRoot, minimalConfig+"[roles.dev]\nprovider = \"claude\"\nmodel = \"shared\"\n", true)
+	git(t, mainRoot, "add", "orai.toml")
+	git(t, mainRoot, "commit", "-q", "-m", "add config")
+	worktree := filepath.Join(tmp, "repo-dev")
+	git(t, mainRoot, "worktree", "add", "-q", "-b", "dev", worktree, "trunk")
+
+	p, err := project.Load(worktree)
+	if err != nil || p.Config.Roles["dev"].Model != "shared" || p.Config.LocalFile != "" {
+		t.Fatalf("without a local file: %v %+v", err, p)
+	}
+	local := filepath.Join(mainRoot, "orai.local.toml")
+	if err := os.WriteFile(local, []byte("[roles.dev]\nmodel = \"mine\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(worktree, "orai.local.toml")); err == nil {
+		t.Fatal("the worktree has a copy of the local file")
+	}
+	for _, from := range []string{worktree, mainRoot} {
+		p, err := project.Load(from)
+		if err != nil || p.Config.Roles["dev"].Model != "mine" || p.Config.LocalFile != local || p.Root != resolvePath(t, mainRoot) {
+			t.Fatalf("from %s: %v %+v", from, err, p)
+		}
+	}
+}

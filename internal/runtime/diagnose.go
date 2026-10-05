@@ -36,6 +36,16 @@ func nextStep(p *project.Project, role config.Role) string {
 	return fmt.Sprintf("Fix the worktree, or `orai run %s --fresh` for a new conversation", role.Name)
 }
 
+// notHere reports a role this computer has never run: its worktree folder does not exist
+// and nothing was saved for it.
+func notHere(p *project.Project, role config.Role) bool {
+	if _, err := os.Stat(filepath.Join(p.Root, role.Worktree)); err == nil {
+		return false
+	}
+	_, err := os.Stat(p.RoleFiles(role.Name).State())
+	return os.IsNotExist(err)
+}
+
 // shown shortens a path under the project root to its relative form for messages.
 func shown(p *project.Project, path string) string {
 	if rel, err := filepath.Rel(p.Root, path); err == nil && !strings.HasPrefix(rel, "..") {
@@ -63,8 +73,19 @@ func Diagnose(p *project.Project) []doctor.Check {
 			fmt.Sprintf("%s uses schema %d; this version writes schema %d", project.ConfigName, p.Config.Schema, config.Schema), action).
 			WithDetail(map[string]any{"root": p.Root, "id": p.ID(), "roles": p.Config.RoleNames()}))
 	} else {
-		checks = append(checks, doctor.New("project", doctor.Healthy, project.ConfigName+" is valid", "").
-			WithDetail(map[string]any{"root": p.Root, "id": p.ID(), "roles": p.Config.RoleNames()}))
+		// What is in effect, and where it came from: the local file's settings are listed.
+		reason := project.ConfigName + " is valid"
+		detail := map[string]any{"root": p.Root, "id": p.ID(), "roles": p.Config.RoleNames()}
+		if p.Config.LocalFile != "" {
+			reason += "; " + config.LocalName + " is applied over it"
+			if keys := p.Config.LocalKeys; len(keys) > 0 {
+				reason += " and sets " + strings.Join(keys, ", ")
+			} else {
+				reason += " and sets nothing"
+			}
+			detail["local"] = map[string]any{"file": p.Config.LocalFile, "keys": p.Config.LocalKeys}
+		}
+		checks = append(checks, doctor.New("project", doctor.Healthy, reason, "").WithDetail(detail))
 	}
 	if len(p.Config.Roles) == 0 {
 		return append(checks, doctor.New("mail", doctor.NotConfigured, "no roles in orai.toml yet",
@@ -98,7 +119,17 @@ func Diagnose(p *project.Project) []doctor.Check {
 		}
 		if err != nil {
 			reason := strings.ReplaceAll(err.Error(), p.Root+string(filepath.Separator), "")
-			checks = append(checks, doctor.New("role."+name, doctor.Degraded, reason, nextStep(p, role)).WithDetail(detail))
+			status := doctor.Degraded
+			if notHere(p, role) {
+				// Declared for the project but never set up here: a choice, not a fault.
+				// Whoever only uses the project's tools sees no problem to fix.
+				status, reason = doctor.NotConfigured, "not set up on this computer (no "+role.Worktree+" folder, no saved conversation)"
+			}
+			next := nextStep(p, role)
+			if status == doctor.NotConfigured {
+				next = "To run this role here: " + next
+			}
+			checks = append(checks, doctor.New("role."+name, status, reason, next).WithDetail(detail))
 			continue
 		}
 		if role.Guide != "" {

@@ -23,7 +23,7 @@ Orai는 [AMQ](https://github.com/avivsinai/agent-message-queue)를 실행하지 
 
 ## 프로젝트에 추가하기
 
-Orai는 프로젝트마다 설치하고 버전을 고정한다. 준비물은 [mise](https://mise.jdx.dev)와 Git이다. 아래 명령은 최신 릴리스를 받아 그 버전을 프로젝트의 `mise.toml`에 적는다. 특정 버전을 쓰려면 `mise use github:oXpace/orai@0.4.0`처럼 `v` 없이 번호를 붙인다. 막 나온 릴리스는 mise의 버전 목록에 늦게 나타날 수 있다. `mise.toml`에 적힌 버전이 위 배지보다 낮으면 번호를 직접 붙여 다시 실행한다.
+Orai는 프로젝트마다 설치하고 버전을 고정한다. 준비물은 [mise](https://mise.jdx.dev)와 Git이다. 아래 명령은 최신 릴리스를 받아 그 버전을 프로젝트의 `mise.toml`에 적는다. 특정 버전을 쓰려면 `mise use github:oXpace/orai@0.5.0`처럼 `v` 없이 번호를 붙인다. 막 나온 릴리스는 mise의 버전 목록에 늦게 나타날 수 있다. `mise.toml`에 적힌 버전이 위 배지보다 낮으면 번호를 직접 붙여 다시 실행한다.
 
 **새 프로젝트**
 
@@ -48,11 +48,12 @@ orai setup --role lead=codex --role dev=claude
 
 | 파일 | 내용 | 커밋 |
 |---|---|---|
-| `orai.toml` | 역할과 shelf·코드 그래프 설정. 없을 때만 만들고, 있으면 `--role`로 요청한 역할만 덧붙인다 | 한다 |
-| `AGENTS.md` | Orai 설명 블록(역할, 메시지, 진단, 문서 검색, 커밋하지 않는 것). `orai:begin`~`orai:end` 사이만 관리하고 나머지는 그대로 둔다 | 한다 |
+| `orai.toml` | 프로젝트가 공유하는 설정: 역할과 shelf·코드 그래프. 없을 때만 만들고, 있으면 `--role`로 요청한 역할만 덧붙인다 | 한다 |
+| `orai.local.toml` | 이 컴퓨터만의 설정(역할의 모델, 포트, 나만 쓰는 역할). 직접 만들 때만 있고 `orai.toml` 위에 키 단위로 겹친다 | 안 한다 |
+| `AGENTS.md` | Orai 설명 블록(진단, 문서 검색, 코드 구조, 커밋하지 않는 것, 역할 세션에서의 역할과 메시지). `orai:begin`~`orai:end` 사이만 관리하고 나머지는 그대로 둔다 | 한다 |
 | `CLAUDE.md` | 없을 때만 `@AGENTS.md` 한 줄로 만든다 | 한다 |
 | `.agents/skills/orai/SKILL.md`, `.claude/skills/orai` | 에이전트가 메시지를 주고받는 방법을 담은 스킬과, Claude Code용 링크 | 한다 |
-| `.gitignore` | Orai 블록: `/.orai/`, `/.agent-mail/`, `/.codegraph/`, 역할 작업 폴더 | 한다 |
+| `.gitignore` | Orai 블록: `/.orai/`, `/orai.local.toml`, `/.agent-mail/`, `/.codegraph/`, 역할 작업 폴더 | 한다 |
 | `.agents/.gitignore` | Orai 블록: `/roles/` (역할 지침을 저장소에 넣지 않는다) | 한다 |
 | `.agents/roles/<역할>.md` | 역할 지침. 이 컴퓨터에서 고쳐 쓴다 | 안 한다 |
 | `.orai/`, `.agent-mail/` | 로컬 상태(세션, shelf 색인, 백업)와 메일함 | 안 한다 |
@@ -72,7 +73,7 @@ orai doctor                                 # Status: healthy 확인
 
 Codex CLI, Claude Code, QMD, CodeGraph가 없으면 설치 명령이 함께 나온다. shelf와 코드 그래프는 선택 기능이라, 쓰지 않으려면 `orai.toml`에서 해당 `[integrations.*]` 표를 지운다.
 
-**같은 저장소를 받은 사람**은 `mise install` 뒤 `orai setup`을 한 번 실행한다. 버전은 `mise.toml`에, 역할과 설정은 `orai.toml`에 이미 있으므로 그 컴퓨터의 로컬 상태(메일함, 역할 지침의 틀, shelf 색인, 코드 그래프)만 만들어진다. 역할 작업 폴더(`git worktree add`)도 컴퓨터마다 만든다.
+**같은 저장소를 받은 사람**은 `mise install` 뒤 `orai setup`을 한 번 실행한다. 버전은 `mise.toml`에, 역할과 설정은 `orai.toml`에 이미 있으므로 그 컴퓨터의 로컬 상태(메일함, 역할 지침의 틀, shelf 색인, 코드 그래프)만 만들어진다. 역할을 실행할 사람은 역할 작업 폴더(`git worktree add`)도 컴퓨터마다 만든다. 역할을 쓰지 않아도 문서 검색과 진단은 그대로 쓴다. 모델이나 포트처럼 컴퓨터마다 달라야 하는 값은 `orai.local.toml`에 적는다([운영 안내](docs/operations.md#공유-설정과-로컬-설정)).
 
 ## 사용
 
@@ -89,7 +90,7 @@ orai status && orai doctor
 
 - 역할 이름과 개수는 자유다. `--role 이름=codex|claude`를 필요한 만큼 붙인다. 역할 없이 시작했다가 나중에 `orai setup --role reviewer=claude`로 추가해도 된다. `--preset pm-staff`는 `--role pm=codex --role staff=claude`의 줄임이다.
 - `setup`은 여러 번 실행해도 안전하다.
-- shelf는 `orai.toml`의 `[integrations.shelf]`에 등록한 폴더를 검색한다. `adr = "docs/adr"`처럼 묶음을 나눠 등록할 수 있고, 역할 세션에는 `shelf`라는 MCP 서버로 연결된다. Desktop처럼 역할 세션 밖에서 쓰는 방법은 [운영 안내](docs/operations.md#역할-세션-밖에서-쓰기)에 있다.
+- shelf는 `orai.toml`의 `[integrations.shelf]`에 등록한 폴더를 검색한다. `adr = "docs/adr"`처럼 묶음을 나눠 등록할 수 있고, 폴더마다 한 줄 설명(`context`)을 달아 검색 결과에 붙일 수 있다. 역할 세션에는 `shelf`라는 MCP 서버로 연결된다. Desktop처럼 역할 세션 밖에서 쓰는 방법은 [운영 안내](docs/operations.md#역할-세션-밖에서-쓰기)에 있다.
 - 명령마다 `--help`가 있다. shelf 설정은 `orai shelf --help`, 진단 표시와 종료 코드는 `orai doctor --help`에 정리돼 있다.
 
 자세한 절차는 [운영 안내](docs/operations.md)에, 필요한 외부 도구와 확인된 버전은 [호환성](docs/compatibility.md)에 정리돼 있다.

@@ -588,15 +588,92 @@ func TestDiagnoseReportsRolesMailAndMissingWorktree(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(dir, "docs"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "docs/lead.md"), []byte("# lead\n"), 0o644)
 	byName = diagnose()
-	// Paths in reasons are relative to the project; the worktree step asks for the first
-	// commit because this repository has none.
+	// A role whose worktree was never made here and that has no saved conversation is
+	// not set up on this computer: that is a choice, so it is offered as a step and not
+	// counted as a fault. The step asks for the first commit, as this repository has none.
 	if !strings.HasPrefix(byName["mail"], "not-ready") || !strings.HasPrefix(byName["role.lead"], "healthy") ||
-		!strings.HasPrefix(byName["role.dev"], "degraded|missing role worktree: .worktrees/dev|Make the first commit") ||
+		!strings.HasPrefix(byName["role.dev"], "not-configured|not set up on this computer (no .worktrees/dev folder, no saved conversation)|To run this role here: Make the first commit") ||
 		!strings.Contains(byName["role.dev"], "git worktree add .worktrees/dev") {
 		t.Fatalf("checks %v", byName)
+	}
+	// Once it has run here, a missing worktree is a fault again.
+	if err := state.WriteJSON(p.RoleFiles("dev").State(), map[string]any{"provider": "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	if byName = diagnose(); !strings.HasPrefix(byName["role.dev"], "degraded|missing role worktree: .worktrees/dev|") {
+		t.Fatalf("a role that ran here: %v", byName)
 	}
 	noRoles := writeProject(t, t.TempDir(), "schema = 2\n")
 	if got := Diagnose(noRoles); got[1].Status != "not-configured" {
 		t.Fatalf("mail without roles: %+v", got[1])
 	}
+}
+
+// orai.local.toml decides what runs here, and status says so. Changing a role's model
+// locally keeps its saved conversation; changing its provider does not, exactly as when
+// orai.toml itself is edited.
+func TestLocalSettingsAreWhatRunsAndStatusNamesThem(t *testing.T) {
+	clearOraiEnv(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "orai.local.toml"),
+		[]byte("[roles.lead]\nmodel = \"mine\"\n\n[roles.scratch]\nprovider = \"claude\"\nworktree = \".\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := writeProject(t, dir, twoRoles)
+	lead := p.Config.Roles["lead"]
+	if args, _ := ProviderArgs(p, lead, ""); !containsArg(args, "mine") || containsArg(args, "gpt-test") {
+		t.Fatalf("launch does not use the local model: %v", args)
+	}
+	var out bytes.Buffer
+	if err := Status(p, &out); err != nil {
+		t.Fatal(err)
+	}
+	var rows []RoleStatus
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil || len(rows) != 3 {
+		t.Fatalf("status: %v %s", err, out.String())
+	}
+	byRole := map[string]RoleStatus{}
+	for _, row := range rows {
+		byRole[row.Role] = row
+	}
+	if got := byRole["lead"]; got.Model != "mine" || got.Effort != "medium" || got.Worktree != "." || strings.Join(got.Local, ",") != "model" {
+		t.Fatalf("lead: %+v", got)
+	}
+	if got := byRole["scratch"]; strings.Join(got.Local, ",") != "." || got.Provider != "claude" {
+		t.Fatalf("scratch: %+v", got)
+	}
+	if got := byRole["dev"]; len(got.Local) != 0 || got.Model != "opus" {
+		t.Fatalf("dev: %+v", got)
+	}
+	for _, c := range Diagnose(p) {
+		if c.Component == "project" && (c.Status != "healthy" || !strings.Contains(c.Reason, "orai.local.toml is applied over it and sets roles.lead.model, roles.scratch")) {
+			t.Fatalf("project check: %+v", c)
+		}
+	}
+
+	transcript := filepath.Join(dir, "transcript.jsonl")
+	_ = os.WriteFile(transcript, []byte("{}\n"), 0o600)
+	saved := map[string]any{"provider": "codex", "cwd": p.Root, "session_id": "0199a213-81c0-7800-8aa1-bbab2a035a53", "transcript": transcript}
+	if err := ValidateSaved(saved, lead, p.Root); err != nil {
+		t.Fatalf("a local model change lost the saved conversation: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "orai.local.toml"), []byte("[roles.lead]\nprovider = \"claude\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := project.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSaved(saved, moved.Config.Roles["lead"], p.Root); err == nil || !strings.Contains(err.Error(), "--fresh") {
+		t.Fatalf("a local provider change resumed the old conversation: %v", err)
+	}
+}
+
+func containsArg(args []string, want string) bool {
+	for _, arg := range args {
+		if arg == want {
+			return true
+		}
+	}
+	return false
 }

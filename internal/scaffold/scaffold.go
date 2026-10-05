@@ -103,7 +103,14 @@ type Options struct {
 	Preset string     // "" means "minimal"
 	Branch string     // "" means DefaultBranch; used only when a repository is created
 	Roles  []RoleSpec // roles to declare, after the preset's
+	Local  bool       // declare them in orai.local.toml (this computer only), not orai.toml
 }
+
+// localHeader opens an orai.local.toml that setup creates for a local role.
+const localHeader = `# This computer's own Orai settings. Not committed.
+# Applied over orai.toml key by key: a value here replaces the shared one, and a role
+# or collection that is only here is added. More: ` + "`orai setup --help`" + `.
+`
 
 // PresetNames returns the known preset names in sorted order.
 func PresetNames() []string {
@@ -287,6 +294,27 @@ func splitLinesKeepEnds(text string) []string {
 	return parts
 }
 
+// LocalExclude is the repository's uncommitted ignore file.
+const LocalExclude = ".git/info/exclude"
+
+// localIgnoreLines is what the settings in effect ignore beyond the shared ones.
+func localIgnoreLines(shared, applied *config.Config) []string {
+	if applied == nil || applied == shared {
+		return nil
+	}
+	known := map[string]bool{}
+	for _, line := range ignoreLines(shared) {
+		known[line] = true
+	}
+	var extra []string
+	for _, line := range ignoreLines(applied) {
+		if !known[line] {
+			extra = append(extra, line)
+		}
+	}
+	return extra
+}
+
 func parsedConfig(text string) *config.Config {
 	cfg, err := config.Parse([]byte(text))
 	if err != nil {
@@ -302,7 +330,7 @@ func parsedConfig(text string) *config.Config {
 // order, since the Go config parser (like Go maps in general) does not preserve source
 // order; the result is deterministic.
 func ignoreLines(cfg *config.Config) []string {
-	lines := []string{"/" + project.StateName + "/"}
+	lines := []string{"/" + project.StateName + "/", "/" + config.LocalName}
 	add := func(v string) {
 		for _, existing := range lines {
 			if existing == v {
@@ -503,10 +531,38 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 		}
 	}
 
-	// Resolve the requested roles against what is already declared.
+	// This computer's own settings, if any. They are read to know what is in effect and
+	// written only for `--local`; the shared file above is validated by itself first.
+	var localText string
+	hasLocal, localBroken := false, false
+	if data, err := os.ReadFile(filepath.Join(root, config.LocalName)); err == nil {
+		hasLocal, localText = true, string(data)
+	}
+	inEffect := func(sharedText string, shared *config.Config) *config.Config {
+		if shared == nil || !hasLocal || localBroken {
+			return shared
+		}
+		merged, err := config.Overlay([]byte(sharedText), []byte(localText))
+		if err != nil {
+			localBroken = true
+			conflicts = append(conflicts, strings.Replace(err.Error(), config.LocalName, config.LocalName+" is invalid", 1))
+			return shared
+		}
+		return merged
+	}
+	effective := inEffect(existingText, existing)
+
+	// Resolve the requested roles against what is already declared. Whether the project
+	// folder is taken decides a new role's default worktree, which is written down: for
+	// a shared role only the shared roles count, or one computer's local file would
+	// change what everyone gets.
 	rootTaken := false
-	if existing != nil {
-		for _, role := range existing.Roles {
+	placed := existing
+	if opts.Local {
+		placed = effective
+	}
+	if placed != nil {
+		for _, role := range placed.Roles {
 			rootTaken = rootTaken || role.Worktree == "."
 		}
 	}
@@ -518,11 +574,15 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 			continue
 		}
 		seen[role.Name] = true
-		if existing != nil {
-			if declared, ok := existing.Roles[role.Name]; ok {
+		if effective != nil {
+			if declared, ok := effective.Roles[role.Name]; ok {
 				if declared.Provider != role.Provider {
+					where := project.ConfigName
+					if effective.FromLocal("roles." + role.Name + ".provider") {
+						where = config.LocalName
+					}
 					conflicts = append(conflicts, fmt.Sprintf("role %s is already declared with provider %s; edit %s to change it",
-						role.Name, declared.Provider, project.ConfigName))
+						role.Name, declared.Provider, where))
 				}
 				continue
 			}
@@ -537,16 +597,21 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 		added = append(added, role)
 	}
 
+	// Roles asked for with --local go to this computer's file; the shared one gets none.
+	shared := added
+	if opts.Local {
+		shared = nil
+	}
 	configText := existingText
 	switch {
 	case !hasConfig:
-		configText = newConfig(added)
+		configText = newConfig(shared)
 		if p, ok := regular(project.ConfigName); ok {
 			actions = append(actions, Action{Description: "Create " + project.ConfigName, Path: p, Data: []byte(configText), Mode: 0o644})
 		}
-	case existing != nil && len(added) > 0:
-		names := make([]string, len(added))
-		for i, role := range added {
+	case existing != nil && len(shared) > 0:
+		names := make([]string, len(shared))
+		for i, role := range shared {
 			configText = strings.TrimRight(configText, "\n") + "\n\n" + roleTable(role)
 			names[i] = role.Name
 		}
@@ -599,17 +664,41 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 	}
 
 	cfg := parsedConfig(configText)
+	if opts.Local && len(added) > 0 && cfg != nil && !localBroken {
+		text, names := localText, make([]string, len(added))
+		if !hasLocal {
+			text = localHeader
+		}
+		for i, role := range added {
+			text = strings.TrimRight(text, "\n") + "\n\n" + roleTable(role)
+			names[i] = role.Name
+		}
+		if _, err := config.Overlay([]byte(configText), []byte(text)); err != nil {
+			conflicts = append(conflicts, fmt.Sprintf("cannot add role(s) %s to %s automatically (%v); declare them by hand",
+				strings.Join(names, ", "), config.LocalName, err))
+		} else if p, ok := regular(config.LocalName); ok {
+			description := fmt.Sprintf("Create %s with role(s) %s (this computer only)", config.LocalName, strings.Join(names, ", "))
+			if hasLocal {
+				description = fmt.Sprintf("Add role(s) %s to %s (this computer only)", strings.Join(names, ", "), config.LocalName)
+			}
+			actions = append(actions, Action{Description: description, Path: p, Data: []byte(text), Mode: 0o644, Backup: hasLocal})
+			hasLocal, localText = true, text
+		}
+	}
+	// cfg is what the repository shares and decides what is committed (.gitignore);
+	// applied is what this computer runs with and decides what is prepared here.
+	applied := inEffect(configText, cfg)
 
 	// A guide for every declared role that names one and lacks the file: the roles just
 	// added, and any the user declared or renamed by hand. Existing guides are never
 	// rewritten.
-	if cfg != nil {
+	if applied != nil {
 		fromPreset := map[string]bool{}
 		for _, role := range added {
 			fromPreset[role.Name] = true
 		}
-		for _, name := range cfg.RoleNames() {
-			role := cfg.Roles[name]
+		for _, name := range applied.RoleNames() {
+			role := applied.Roles[name]
 			if role.Guide == "" {
 				continue
 			}
@@ -628,9 +717,9 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 		}
 	}
 
-	if cfg != nil && cfg.Shelf != nil {
+	if applied != nil && applied.Shelf != nil {
 		folderSet := map[string]bool{}
-		for _, folder := range cfg.Shelf.Collections {
+		for _, folder := range applied.Shelf.Collections {
 			folderSet[folder] = true
 		}
 		folders := make([]string, 0, len(folderSet))
@@ -652,8 +741,8 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 		}
 	}
 
-	if cfg != nil && len(cfg.Roles) > 0 {
-		if action := mailboxAction(root, cfg); action != nil {
+	if applied != nil && len(applied.Roles) > 0 {
+		if action := mailboxAction(root, applied); action != nil {
 			actions = append(actions, *action)
 		}
 	}
@@ -664,6 +753,21 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 		// Role guides are written per machine and stay out of the repository; the skill
 		// next to them is shared.
 		{AgentsIgnore, "/roles/", "hash"},
+	}
+	// What only this computer's settings add (a local role's worktree, say) cannot go in
+	// the committed .gitignore, so it is ignored through the repository's own exclude file.
+	// A block written earlier is kept current, down to empty once nothing local needs it.
+	extra := localIgnoreLines(cfg, applied)
+	written := false
+	if data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(LocalExclude))); err == nil {
+		written = hasBlock(string(data), "hash")
+	}
+	if info, err := os.Stat(filepath.Join(root, ".git")); err == nil && info.IsDir() {
+		if len(extra) > 0 || written {
+			blocks = append(blocks, struct{ Rel, Body, Style string }{LocalExclude, strings.Join(extra, "\n"), "hash"})
+		}
+	} else if len(extra) > 0 {
+		notes = append(notes, fmt.Sprintf("Keep these out of Git yourself (they come from %s): %s", config.LocalName, strings.Join(extra, " ")))
 	}
 	for _, block := range blocks {
 		p, ok := regular(block.Rel)

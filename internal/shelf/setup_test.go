@@ -267,3 +267,27 @@ func TestRegistrationComparesProjectMCPSettingsWithTheShelfAddress(t *testing.T)
 		t.Fatalf("the same server seen through the CLI: %+v", c)
 	}
 }
+
+// A port set in orai.local.toml moves this computer's server. The address the committed
+// settings name is still right for everyone else, so the fix is not to edit them.
+func TestRegistrationSaysWhenALocalPortLeavesTheCommittedAddressBehind(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "proj")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for rel, content := range map[string]string{
+		"orai.local.toml": "[integrations.shelf]\nport = 18401\n",
+		".mcp.json":       `{"mcpServers": {"shelf": {"type": "http", "url": "http://127.0.0.1:18338/mcp"}}}`,
+	} {
+		if err := os.WriteFile(filepath.Join(root, rel), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := writeProject(t, root, "schema = 2\n[integrations.shelf]\nport = 18338\n")
+	s := NewSettings(p)
+	c := registration(s, false)
+	if s.Port != 18401 || c.Status != doctor.Degraded || !strings.Contains(c.Reason, "orai.local.toml moves this computer's shelf to http://127.0.0.1:18401/mcp") ||
+		!strings.Contains(c.NextAction, "drop `port` from orai.local.toml") || strings.Contains(c.NextAction, "set the url") {
+		t.Fatalf("local port: %+v", c)
+	}
+}

@@ -142,8 +142,8 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 	}
 	// Make the index hold exactly the collections orai.toml declares. init and refresh
 	// apply the difference (they re-index anyway); recover only starts the server, so it
-	// names the difference and the command that applies it. Other collections, the
-	// model and the DB are left as they are.
+	// names the difference and the command that applies it. The model and the DB are
+	// left as they are. Contexts are applied by all three (see context.go).
 	apply := action == "init" || action == "refresh"
 	stale := func(what string) error {
 		return fmt.Errorf("%s. Run `orai shelf stop && orai shelf refresh` to apply orai.toml", what)
@@ -194,6 +194,9 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 		for _, pair := range s.overlapping() {
 			fmt.Fprintf(out, "Note: collections %s cover the same documents, so they are indexed twice. %s\n", pair, overlapFix)
 		}
+	}
+	if err := applyContexts(s, qmd, out); err != nil {
+		return err
 	}
 	if action == "init" || action == "refresh" {
 		if _, err := runCommand(out, s.Argv(qmd, "update"), s, false); err != nil {

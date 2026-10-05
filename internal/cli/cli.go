@@ -62,7 +62,7 @@ options:
   -h, --help            show this help; ` + "`orai <command> --help`" + ` explains one command
 `
 
-const setupHelp = `usage: orai setup [--role NAME=PROVIDER[:WORKTREE] ...] [--preset minimal|pm-staff]
+const setupHelp = `usage: orai setup [--role NAME=PROVIDER[:WORKTREE] ... [--local]] [--preset minimal|pm-staff]
                   [--branch NAME] [--dry-run] [--no-tools] [--project PATH]
 
 Set up the project in this folder: Git repository, orai.toml, agent instructions,
@@ -77,8 +77,29 @@ roles:
                         :WORKTREE to choose (":." shares the project folder).
                         Works on an existing project too: new roles are added to
                         orai.toml with a guide in .agents/roles/NAME.md.
+  --local               Declare the roles of this run in orai.local.toml instead, so
+                        they exist on this computer only (see below).
   --preset pm-staff     Shorthand for --role pm=codex --role staff=claude, with
                         guides written for that pair. Default: minimal (no roles).
+
+shared and local settings:
+  orai.toml             what the project shares, committed: collections, contexts,
+                        the code graph, and the roles and defaults the team agrees on.
+  orai.local.toml       this computer's own settings, next to orai.toml and never
+                        committed. Optional: without it orai.toml is used as it is.
+  The local file is laid over the shared one key by key. A value replaces the shared
+  value; a role, collection or context that is only local is added:
+      [roles.pm]                  # orai.local.toml
+      model = "..."               # replaces the shared model of pm, nothing else
+      [integrations.shelf]
+      port = 18401                # this computer uses another port
+  Paths are relative to the project folder in both files. The local file cannot remove
+  what orai.toml declares, and cannot set schema, name or session (the mailbox and the
+  index are named from them). The merged result is checked as one declaration, and an
+  error names the file. ` + "`orai doctor`" + ` (project) lists what the local file sets, and
+  ` + "`orai status`" + ` shows each role's settings in effect.
+  setup never writes orai.local.toml except to add a role with --local, and never
+  changes what orai.toml already says.
 
 examples:
   orai setup --role lead=codex --role dev=claude --role reviewer=claude
@@ -102,8 +123,10 @@ Start a role in this terminal, resuming exactly the conversation Orai captured f
 
 const statusHelp = `usage: orai status [--project PATH]
 
-Print each role as JSON: provider, whether it is running, its saved session,
-whether notifications can be delivered, the last delivery error, pending mail.
+Print each role as JSON: the settings in effect (provider, worktree, model, effort)
+and which of them orai.local.toml set ("local"; "." means the whole role), whether it
+is running, its saved session, whether notifications can be delivered, the last
+delivery error, pending mail.
 `
 
 const doctorHelp = `usage: orai doctor [--deep] [--json] [--project PATH]
@@ -156,7 +179,8 @@ not a copy: the documents stay where they are. The engine is QMD, run only for t
 project: its index lives in .orai/shelf and its server listens on 127.0.0.1.
 
   init      first time: build the index and embeddings, start the server, verify
-  recover   start the server again (after a reboot) without rebuilding, verify
+  recover   start the server again (after a reboot) without rebuilding, apply the
+            contexts in orai.toml, verify
   refresh   re-index after documents or the collections in orai.toml changed (a
             collection that was removed or re-declared is dropped or re-registered),
             then start and verify
@@ -188,6 +212,20 @@ settings, in orai.toml under [integrations.shelf]:
   [integrations.shelf.smoke]    lex, vec, expect: a query pair and the document (path
                                 from the project folder) they must return, checked by
                                 ` + "`orai doctor --deep`" + `
+  [integrations.shelf.context]  what the documents under a folder are for, one line per
+  "docs/adr" = "..."            folder (path from the project folder; "." is everything).
+                                Search results carry it as ` + "`context`" + `, so a reader can tell
+                                a decision record from a spec before opening either. It
+                                does not change what is found. After changing it:
+                                orai shelf recover (no stop, nothing is re-indexed).
+                                Once the table exists the index holds exactly what it
+                                declares; without it Orai leaves contexts alone
+
+reading results:
+  A result names a document as <collection>/<path inside it>; the collection's folder
+  is in orai.toml. Not every client hands its model the whole result (context, snippet,
+  or the text a ` + "`get`" + ` returns), so find with the shelf, then read the file itself.
+  What each provider was seen to pass on: ` + doctor.DocsURL + `/compatibility.md
 
 outside role sessions (a desktop app, a plain claude or codex):
   Role sessions are connected by Orai. Anything else reads the project's own MCP
@@ -301,7 +339,7 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 func wantsHelp(argv []string) bool {
 	o, _ := parse(argv, map[string]bool{"project": true, "preset": true, "branch": true, "role": true, "as": true,
 		"limit": true, "body": true, "file": true, "kind": true, "thread": true,
-		"dry-run": false, "no-tools": false, "fresh": false, "deep": false, "json": false, "peek": false, "again": false})
+		"dry-run": false, "no-tools": false, "local": false, "fresh": false, "deep": false, "json": false, "peek": false, "again": false})
 	return o.flag("help")
 }
 
@@ -329,12 +367,15 @@ func withProject(argv []string, spec map[string]bool, fn func(*project.Project, 
 
 func runSetup(argv []string, stdout io.Writer) (int, error) {
 	o, err := parse(argv, map[string]bool{"project": true, "preset": true, "branch": true, "role": true,
-		"dry-run": false, "no-tools": false})
+		"dry-run": false, "no-tools": false, "local": false})
 	if err != nil {
 		return exitUsage, err
 	}
 	if len(o.args) > 0 {
 		return exitUsage, usagef("setup takes no positional arguments")
+	}
+	if o.flag("local") && len(o.lists["role"]) == 0 {
+		return exitUsage, usagef("--local goes with --role: it says where the new role is declared")
 	}
 	preset := o.get("preset")
 	if preset == "" {
@@ -348,7 +389,7 @@ func runSetup(argv []string, stdout io.Writer) (int, error) {
 		sort.Strings(names)
 		return exitUsage, usagef("--preset must be one of: %s", strings.Join(names, ", "))
 	}
-	opts := scaffold.Options{Preset: preset, Branch: o.get("branch")}
+	opts := scaffold.Options{Preset: preset, Branch: o.get("branch"), Local: o.flag("local")}
 	for _, text := range o.lists["role"] {
 		role, err := scaffold.ParseRole(text)
 		if err != nil {

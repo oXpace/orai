@@ -12,11 +12,11 @@ mise use --pin github:oXpace/orai  # 최신 GitHub Release의 바이너리를 �
 orai setup                         # 기본 세팅
 ```
 
-특정 버전을 쓰려면 `mise use github:oXpace/orai@0.4.0`처럼 번호를 붙인다. Release 태그에 `v`가 없으므로 `@v0.4.0`이 아니라 `@0.4.0`이다.
+특정 버전을 쓰려면 `mise use github:oXpace/orai@0.5.0`처럼 번호를 붙인다. Release 태그에 `v`가 없으므로 `@v0.5.0`이 아니라 `@0.5.0`이다.
 
 - mise github backend는 `oXpace/orai`의 GitHub Release에서 현재 플랫폼(darwin/linux, arm64/amd64)의 `orai_<버전>_<os>_<arch>.tar.gz`를 받는다. 실행에 Go나 다른 런타임은 필요 없다. 게시 전 변경은 Orai checkout에서 `go run ./cmd/orai --project <경로> setup`으로 시험한다.
 - `setup`은 프로젝트에 Orai 고정이 없으면 `mise use` 안내를 출력한다.
-- mise는 나온 지 얼마 안 된 Release를 버전 목록(`mise ls-remote github:oXpace/orai`)에서 숨긴다. 이때 `--pin`은 이전 버전을 고르므로 `@0.4.0`처럼 번호를 명시한다. 번호를 명시한 설치는 배포 직후에도 된다. mise 2026.10.0에서 `minimum_release_age`를 설정하지 않았는데도 숨겨졌고, `mise ls-remote`가 "newer releases hidden by minimum_release_age"라고 알린다. 숨기는 기간의 기본값은 확인하지 못했다. 제외 설정 `minimum_release_age_excludes`가 있다.
+- mise는 나온 지 얼마 안 된 Release를 버전 목록(`mise ls-remote github:oXpace/orai`)에서 숨긴다. 이때 `--pin`은 이전 버전을 고르므로 `@0.5.0`처럼 번호를 명시한다. 번호를 명시한 설치는 배포 직후에도 된다. mise 2026.10.0에서 `minimum_release_age`를 설정하지 않았는데도 숨겨졌고, `mise ls-remote`가 "newer releases hidden by minimum_release_age"라고 알린다. 숨기는 기간의 기본값은 확인하지 못했다. 제외 설정 `minimum_release_age_excludes`가 있다.
 - PATH에 다른 `orai`(예: 예전 전역 링크)가 있어도, mise가 활성화된 셸에서는 프로젝트에 고정한 버전이 먼저 선택된다.
 
 Codex, Claude Code, QMD, CodeGraph는 사용자가 설치한다. Orai는 이 도구들을 설치하거나 업그레이드하지 않는다. AMQ는 필요 없다(메일함은 Orai가 관리하며 형식만 AMQ와 호환된다). 필요한 버전은 [호환성](compatibility.md)에 있다.
@@ -44,6 +44,20 @@ git add -A && git commit -m "Update Orai"
 - 저장된 대화, 메일함, shelf 색인은 그대로 남는다. 실행 중인 역할 세션은 예전 버전으로 계속 돌므로, 끝낸 뒤 `orai <역할>`로 다시 연다. 같은 대화로 이어진다.
 - 같은 저장소를 쓰는 다른 사람은 변경을 받은 뒤 `mise install`과 `orai setup`을 실행한다.
 - 되돌리려면 `mise.toml`의 버전을 이전 번호로 바꾸고 `orai setup`을 다시 실행한다.
+
+### 0.4.x → 0.5.0
+
+반드시 해야 할 일은 없다. `orai setup`이 `AGENTS.md`의 Orai 블록과 `.gitignore` 블록을 새 내용으로 바꾼다.
+
+| 대상 | 해야 할 일 |
+|---|---|
+| 컴퓨터마다 다른 설정(역할의 모델, 포트, 나만 쓰는 역할) | 새 기능이다. `orai.toml` 옆에 `orai.local.toml`을 만들어 적는다([공유 설정과 로컬 설정](#공유-설정과-로컬-설정)). 만들지 않으면 지금과 똑같이 동작한다. `orai setup`이 `.gitignore` 블록에 이 파일을 더한다 |
+| `orai.toml`에 개인 값이 섞여 있을 때 | 옮기는 일은 직접 한다. 예를 들어 `[roles.pm]`의 `model`·`effort` 줄을 `orai.local.toml`의 `[roles.pm]`으로 옮긴다. 공유 기본값으로 남겨 두고 로컬에서 덮어써도 된다. Orai가 값을 자동으로 옮기지 않으므로 동작이 저절로 바뀌지 않는다 |
+| 역할을 쓰지 않는 컴퓨터의 `orai doctor` | 이 컴퓨터에서 한 번도 시작하지 않았고 작업 폴더도 없는 역할은 문제로 세지 않고 선택 항목(`-`)으로 나온다. 전에는 degraded였다 |
+| `orai status`를 읽는 스크립트 | 역할마다 `worktree`, `model`, `effort`, `local`이 추가됐다. 있던 필드는 그대로다 |
+| 폴더별 설명(context)을 쓰고 싶을 때 | 새 기능이다. `orai.toml`에 `[integrations.shelf.context]`를 적고 `orai shelf recover`를 실행한다([폴더에 설명 달기](#폴더에-설명-달기-context)) |
+| `qmd context add`로 직접 넣어 둔 설명이 있을 때 | 표를 적지 않는 동안에는 그대로 남는다. 표를 적으면 색인의 설명은 표와 같아지므로, 남길 설명을 먼저 `orai.toml`에 옮겨 적는다. 표에 없는 설명은 다음 `recover`·`refresh`가 본문을 출력한 뒤 지운다 |
+| `orai doctor --json`을 읽는 스크립트 | 설명을 선언한 프로젝트에 `shelf.context` 항목이 추가된다. 로컬 파일이 있으면 `project.detail.local`(`file`, `keys`)이 추가된다. 시작한 적 없는 역할의 `role.<이름>`은 `degraded`가 아니라 `not-configured`다 |
 
 ### 0.3.x → 0.4.0
 
@@ -116,7 +130,55 @@ orai setup --help                 # 옵션과 예시
 - 세션을 열 때의 공통 단계(문서 읽기, 메시지 확인, 할 일이 없으면 턴 종료)는 프롬프트에 있다. 일부 역할에만 필요한 단계는 역할 지침의 "세션 시작" 절에 둔다. `setup`은 Claude 역할의 지침에 이 절(`channel_ready` 호출)을 써 넣고, Codex 역할에는 넣지 않는다. 역할마다 세션을 열 때 할 일을 더 정하려면 이 절에 적는다. Codex 역할을 Claude로 바꿀 때는 따로 할 일이 없다(절에 `channel_ready`가 없으면 프롬프트가 직접 알려 준다). Claude 역할을 Codex로 바꿀 때는 이 절을 지운다.
 - 역할 지침(`.agents/roles/`)은 커밋되지 않는다. 컴퓨터마다 `setup`이 틀을 만들고 각자 고쳐 쓴다. 팀이 같은 지침을 공유하려면 `orai.toml`의 `guide`를 `docs/roles/dev.md`처럼 저장소에 넣는 경로로 바꾼다. 예전 버전에서 이미 커밋한 지침은 `git rm -r --cached .agents/roles`로 추적만 해제한다(파일은 남는다).
 - 역할 이름을 바꾸거나 역할을 없앨 때는 `orai.toml`의 `[roles.<이름>]` 표를 직접 고치거나 지운 뒤 `orai setup`을 실행한다. 새 이름의 메일함과, 없는 지침 파일(`guide`에 적은 경로)이 만들어진다. 예전 이름의 메일함과 지침 파일, 저장된 대화는 지우지 않으므로 필요하면 직접 정리한다. 이름을 바꾼 역할은 새 대화로 시작한다. `pm-staff`로 만든 프로젝트도 이 방법으로 원하는 구성으로 바꾼다.
-- 별도 작업 폴더를 쓰는 역할은 첫 커밋 뒤에 `git worktree add .worktrees/<이름>`으로 폴더를 만든다. `setup`과 `doctor`가 이 명령을 남은 조치로 보여준다.
+- 별도 작업 폴더를 쓰는 역할은 첫 커밋 뒤에 `git worktree add .worktrees/<이름>`으로 폴더를 만든다. `setup`과 `doctor`가 이 명령을 보여준다. 이 컴퓨터에서 한 번도 시작하지 않은 역할은 선택 항목으로, 시작한 적이 있는데 폴더가 없어진 역할은 문제로 나온다.
+- 이 컴퓨터에서만 쓸 역할은 `--local`을 붙인다. `orai.toml` 대신 `orai.local.toml`에 선언된다([공유 설정과 로컬 설정](#공유-설정과-로컬-설정)).
+
+### 공유 설정과 로컬 설정
+
+| 파일 | 담는 것 | 커밋 |
+|---|---|---|
+| `orai.toml` | 프로젝트가 공유하는 설정: 묶음, 폴더 설명, CodeGraph 사용 여부, 팀이 정한 역할과 그 기본값 | 한다 |
+| `orai.local.toml` | 이 컴퓨터만의 설정. `orai.toml` 옆(main checkout)에 둔다. 없어도 된다 | 안 한다 |
+
+로컬 파일은 공유 파일 위에 키 단위로 겹친다. 값은 공유 값을 대신하고, 로컬에만 있는 역할·묶음·설명은 더해진다.
+
+```toml
+# orai.toml (공유)
+[roles.pm]
+provider = "codex"
+worktree = "."
+guide = ".agents/management/PM.md"
+model = "gpt-6-sol"            # 팀 기본값. 없으면 provider 기본값
+
+[integrations.shelf]
+collections = { docs = "docs" }
+port = 18338
+```
+
+```toml
+# orai.local.toml (이 컴퓨터)
+[roles.pm]
+model = "gpt-6.1-sol"          # pm의 모델만 바뀐다. provider, 작업 폴더, 지침은 공유 값 그대로
+effort = "high"
+
+[roles.scratch]                # 이 컴퓨터에만 있는 역할
+provider = "claude"
+worktree = ".worktrees/scratch"
+
+[integrations.shelf]
+port = 18401                   # 이 컴퓨터에서 포트가 겹칠 때
+```
+
+- **우선순위**: 로컬이 이긴다. 표(`[roles.pm]`, `[integrations.shelf.collections]` 등)는 같은 이름의 표와 합치고, 그 밖의 값은 통째로 대신한다. 설정에 목록 값은 없다.
+- **경로**: 어느 파일에 적든 프로젝트 폴더 기준이다.
+- **정할 수 없는 것**: `schema`, `name`, `session`. 프로젝트 ID, 색인 이름, 메일함 경로가 여기서 나온다.
+- **지우기**: 로컬 파일로 공유 선언을 지우거나 끌 수는 없다. 더하거나 바꾸기만 한다. 쓰지 않는 역할은 그대로 둬도 `orai doctor`가 문제로 세지 않는다.
+- **오류**: `orai.toml`은 혼자서도 유효해야 한다. 겹친 결과가 잘못되면 명령이 설정 오류(종료 코드 2)로 멈추고 `orai.local.toml`을 짚는다. 조용히 무시하지 않는다.
+- **적용 값 확인**: `orai doctor`의 `project` 항목이 로컬 파일이 정한 키를 나열한다. `orai status`는 역할마다 적용 중인 `provider`, `worktree`, `model`, `effort`와, 그중 로컬 파일이 정한 것(`local`)을 보여 준다. `orai <역할> --dry-run`은 실제 실행 명령을 보여 준다.
+- **setup**: `orai.local.toml`을 만들거나 고치지 않는다. `orai setup --role 이름=provider --local`일 때만 그 역할을 로컬 파일에 덧붙인다(없으면 만든다). `--local`이 없으면 지금처럼 `orai.toml`에 덧붙인다.
+- **Git**: 커밋되는 `.gitignore` 블록은 공유 설정만으로 계산하므로 사람마다 달라지지 않는다. 로컬 설정 때문에 더 무시해야 하는 경로(로컬 역할의 작업 폴더 등)는 `setup`이 `.git/info/exclude`의 Orai 블록에 넣는다. 저장소 최상위가 아닌 프로젝트(모노레포 하위)에서는 넣지 않고 경로를 알려 준다.
+- **바꾼 뒤**: `model`·`effort`는 다음 `orai <역할>`부터 적용되고 저장된 대화는 그대로 이어진다. `provider`나 `worktree`를 바꾸면 저장된 대화와 맞지 않아 재개를 거부하므로 `--fresh`로 시작한다(`orai.toml`을 고쳤을 때와 같다). `port`를 로컬에서 바꾸면 커밋된 `.mcp.json`·`.codex/config.toml`의 주소와 어긋난다. `orai doctor`의 `shelf.registration`이 알려 준다. shelf 설정을 바꾼 뒤의 명령은 [shelf](#shelf-문서-검색) 절과 같다.
+- **새 checkout**: 로컬 파일 없이 공유 설정 전부가 복구된다. 로컬에만 둔 역할과 개인 값은 그 컴퓨터에만 있다.
 
 대상 폴더는 `--project`로 지정할 수 있다. 지정하지 않으면 현재 저장소의 기존 프로젝트, 없으면 저장소의 main checkout, Git 밖이면 현재 폴더가 대상이다. 저장소 바깥 상위 폴더의 `orai.toml`은 다른 프로젝트로 보고 사용하지 않는다. 모노레포 하위 프로젝트를 처음 만들 때는 `--project`로 지정한다.
 
@@ -124,8 +186,8 @@ orai setup --help                 # 옵션과 예시
 
 1. **Git 저장소**: 저장소 밖이면 `git init -b trunk`로 만든다. 이미 저장소 안이면(모노레포 포함) 건드리지 않는다.
 2. **파일**:
-   - `orai.toml`: 없으면 만든다. 있으면 검증하고, `--role`로 요청한 새 역할만 덧붙인다.
-   - `AGENTS.md`, `.gitignore`, `.agents/.gitignore`: `orai:begin`/`orai:end` 관리 블록만 추가하거나 교체한다. 블록 밖 내용은 바꾸지 않는다. `AGENTS.md` 블록은 에이전트에게 Orai가 무엇이고 역할·메시지·진단·문서 검색을 어떻게 쓰는지 설명한다. `.agents/.gitignore` 블록은 `/roles/`를 제외해 역할 지침을 저장소에 넣지 않는다.
+   - `orai.toml`: 없으면 만든다. 있으면 검증하고, `--role`로 요청한 새 역할만 덧붙인다. `orai.local.toml`은 읽기만 하고, `--local`로 요청한 역할만 덧붙인다.
+   - `AGENTS.md`, `.gitignore`, `.agents/.gitignore`: `orai:begin`/`orai:end` 관리 블록만 추가하거나 교체한다. 블록 밖 내용은 바꾸지 않는다. `AGENTS.md` 블록은 역할이 없어도 누구나 쓰는 것(진단, 문서 검색, 코드 구조)을 먼저 적고, 역할 세션에서만 해당하는 것(역할, 메시지)을 뒤에 적는다. 원칙과 진입점만 담고, 설정과 명령의 상세는 도움말과 이 문서가 맡는다. `.agents/.gitignore` 블록은 `/roles/`를 제외해 역할 지침을 저장소에 넣지 않는다.
    - `.agents/skills/orai/SKILL.md`: 생성 표식이 있는 파일만 갱신한다. 표식 없이 사용자가 만든 파일이 있으면 충돌로 보고한다.
    - `.claude/skills/orai` 심볼릭 링크를 만든다.
    - `CLAUDE.md`: 없을 때만 `@AGENTS.md`로 만든다.
@@ -246,6 +308,7 @@ shelf는 등록한 Markdown 폴더(기본 `docs/`)를 색인해 역할 세션이
 | `port` | 프로젝트 경로에서 계산 (18200~18999) | 서버 포트를 고정한다. 주소를 설정 파일에 적어 둘 때([역할 세션 밖에서 쓰기](#역할-세션-밖에서-쓰기))와 계산된 포트를 다른 서버가 쓰고 있을 때 지정한다 |
 | `embed_model` | Qwen3-Embedding-0.6B Q8 | 첫 `orai shelf init` 때만 읽는다. 이후 변경은 아래 "모델 변경"을 따른다 |
 | `[integrations.shelf.smoke]` | 없음 | `--deep`이 올바른 문서가 검색되는지 확인할 질의. [진단](#진단) 참고 |
+| `[integrations.shelf.context]` | 없음 | 폴더별 한 줄 설명. 검색 결과에 `context`로 붙는다. [폴더에 설명 달기](#폴더에-설명-달기-context) 참고 |
 
 `[integrations.shelf]` 표가 없으면 shelf를 쓰지 않는 프로젝트로 본다.
 
@@ -263,11 +326,32 @@ product = "docs/product"
 - `collections`를 고친 뒤에는 `orai shelf stop && orai shelf refresh`를 실행한다. 새 묶음을 추가하고, 폴더나 패턴이 바뀐 묶음을 다시 등록하고, `orai.toml`에서 지운 묶음을 색인에서 뺀다. 다른 묶음과 모델, DB 파일은 그대로 둔다.
 - `recover`는 서버만 다시 켜므로 색인을 고치지 않는다. 선언과 색인이 다르면 무엇이 다른지 알려 주고 위 명령을 안내한다.
 
+### 폴더에 설명 달기 (context)
+
+폴더의 문서가 무엇을 위한 것인지 한 줄로 적어 두면, 그 폴더에서 나온 검색 결과마다 설명이 `context`로 붙는다. 읽는 쪽은 문서를 열기 전에 결정 기록인지 제품 스펙인지 구분할 수 있다. 묶음을 나누지 않고도 문서의 종류를 알려 줄 수 있는 가벼운 방법이다.
+
+```toml
+[integrations.shelf.context]
+"docs/product" = "화면별 제품 스펙: 사용자 흐름, 동작, 수용 기준"
+"docs/adr" = "설계 결정의 배경, 대안, 선택 이유. 지금도 유효한지는 본문에서 확인한다"
+"docs/troubleshooting" = "오류 증상, 원인, 재현 조건, 복구 절차"
+```
+
+- 키는 프로젝트 폴더 기준 경로다(`"."`은 전체). 묶음에 속하거나 묶음을 포함하는 경로여야 한다. 설명은 한 줄이다.
+- 설명은 묶음이 아니라 폴더에 붙는다. 나중에 `docs/adr`을 따로 묶어도 같은 선언이 그대로 적용된다. 바깥 폴더의 설명과 안쪽 폴더의 설명은 바깥 것부터 차례로 함께 붙는다.
+- 고친 뒤에는 `orai shelf recover`를 실행한다. 서버를 멈추지 않고 색인도 다시 만들지 않으며, 다음 검색부터 반영된다. `init`과 `refresh`도 같이 적용하므로 새 checkout이나 색인을 다시 만든 뒤에도 설명이 복원된다.
+- 표가 있으면 색인의 설명은 표와 같아진다. 표에 없는 설명은 본문을 출력한 뒤 지운다. 표가 없으면 Orai는 색인의 설명을 건드리지 않는다. 빈 표(`[integrations.shelf.context]`만 적음)는 "설명 없음"을 선언한 것이다.
+- 선언과 색인이 다르면 `orai doctor`가 `shelf.context`로 알려 준다. 설명을 선언하지 않은 프로젝트에는 이 항목이 나오지 않는다.
+- 설명은 어떤 문서가 검색되는지와 순위를 바꾸지 않는다(QMD 2.8.3은 설명을 임베딩과 재순위에 넣지 않고 결과에 붙이기만 한다). 설명의 내용은 프로젝트가 소유한다. 규칙이나 판정 근거가 아니라 문서의 용도와 범위를 알려 주는 글로 쓴다.
+
+**세션이 실제로 보는 것.** 검색 결과 전체가 모델에 전달되는지는 provider마다 다르다([호환성](compatibility.md#shelf-결과가-모델에-전달되는-범위)). 확인한 버전의 Codex는 결과에서 경로·제목·점수만 보고 `context`와 발췌, `get`이 돌려준 본문은 보지 못한다. 그래서 프로젝트 지침은 "shelf로 찾고, 원문은 파일로 읽는다"를 기준으로 한다. 결과의 경로는 `묶음 이름/묶음 안 경로`이므로 묶음의 폴더(`orai.toml`)를 앞에 붙이면 실제 파일이다. 폴더별 설명도 `orai.toml`에 있으므로 어느 provider든 읽을 수 있다.
+
 ### 평소 사용
 
 | 상황 | 명령 |
 |---|---|
 | 문서를 추가하거나 고쳤다, `collections`를 바꿨다 | `orai shelf stop && orai shelf refresh` |
+| 폴더 설명(`context`)을 고쳤다 | `orai shelf recover` |
 | 재부팅 뒤 서버가 꺼졌다 (`shelf.server`가 `✗`) | `orai shelf recover` |
 | 지금 검색이 되는지 확인 | `orai shelf check` |
 | 서버 끄기 | `orai shelf stop` |
@@ -276,7 +360,7 @@ product = "docs/product"
 
 ```sh
 orai shelf init      # 설정이 없을 때만 생성(기본 모델 Qwen3-Embedding-0.6B Q8), update·embed, 서버 시작, 검증
-orai shelf recover   # 기존 설정·DB·모델 보존, 꺼진 서버 시작, 검증 (재부팅 후 필요)
+orai shelf recover   # 기존 설정·DB·모델 보존, 꺼진 서버 시작, 폴더 설명 적용, 검증 (재부팅 후 필요)
 orai shelf refresh   # 묶음을 orai.toml에 맞추고 문서·임베딩 갱신 후 시작·검증 (서버가 떠 있으면 거부)
 orai shelf check     # 상태 변경 없이 전체 검증 (vector-only → lex+vec → 본문)
 orai shelf stop      # 이 프로젝트 index의 서버만 중지
@@ -350,6 +434,7 @@ codegraph status --json <프로젝트 루트>
 | shelf가 아직 만들어지지 않음 | QMD 설치 후 `orai shelf init` ([처음 준비](#처음-준비)) |
 | 문서를 고쳤는데 검색에 안 나옴(`shelf.index` degraded) | `orai shelf stop && orai shelf refresh` |
 | 지운 묶음이 계속 검색되거나 같은 문서가 두 번 나옴(`shelf.collections` degraded) | `orai.toml`의 `collections`를 확인하고 `orai shelf stop && orai shelf refresh` |
+| 폴더 설명이 선언과 다름(`shelf.context` degraded) | `orai shelf recover` |
 | 역할 밖 설정의 주소가 다름(`shelf.registration` degraded) | Next steps에 나온 파일의 주소·이름을 고치고, `orai.toml`에 `port`를 고정한다 |
 | QMD `access denied` | 샌드박스 밖에서 다시 확인한다. 그 결과는 그 환경에만 적용된다 |
 | QMD 다른 index 서버 | 그대로 두고 `integrations.shelf.port`를 바꾼다 |

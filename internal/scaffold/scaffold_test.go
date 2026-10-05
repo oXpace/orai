@@ -1154,3 +1154,128 @@ func TestGitignoreWithRolesIncludesAgentMailAndNoAmqrc(t *testing.T) {
 		t.Fatalf(".gitignore unexpectedly mentions .amqrc: %s", text)
 	}
 }
+
+// planLocal plans `orai setup --role ... --local`.
+func planLocal(t *testing.T, root string, roles ...string) ([]scaffold.Action, error) {
+	t.Helper()
+	opts := scaffold.Options{Local: true}
+	for _, text := range roles {
+		role, err := scaffold.ParseRole(text)
+		if err != nil {
+			t.Fatalf("ParseRole(%q): %v", text, err)
+		}
+		opts.Roles = append(opts.Roles, role)
+	}
+	actions, _, err := scaffold.Plan(root, opts)
+	return actions, err
+}
+
+func readFile(t *testing.T, parts ...string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(parts...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// A role declared with --local exists on this computer only: it goes to orai.local.toml,
+// is prepared like any role (guide, mailbox), and leaves every committed file as it was.
+// What it needs ignored goes to the repository's own exclude file.
+func TestLocalRolesStayOutOfEverythingThatIsCommitted(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, _ := mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	shared, ignore := readFile(t, root, project.ConfigName), readFile(t, root, ".gitignore")
+	if !strings.Contains(ignore, "/"+config.LocalName+"\n") {
+		t.Fatalf(".gitignore does not exclude the local file:\n%s", ignore)
+	}
+
+	actions, err := planLocal(t, root, "lead=codex", "scratch=claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustApply(t, root, actions)
+	if got := readFile(t, root, project.ConfigName); got != shared {
+		t.Fatalf("orai.toml changed:\n%s", got)
+	}
+	if got := readFile(t, root, ".gitignore"); got != ignore {
+		t.Fatalf("the committed .gitignore changed:\n%s", got)
+	}
+	local := readFile(t, root, config.LocalName)
+	if !strings.HasPrefix(local, "# This computer's own Orai settings") || !strings.Contains(local, "[roles.scratch]\nprovider = \"claude\"\nworktree = \".worktrees/scratch\"") {
+		t.Fatalf("orai.local.toml:\n%s", local)
+	}
+	exclude := readFile(t, root, scaffold.LocalExclude)
+	for _, want := range []string{"/" + project.MailName + "/", "/.worktrees/scratch/"} {
+		if !strings.Contains(exclude, want+"\n") {
+			t.Fatalf("%s lacks %s:\n%s", scaffold.LocalExclude, want, exclude)
+		}
+	}
+	for _, rel := range []string{".agents/roles/scratch.md", project.MailName + "/orai/agents/scratch", project.MailName + "/orai/agents/lead"} {
+		if _, err := os.Stat(filepath.Join(root, rel)); err != nil {
+			t.Fatalf("not prepared: %v", err)
+		}
+	}
+	p, err := project.Load(root)
+	if err != nil || len(p.Config.Roles) != 2 || p.Config.Roles["lead"].Worktree != "." || !p.Config.FromLocal("roles.scratch") {
+		t.Fatalf("project: %v %+v", err, p)
+	}
+
+	// Re-running setup changes nothing, and a plain --role still goes to orai.toml.
+	if again, _ := mustPlan(t, root, "minimal", scaffold.DefaultBranch); len(again) != 0 {
+		t.Fatalf("setup is not idempotent with a local file: %v", again)
+	}
+	actions, err = planRoles(t, root, "reviewer=claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustApply(t, root, actions)
+	if got := readFile(t, root, config.LocalName); got != local {
+		t.Fatalf("a shared role rewrote the local file:\n%s", got)
+	}
+	// The shared role gets the default every checkout would give it: the project folder
+	// is free as far as orai.toml knows, whatever this computer's local roles use.
+	if got := readFile(t, root, project.ConfigName); !strings.Contains(got, "[roles.reviewer]\nprovider = \"claude\"\nworktree = \".\"") {
+		t.Fatalf("shared role: %s", got)
+	}
+	if got := readFile(t, root, ".gitignore"); !strings.Contains(got, "/"+project.MailName+"/") || strings.Contains(got, "scratch") {
+		t.Fatalf(".gitignore after a shared role:\n%s", got)
+	}
+
+	// A role the local file declares cannot be declared again with another provider.
+	var conflict *scaffold.Conflict
+	if _, err := planRoles(t, root, "scratch=codex"); !errors.As(err, &conflict) || !strings.Contains(err.Error(), "edit "+config.LocalName) {
+		t.Fatalf("conflict with a local role: %v", err)
+	}
+
+	// Without the local file nothing local is left to ignore, and the block says so.
+	if err := os.Remove(filepath.Join(root, config.LocalName)); err != nil {
+		t.Fatal(err)
+	}
+	actions, _ = mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	if got := readFile(t, root, scaffold.LocalExclude); strings.Contains(got, "scratch") {
+		t.Fatalf("%s kept what the removed local file needed:\n%s", scaffold.LocalExclude, got)
+	}
+	if again, _ := mustPlan(t, root, "minimal", scaffold.DefaultBranch); len(again) != 0 {
+		t.Fatalf("not settled after the local file was removed: %v", again)
+	}
+}
+
+// setup reads the local file to know what is in effect, but an invalid one is a
+// conflict that names it, and nothing is written.
+func TestInvalidLocalFileStopsSetupAndIsNamed(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, _ := mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	if err := os.WriteFile(filepath.Join(root, config.LocalName), []byte("session = \"mine\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshot(t, root)
+	conflict := mustConflict(t, root)
+	if !strings.Contains(conflict.Error(), config.LocalName+" is invalid: `session` belongs in orai.toml") {
+		t.Fatalf("conflict: %v", conflict)
+	}
+	assertSameSnapshot(t, before, snapshot(t, root))
+}

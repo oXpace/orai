@@ -5,5 +5,6 @@ dist/
 
 # orai:begin (managed by `orai setup`)
 /.orai/
+/orai.local.toml
 /.codegraph/
 # orai:end

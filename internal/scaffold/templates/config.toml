@@ -1,4 +1,7 @@
-# Orai project declaration — commit this file.
+# Orai project declaration — commit this file. It holds what the project shares.
+# One computer's own settings (a different model for a role, another port, a role only
+# you run) go in orai.local.toml next to it, which is not committed and is applied over
+# this file key by key: `orai setup --help`.
 # Local state (sessions, locks, shelf index) lives in .orai/ and is never shared.
 schema = 2
 session = "orai"            # mailbox name: .agent-mail/<session>/
@@ -16,6 +19,8 @@ collections = { docs = "docs" }   # name = folder. To split a folder, give part 
 # lex = "unique term"                        # keyword query only one document matches
 # vec = "a question that document answers"   # meaning-based query for the same document
 # expect = "docs/architecture.md"            # the document both searches must return
+# [integrations.shelf.context]   # optional: what the documents under a folder are for, one
+# "docs/adr" = "..."             # line each; search results carry it. Apply: `orai shelf recover`
 
 # Code graph: symbol and call index in .codegraph/ (CodeGraph,
 # `npm install -g @colbymchenry/codegraph`). Remove this table to opt out.

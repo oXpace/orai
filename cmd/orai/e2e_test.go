@@ -252,3 +252,59 @@ func TestProjectFromZeroThreeKeepsWorkingAndIsToldWhatToEdit(t *testing.T) {
 		t.Fatal("orai.toml was rewritten")
 	}
 }
+
+// A project keeps its shared settings in orai.toml and each computer its own in
+// orai.local.toml. From the binary: a local role is added without touching orai.toml, a
+// local model is what a role would be started with, doctor and status say where the
+// settings came from, and a broken local file is a usage error that names the file.
+func TestLocalSettingsFromTheBinary(t *testing.T) {
+	project := filepath.Join(t.TempDir(), "app")
+	_ = os.Mkdir(project, 0o755)
+	orai(t, project, "", "", "setup", "--role", "lead=codex", "--no-tools")
+	shared, _ := os.ReadFile(filepath.Join(project, "orai.toml"))
+
+	if _, errOut, code := orai(t, project, "", "", "setup", "--local", "--no-tools"); code != 2 || !strings.Contains(errOut, "--local goes with --role") {
+		t.Fatalf("--local alone: %d %s", code, errOut)
+	}
+	out, errOut, code := orai(t, project, "", "", "setup", "--role", "scratch=claude:.", "--local", "--no-tools")
+	if code != 0 || !strings.Contains(out, "Create orai.local.toml with role(s) scratch (this computer only)") {
+		t.Fatalf("local role: %d %s %s", code, out, errOut)
+	}
+	if after, _ := os.ReadFile(filepath.Join(project, "orai.toml")); string(after) != string(shared) {
+		t.Fatalf("orai.toml changed:\n%s", after)
+	}
+	local := filepath.Join(project, "orai.local.toml")
+	text, _ := os.ReadFile(local)
+	if err := os.WriteFile(local, append(text, []byte("\n[roles.lead]\nmodel = \"local-model\"\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, errOut, code = orai(t, project, "", "", "lead", "--dry-run")
+	if code != 0 || !strings.Contains(out, "local-model") {
+		t.Fatalf("dry run does not use the local model: %d %s %s", code, out, errOut)
+	}
+	status, _, _ := orai(t, project, "", "", "status")
+	for _, want := range []string{`"model": "local-model"`, `"role": "scratch"`, `"local": [`} {
+		if !strings.Contains(status, want) {
+			t.Fatalf("status lacks %s:\n%s", want, status)
+		}
+	}
+	report, _, _ := orai(t, project, "", "", "doctor")
+	if !strings.Contains(report, "orai.local.toml is applied over it and sets roles.lead.model, roles.scratch") {
+		t.Fatalf("doctor does not name the local settings:\n%s", report)
+	}
+	if ignored, _ := os.ReadFile(filepath.Join(project, ".gitignore")); !strings.Contains(string(ignored), "/orai.local.toml") {
+		t.Fatalf(".gitignore:\n%s", ignored)
+	}
+
+	if err := os.WriteFile(local, []byte("[roles.lead]\nnickname = \"boss\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, errOut, code := orai(t, project, "", "", "status"); code != 2 || !strings.Contains(errOut, "orai.local.toml, applied over orai.toml: roles.lead: unknown key(s) nickname") {
+		t.Fatalf("broken local file: %d %s", code, errOut)
+	}
+	_ = os.Remove(local)
+	if status, _, code := orai(t, project, "", "", "status"); code != 0 || strings.Contains(status, "scratch") || strings.Contains(status, "local-model") {
+		t.Fatalf("without the local file: %d %s", code, status)
+	}
+}

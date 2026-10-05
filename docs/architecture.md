@@ -45,6 +45,16 @@ Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 �
 
 공유 설정(`orai.toml`, 커밋 대상)에는 이식 가능한 사실만 둔다. schema 버전, 메일함 세션 이름, 역할(provider, 상대경로, 선택적 model·effort·branch), 연동 설정이 여기에 해당한다. 모델과 effort는 코어에 기본값이 없다. 값이 없으면 각 provider의 기본값을 쓴다. 모르는 키, 절대경로, 루트를 벗어나는 지침 경로, 예약어 역할명(`setup`, `run`, `msg`, `shelf`, `user` 등 CLI 명령과 사용자 handle)은 거부한다. 현재 schema는 2다. schema 1은 문서 검색 표의 이름이 `[integrations.wiki]`였고, 그 파일도 그대로 읽는다. Orai는 `orai.toml` 본문을 고치지 않으므로 doctor가 고칠 두 줄을 알려 준다.
 
+이 컴퓨터만의 설정은 `orai.toml` 옆의 `orai.local.toml`(커밋 제외, 없어도 된다)에 둔다. 역할 worktree에서 실행해도 프로젝트는 main checkout이므로 이 파일의 자리는 main checkout 한 곳이다. 읽는 순서는 다음과 같다.
+
+1. `orai.toml`을 혼자서 검증한다. 그래서 로컬 파일이 없는 checkout은 언제나 동작하고, 로컬 파일이 공유 파일의 오류를 가리지 못한다.
+2. 로컬 파일을 키 단위로 겹친다. 표는 같은 이름의 표와 합치고, 그 밖의 값은 공유 값을 대신한다.
+3. 겹친 결과를 파일 하나를 읽을 때와 같은 규칙으로 검증한다. 여기서 난 오류는 로컬 파일의 것으로 보고한다.
+
+로컬 파일은 `roles`와 `integrations` 아래의 모든 키를 정할 수 있다. `schema`, `name`, `session`은 정할 수 없다. 프로젝트 ID, 색인 이름, 메일함 경로가 여기서 나오므로 한 컴퓨터에서만 바뀌면 자기 색인과 메일함을 잃는다. 선언을 지우는 방법은 없다(TOML에 "없음"을 뜻하는 값이 없고, 임의의 표식을 만들지 않았다). 스키마에 목록 값이 없어 목록을 합치는 규칙도 없다.
+
+로컬 파일이 정한 키는 설정과 함께 기록되어 `orai doctor`의 `project` 항목과 `orai status`가 보여 준다. 진단과 실행은 모두 겹친 결과를 기준으로 한다. 커밋되는 생성물(`.gitignore` 블록)만 공유 설정으로 계산한다. 그러지 않으면 사람마다 블록이 달라진다. 로컬 설정 때문에 더 무시해야 하는 경로(로컬 역할의 worktree 등)는 저장소의 `.git/info/exclude`에 같은 방식의 블록으로 넣는다.
+
 로컬 상태(`.orai/`, 0700, 커밋 제외) 구조는 다음과 같다.
 
 ```
@@ -113,7 +123,7 @@ orai run <role>
 
 코어(세션·메시지)는 연동 없이도 동작한다. 연동이 실패하면 숨기지 않고 보고하며, 에이전트는 `rg`와 원문 읽기로 작업을 이어간다.
 
-**shelf (문서 검색, 엔진 QMD).** shelf는 등록한 문서 폴더를 찾아볼 수 있게 하는 색인이다. 지식을 정리하거나 소유하지 않으며, 원본은 저장소의 파일이다. 사용자와 에이전트는 `shelf`라는 이름만 본다(`orai shelf …`, `[integrations.shelf]`, MCP 서버 `shelf`, 진단 항목 `shelf.*`). MCP 서버 이름은 모든 프로젝트에서 같다. 세션은 자기 프로젝트의 서버 하나에만 연결되므로 이름으로 프로젝트를 구분할 필요가 없고, 같은 이름이어야 지침과 도구 허용(`mcp__shelf__*`)을 프로젝트마다 다시 쓰지 않는다. 묶음(collection)은 폴더이거나 폴더의 일부(`{ path, pattern }`)이며, `orai.toml`이 선언이고 색인은 그 결과다. `init`과 `refresh`는 색인을 선언에 맞추고(추가, 다시 등록, 삭제), `recover`는 서버만 켜므로 차이를 알려 주기만 한다. 엔진은 `integrations.shelf.engine`으로 지정하며 현재는 `qmd`만 지원한다. 프로젝트마다 index 이름 `orai-<project id>`를 쓴다. QMD 2.8.3 소스를 확인한 결과, `--index <name>`을 주면 daemon PID/로그 파일이 `~/.cache/qmd/mcp-<name>.pid|log`로 분리되고 설정 파일도 `<name>.yml`이 된다. 여기에 `QMD_CONFIG_DIR`과 `INDEX_PATH`로 설정과 DB를 `.orai/shelf/` 안에 둔다. 모델 캐시는 공유하므로 프로젝트마다 모델을 다시 받지 않는다. 서버는 `127.0.0.1`에만 열고, 포트는 설정값이 없으면 ID에서 유도한다(18200–18999). 이미 열린 포트는 MCP `status`의 컬렉션 절대경로가 이 프로젝트와 같을 때만 재사용한다. 중지는 index 범위의 `qmd --index <ours> mcp stop`만 쓴다. 역할 실행 시에는 MCP 서버 `shelf`를 프로세스 인자로 주입하므로 전역·worktree 설정 파일을 바꾸지 않는다. 역할 세션 밖에서 쓰려고 사용자가 프로젝트 MCP 설정(`.mcp.json`, `.codex/config.toml`)에 주소를 적어 둔 경우, Orai는 그 파일을 읽기만 하고 주소가 이 프로젝트 서버와 맞는지 진단한다(`shelf.registration`).
+**shelf (문서 검색, 엔진 QMD).** shelf는 등록한 문서 폴더를 찾아볼 수 있게 하는 색인이다. 지식을 정리하거나 소유하지 않으며, 원본은 저장소의 파일이다. 사용자와 에이전트는 `shelf`라는 이름만 본다(`orai shelf …`, `[integrations.shelf]`, MCP 서버 `shelf`, 진단 항목 `shelf.*`). MCP 서버 이름은 모든 프로젝트에서 같다. 세션은 자기 프로젝트의 서버 하나에만 연결되므로 이름으로 프로젝트를 구분할 필요가 없고, 같은 이름이어야 지침과 도구 허용(`mcp__shelf__*`)을 프로젝트마다 다시 쓰지 않는다. 묶음(collection)은 폴더이거나 폴더의 일부(`{ path, pattern }`)이며, `orai.toml`이 선언이고 색인은 그 결과다. `init`과 `refresh`는 색인을 선언에 맞추고(추가, 다시 등록, 삭제), `recover`는 서버만 켜므로 차이를 알려 주기만 한다. 폴더별 설명(context, `[integrations.shelf.context]`)도 선언이 원천이다. 엔진은 설명을 묶음별로 `.orai/shelf/`의 자기 설정에 두는데 이것은 로컬 상태라 새 checkout에는 없다. 그래서 설명은 폴더 경로로 선언하고, Orai가 그 폴더를 포함하는 묶음과 그 폴더 안에 있는 묶음에 나눠 적용한다. 설명은 다시 색인할 필요가 없고 실행 중인 서버가 다음 검색부터 읽으므로 `init`, `refresh`, `recover`가 모두 적용한다. 표를 선언하지 않은 프로젝트의 설명은 건드리지 않는다. 검색 결과는 MCP 응답의 구조화된 부분에 실리는데 이를 모델에 넘기는지는 provider가 정한다. Orai는 그 사이에 끼지 않으므로, 지침은 어느 provider에서나 성립하는 "shelf로 찾고 원문은 파일로 읽는다"를 기준으로 한다. 엔진은 `integrations.shelf.engine`으로 지정하며 현재는 `qmd`만 지원한다. 프로젝트마다 index 이름 `orai-<project id>`를 쓴다. QMD 2.8.3 소스를 확인한 결과, `--index <name>`을 주면 daemon PID/로그 파일이 `~/.cache/qmd/mcp-<name>.pid|log`로 분리되고 설정 파일도 `<name>.yml`이 된다. 여기에 `QMD_CONFIG_DIR`과 `INDEX_PATH`로 설정과 DB를 `.orai/shelf/` 안에 둔다. 모델 캐시는 공유하므로 프로젝트마다 모델을 다시 받지 않는다. 서버는 `127.0.0.1`에만 열고, 포트는 설정값이 없으면 ID에서 유도한다(18200–18999). 이미 열린 포트는 MCP `status`의 컬렉션 절대경로가 이 프로젝트와 같을 때만 재사용한다. 중지는 index 범위의 `qmd --index <ours> mcp stop`만 쓴다. 역할 실행 시에는 MCP 서버 `shelf`를 프로세스 인자로 주입하므로 전역·worktree 설정 파일을 바꾸지 않는다. 역할 세션 밖에서 쓰려고 사용자가 프로젝트 MCP 설정(`.mcp.json`, `.codex/config.toml`)에 주소를 적어 둔 경우, Orai는 그 파일을 읽기만 하고 주소가 이 프로젝트 서버와 맞는지 진단한다(`shelf.registration`).
 
 **CodeGraph.** 설치, provider MCP 등록, 프로젝트 색인은 사용자가 따로 진행하는 단계다. Orai는 `codegraph status --json`과 (deep 모드에서) 알려진 심볼 조회로 상태만 진단한다. 전역 등록과 중복될 수 있어 MCP를 자동으로 주입하지 않는다.
 
@@ -131,7 +141,7 @@ orai run <role>
 | not-checked | 이 모드에서 일부러 실행하지 않음 (예: `--deep` 없이 의미 검색). 전체 상태에 영향 없음 |
 | unsupported | 설치된 버전에 필요한 기능이 없음 |
 
-shelf 진단은 원인별로 나눈다. 연결 거부, 샌드박스 접근 거부, 다른 프로젝트 서버, MCP handshake 실패, 빈 색인, embedding 미완료, vector 검색 실패, lex+vec·본문 조회 실패가 각각 다른 항목으로 보고된다. 색인이 선언과 다른 경우(`orai.toml`에서 지운 묶음이 남아 있음, 두 묶음이 같은 문서를 덮음)는 `shelf.collections`로, 프로젝트 MCP 설정의 주소 불일치는 `shelf.registration`으로 보고한다. 기본 doctor는 모델을 불러오지 않으므로 의미 검색 항목을 not-checked로 표시한다. not-checked는 검증했다는 뜻이 아니지만, 문제로 세지도 않는다. 의미 검색까지 확인하려면 `--deep`을 쓴다. 한 환경(예: 샌드박스 밖)에서 성공했다고 다른 환경에서도 성공했다고 확대하지 않는다.
+shelf 진단은 원인별로 나눈다. 연결 거부, 샌드박스 접근 거부, 다른 프로젝트 서버, MCP handshake 실패, 빈 색인, embedding 미완료, vector 검색 실패, lex+vec·본문 조회 실패가 각각 다른 항목으로 보고된다. 색인이 선언과 다른 경우(`orai.toml`에서 지운 묶음이 남아 있음, 두 묶음이 같은 문서를 덮음)는 `shelf.collections`로, 선언한 폴더 설명이 색인과 다른 경우는 `shelf.context`로(설명을 선언한 프로젝트에만 나오고, 엔진에 물어볼 수 없으면 not-checked다), 프로젝트 MCP 설정의 주소 불일치는 `shelf.registration`으로 보고한다. 기본 doctor는 모델을 불러오지 않으므로 의미 검색 항목을 not-checked로 표시한다. not-checked는 검증했다는 뜻이 아니지만, 문제로 세지도 않는다. 의미 검색까지 확인하려면 `--deep`을 쓴다. 한 환경(예: 샌드박스 밖)에서 성공했다고 다른 환경에서도 성공했다고 확대하지 않는다.
 
 종료 코드: 0 healthy / 1 degraded(또는 코어가 not-configured) / 2 사용법·설정 오류 / 3 코어 blocked. 메시지 명령은 성공 0, 실패 1, 사용법 오류 2다.
 

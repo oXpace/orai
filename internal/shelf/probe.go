@@ -110,6 +110,10 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 			overlapFix+" in orai.toml, then `orai shelf stop && orai shelf refresh`"))
 	}
 
+	if check, declared := contextCheck(s); declared {
+		checks = append(checks, check)
+	}
+
 	if !truthy(status["totalDocuments"]) {
 		checks = append(checks, doctor.New(c+".index", doctor.NotReady, "the shelf index has no documents",
 			"Add Markdown files under "+strings.Join(s.collectionNames(), ", ")+", then `orai shelf stop && orai shelf refresh`"))

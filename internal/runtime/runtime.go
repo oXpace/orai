@@ -538,14 +538,19 @@ func Launch(p *project.Project, roleName string, fresh, dry bool, out io.Writer)
 }
 
 type RoleStatus struct {
-	Role          string `json:"role"`
-	Provider      string `json:"provider"`
-	Running       bool   `json:"running"`
-	SessionID     any    `json:"session_id"`
-	DeliveryReady bool   `json:"delivery_ready"`
-	LastError     any    `json:"last_error"`
-	Pending       *int   `json:"pending,omitempty"`
-	MailError     string `json:"mail_error,omitempty"`
+	Role     string `json:"role"`
+	Provider string `json:"provider"`
+	// The settings in effect, and which of them orai.local.toml set ("." = the whole role).
+	Worktree      string   `json:"worktree"`
+	Model         string   `json:"model,omitempty"`
+	Effort        string   `json:"effort,omitempty"`
+	Local         []string `json:"local,omitempty"`
+	Running       bool     `json:"running"`
+	SessionID     any      `json:"session_id"`
+	DeliveryReady bool     `json:"delivery_ready"`
+	LastError     any      `json:"last_error"`
+	Pending       *int     `json:"pending,omitempty"`
+	MailError     string   `json:"mail_error,omitempty"`
 }
 
 func Status(p *project.Project, out io.Writer) error {
@@ -557,7 +562,8 @@ func Status(p *project.Project, out io.Writer) error {
 		current, _ := state.ReadJSON(files.State())
 		delivery, _ := state.ReadJSON(files.Delivery(role.Provider))
 		active := state.Locked(files)
-		item := RoleStatus{Role: name, Provider: role.Provider, Running: active, SessionID: current["session_id"]}
+		item := RoleStatus{Role: name, Provider: role.Provider, Running: active, SessionID: current["session_id"],
+			Worktree: role.Worktree, Model: role.Model, Effort: role.Effort, Local: p.Config.LocalUnder("roles." + name)}
 		item.DeliveryReady = active && current["captured_at"] != nil && delivery["nonce"] == current["nonce"] &&
 			delivery["ready"] == true
 		if active {

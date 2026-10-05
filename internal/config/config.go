@@ -4,7 +4,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"regexp"
@@ -19,6 +21,9 @@ const (
 	// search `[integrations.wiki]`; it is still read, and doctor asks for the two-line edit.
 	Schema     = 2
 	UserHandle = "user"
+	// LocalName is the optional file next to orai.toml that holds this computer's own
+	// settings. It is not committed, and is applied over orai.toml (see Overlay).
+	LocalName = "orai.local.toml"
 	// DefaultPattern takes every Markdown file under a collection folder.
 	DefaultPattern = "**/*.md"
 )
@@ -64,6 +69,62 @@ type Shelf struct {
 	Port        int               // 0 = derived from the project id
 	EmbedModel  string
 	Smoke       *Smoke
+	// Context says what the documents under a folder are for: project-relative path ->
+	// one line, which search results then carry. nil when the table is absent, and Orai
+	// then leaves whatever descriptions the index has alone.
+	Context map[string]string
+}
+
+// Within reports whether folder is base or lies under it, and its path from base (""
+// for base itself). Both are slash paths relative to the project root.
+func Within(base, folder string) (string, bool) {
+	base, folder = path.Clean(base), path.Clean(folder)
+	switch {
+	case folder == base:
+		return "", true
+	case base == ".":
+		return folder, true
+	case strings.HasPrefix(folder, base+"/"):
+		return folder[len(base)+1:], true
+	}
+	return "", false
+}
+
+// ContextPlan turns the declared descriptions into what each collection holds: collection
+// -> path inside it ("" for its root) -> text. A description is keyed by folder, not by
+// collection, so it survives a change in how the folders are split into collections: it
+// lands in every collection that contains the folder, and on the root of every
+// collection the folder contains. Descriptions that meet on one root are joined from
+// the outermost folder inwards, the order in which the engine reads nested ones.
+func (s *Shelf) ContextPlan() map[string]map[string]string {
+	folders := make([]string, 0, len(s.Context))
+	for folder := range s.Context {
+		folders = append(folders, folder)
+	}
+	sort.Slice(folders, func(i, j int) bool {
+		if len(folders[i]) != len(folders[j]) {
+			return len(folders[i]) < len(folders[j])
+		}
+		return folders[i] < folders[j]
+	})
+	plan := map[string]map[string]string{}
+	for name, root := range s.Collections {
+		for _, folder := range folders {
+			inner, inside := Within(root, folder)
+			if _, around := Within(folder, root); !inside && !around {
+				continue
+			}
+			if plan[name] == nil {
+				plan[name] = map[string]string{}
+			}
+			if earlier := plan[name][inner]; earlier != "" {
+				plan[name][inner] = earlier + " / " + s.Context[folder]
+			} else {
+				plan[name][inner] = s.Context[folder]
+			}
+		}
+	}
+	return plan
 }
 
 type Codegraph struct{ SmokeSymbol string }
@@ -75,6 +136,36 @@ type Config struct {
 	Roles     map[string]Role
 	Shelf     *Shelf
 	Codegraph *Codegraph
+	// LocalFile is the local settings file that was applied over orai.toml ("" when
+	// there is none), and LocalKeys the settings it set, as dotted paths such as
+	// "roles.pm.model" (a table the shared file lacks is named once, as a whole).
+	LocalFile string
+	LocalKeys []string
+}
+
+// FromLocal reports whether key, or a table that contains it, was set by the local file.
+func (c *Config) FromLocal(key string) bool {
+	for _, local := range c.LocalKeys {
+		if key == local || strings.HasPrefix(key, local+".") {
+			return true
+		}
+	}
+	return false
+}
+
+// LocalUnder returns what the local file set inside the table at prefix, relative to
+// it: "roles.pm" gives ["model"], and ["."] when the whole table is local.
+func (c *Config) LocalUnder(prefix string) []string {
+	var keys []string
+	for _, local := range c.LocalKeys {
+		switch {
+		case local == prefix || strings.HasPrefix(prefix, local+"."):
+			return []string{"."}
+		case strings.HasPrefix(local, prefix+"."):
+			keys = append(keys, strings.TrimPrefix(local, prefix+"."))
+		}
+	}
+	return keys
 }
 
 // Handles returns the mailbox handles: roles in name order, then the user.
@@ -155,6 +246,14 @@ func relative(value any, where string, contained bool) (string, error) {
 	return text, nil
 }
 
+// quoteKey shows a table key the way orai.toml spells it when it needs quotes.
+func quoteKey(key string) string {
+	if collectionPattern.MatchString(key) {
+		return key
+	}
+	return `"` + key + `"`
+}
+
 func contains(list []string, value string) bool {
 	for _, item := range list {
 		if item == value {
@@ -215,7 +314,7 @@ func filePattern(value any, where string) (string, error) {
 // parseShelf reads the document search table. where is its name in this file
 // (integrations.shelf, or integrations.wiki in a schema 1 file) so errors point at it.
 func parseShelf(value any, where string) (*Shelf, error) {
-	t, err := table(value, where, "engine", "collections", "port", "embed_model", "smoke")
+	t, err := table(value, where, "engine", "collections", "port", "embed_model", "smoke", "context")
 	if err != nil {
 		return nil, err
 	}
@@ -281,15 +380,121 @@ func parseShelf(value any, where string) (*Shelf, error) {
 		}
 		shelf.Smoke = smoke
 	}
+	if raw, ok := t["context"]; ok {
+		entries, isTable := raw.(map[string]any)
+		if !isTable {
+			return nil, errorf("%s.context must map folders to one-line descriptions", where)
+		}
+		shelf.Context = map[string]string{}
+		for key, value := range entries {
+			at := where + ".context." + quoteKey(key)
+			folder, err := relative(key, at, true)
+			if err != nil {
+				return nil, err
+			}
+			folder = path.Clean(folder)
+			text, err := requiredText(value, at)
+			if err != nil {
+				return nil, err
+			}
+			// One line: the engine lists descriptions line by line, and takes a leading
+			// dash for an option.
+			if text = strings.TrimSpace(text); strings.ContainsAny(text, "\r\n") || strings.HasPrefix(text, "-") {
+				return nil, errorf("%s must be one line of text that does not start with a dash", at)
+			}
+			if _, twice := shelf.Context[folder]; twice {
+				return nil, errorf("%s names the folder %s a second time", at, folder)
+			}
+			shelf.Context[folder] = text
+		}
+		for folder := range shelf.Context {
+			used := false
+			for _, root := range shelf.Collections {
+				_, inside := Within(root, folder)
+				_, around := Within(folder, root)
+				used = used || inside || around
+			}
+			if !used {
+				return nil, errorf("%s.context.%s is not part of any collection: use a collection folder, or a path inside or around one", where, quoteKey(folder))
+			}
+		}
+	}
 	return shelf, nil
 }
 
-// Parse validates a decoded orai.toml.
+// Parse reads and validates orai.toml.
 func Parse(data []byte) (*Config, error) {
 	var raw map[string]any
 	if err := toml.Unmarshal(data, &raw); err != nil {
 		return nil, errorf("orai.toml: %v", err)
 	}
+	return validate(raw)
+}
+
+// identity is what the local file may not set: these name the project's mailbox and
+// index, and a checkout that changed them would silently stop seeing its own.
+var identity = []string{"schema", "name", "session"}
+
+// Overlay reads orai.toml with a local settings file applied over it. The shared file
+// must be valid by itself, so a checkout without the local file always works. Then the
+// local file's values are laid over it key by key: a table is merged into the shared
+// table of the same name, and anything else replaces the shared value. The result is
+// validated as a whole, exactly like a single file. Nothing can be removed this way,
+// and neither file holds a list, so there is no rule for merging one.
+func Overlay(shared, local []byte) (*Config, error) {
+	var base, over map[string]any
+	if err := toml.Unmarshal(shared, &base); err != nil {
+		return nil, errorf("orai.toml: %v", err)
+	}
+	if _, err := validate(base); err != nil {
+		return nil, err
+	}
+	if err := toml.Unmarshal(local, &over); err != nil {
+		return nil, errorf("%s: %v", LocalName, err)
+	}
+	for _, key := range identity {
+		if _, set := over[key]; set {
+			return nil, errorf("%s: `%s` belongs in orai.toml (the project's mailbox and index are named from it)", LocalName, key)
+		}
+	}
+	if _, err := table(over, LocalName, "roles", "integrations"); err != nil {
+		return nil, err
+	}
+	if schema, _ := base["schema"].(int64); schema != Schema {
+		return nil, errorf("%s needs `schema = %d` in orai.toml", LocalName, Schema)
+	}
+	var keys []string
+	cfg, err := validate(overlay(base, over, "", &keys))
+	if err != nil {
+		return nil, errorf("%s, applied over orai.toml: %v", LocalName, err)
+	}
+	sort.Strings(keys)
+	cfg.LocalKeys = keys
+	return cfg, nil
+}
+
+// overlay returns base with over laid on top, and appends the dotted path of every
+// setting over supplied to keys. Neither argument is modified.
+func overlay(base, over map[string]any, prefix string, keys *[]string) map[string]any {
+	merged := make(map[string]any, len(base)+len(over))
+	for key, value := range base {
+		merged[key] = value
+	}
+	for key, value := range over {
+		mine, isTable := value.(map[string]any)
+		theirs, wasTable := base[key].(map[string]any)
+		if isTable && wasTable {
+			merged[key] = overlay(theirs, mine, prefix+key+".", keys)
+			continue
+		}
+		merged[key] = value
+		*keys = append(*keys, prefix+key)
+	}
+	return merged
+}
+
+// validate checks a decoded declaration (one file, or two already merged).
+func validate(raw map[string]any) (*Config, error) {
 	t, err := table(raw, "orai.toml", "schema", "name", "session", "roles", "integrations")
 	if err != nil {
 		return nil, err
@@ -365,5 +570,31 @@ func Load(file string) (*Config, error) {
 	if err != nil {
 		return nil, errorf("%s: %v", file, strings.TrimPrefix(err.Error(), "orai.toml: "))
 	}
+	return cfg, nil
+}
+
+// LoadWithLocal reads file and, when localFile exists, applies it over file (see
+// Overlay). A missing local file is the normal case and changes nothing.
+func LoadWithLocal(file, localFile string) (*Config, error) {
+	cfg, err := Load(file)
+	if err != nil {
+		return nil, err
+	}
+	local, err := os.ReadFile(localFile)
+	if errors.Is(err, fs.ErrNotExist) {
+		return cfg, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	shared, err := os.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	if cfg, err = Overlay(shared, local); err != nil {
+		// The message names the file by its base name; point at the one that was read.
+		return nil, errorf("%s", strings.Replace(err.Error(), LocalName, localFile, 1))
+	}
+	cfg.LocalFile = localFile
 	return cfg, nil
 }
