@@ -7,7 +7,7 @@
 | 할 일 | 명령 |
 |---|---|
 | 처음 한 번 색인 만들기 | `orai shelf init` (`orai setup`이 대신 실행한다) |
-| 문서를 고친 뒤 색인 갱신 | `orai shelf stop && orai shelf refresh` |
+| 문서를 고친 뒤 색인 갱신 | `orai shelf sync` |
 | 재부팅 뒤 서버 다시 켜기 | `orai shelf recover` |
 | 상태 확인 | `orai doctor`, 실제 검색까지 확인하려면 `orai doctor --deep` |
 

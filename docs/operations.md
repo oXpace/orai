@@ -12,11 +12,11 @@ mise use --pin github:oXpace/orai  # 최신 GitHub Release의 바이너리를 �
 orai setup                         # 기본 세팅
 ```
 
-특정 버전을 쓰려면 `mise use github:oXpace/orai@0.5.0`처럼 번호를 붙인다. Release 태그에 `v`가 없으므로 `@v0.5.0`이 아니라 `@0.5.0`이다.
+특정 버전을 쓰려면 `mise use github:oXpace/orai@0.5.1`처럼 번호를 붙인다. Release 태그에 `v`가 없으므로 `@v0.5.1`이 아니라 `@0.5.1`이다.
 
 - mise github backend는 `oXpace/orai`의 GitHub Release에서 현재 플랫폼(darwin/linux, arm64/amd64)의 `orai_<버전>_<os>_<arch>.tar.gz`를 받는다. 실행에 Go나 다른 런타임은 필요 없다. 게시 전 변경은 Orai checkout에서 `go run ./cmd/orai --project <경로> setup`으로 시험한다.
 - `setup`은 프로젝트에 Orai 고정이 없으면 `mise use` 안내를 출력한다.
-- mise는 나온 지 얼마 안 된 Release를 버전 목록(`mise ls-remote github:oXpace/orai`)에서 숨긴다. 이때 `--pin`은 이전 버전을 고르므로 `@0.5.0`처럼 번호를 명시한다. 번호를 명시한 설치는 배포 직후에도 된다. mise 2026.10.0에서 `minimum_release_age`를 설정하지 않았는데도 숨겨졌고, `mise ls-remote`가 "newer releases hidden by minimum_release_age"라고 알린다. 숨기는 기간의 기본값은 확인하지 못했다. 제외 설정 `minimum_release_age_excludes`가 있다.
+- mise는 나온 지 얼마 안 된 Release를 버전 목록(`mise ls-remote github:oXpace/orai`)에서 숨긴다. 이때 `--pin`은 이전 버전을 고르므로 `@0.5.1`처럼 번호를 명시한다. 번호를 명시한 설치는 배포 직후에도 된다. mise 2026.10.0에서 `minimum_release_age`를 설정하지 않았는데도 숨겨졌고, `mise ls-remote`가 "newer releases hidden by minimum_release_age"라고 알린다. 숨기는 기간의 기본값은 확인하지 못했다. 제외 설정 `minimum_release_age_excludes`가 있다.
 - PATH에 다른 `orai`(예: 예전 전역 링크)가 있어도, mise가 활성화된 셸에서는 프로젝트에 고정한 버전이 먼저 선택된다.
 
 Codex, Claude Code, QMD, CodeGraph는 사용자가 설치한다. Orai는 이 도구들을 설치하거나 업그레이드하지 않는다. AMQ는 필요 없다(메일함은 Orai가 관리하며 형식만 AMQ와 호환된다). 필요한 버전은 [호환성](compatibility.md)에 있다.
@@ -44,6 +44,10 @@ git add -A && git commit -m "Update Orai"
 - 저장된 대화, 메일함, shelf 색인은 그대로 남는다. 실행 중인 역할 세션은 예전 버전으로 계속 돌므로, 끝낸 뒤 `orai <역할>`로 다시 연다. 같은 대화로 이어진다.
 - 같은 저장소를 쓰는 다른 사람은 변경을 받은 뒤 `mise install`과 `orai setup`을 실행한다.
 - 되돌리려면 `mise.toml`의 버전을 이전 번호로 바꾸고 `orai setup`을 다시 실행한다.
+
+### 0.5.0 → 0.5.1
+
+문서를 고친 뒤의 갱신 명령이 `orai shelf stop && orai shelf refresh`에서 `orai shelf sync`로 바뀌었다. 0.5.0까지의 안내는 문서를 고칠 때마다 서버를 다시 시작하게 했고, 그때마다 연결된 세션의 shelf 연결이 끊겼다. `orai setup`이 `AGENTS.md` 블록의 안내를 새 명령으로 바꾼다. 프로젝트 지침이나 스크립트에 예전 명령을 직접 적어 두었다면 고친다. `refresh`는 그대로 있고 `collections`를 바꿨을 때만 쓴다.
 
 ### 0.4.x → 0.5.0
 
@@ -350,7 +354,8 @@ product = "docs/product"
 
 | 상황 | 명령 |
 |---|---|
-| 문서를 추가하거나 고쳤다, `collections`를 바꿨다 | `orai shelf stop && orai shelf refresh` |
+| 문서를 추가하거나 고치거나 지웠다 | `orai shelf sync` (서버는 계속 돈다) |
+| `collections`를 바꿨다 | `orai shelf stop && orai shelf refresh` |
 | 폴더 설명(`context`)을 고쳤다 | `orai shelf recover` |
 | 재부팅 뒤 서버가 꺼졌다 (`shelf.server`가 `✗`) | `orai shelf recover` |
 | 지금 검색이 되는지 확인 | `orai shelf check` |
@@ -361,6 +366,7 @@ product = "docs/product"
 ```sh
 orai shelf init      # 설정이 없을 때만 생성(기본 모델 Qwen3-Embedding-0.6B Q8), update·embed, 서버 시작, 검증
 orai shelf recover   # 기존 설정·DB·모델 보존, 꺼진 서버 시작, 폴더 설명 적용, 검증 (재부팅 후 필요)
+orai shelf sync      # 바뀐 문서의 색인·임베딩 갱신, 폴더 설명 적용, 검증. 서버를 멈추지 않고, 꺼져 있으면 켠다
 orai shelf refresh   # 묶음을 orai.toml에 맞추고 문서·임베딩 갱신 후 시작·검증 (서버가 떠 있으면 거부)
 orai shelf check     # 상태 변경 없이 전체 검증 (vector-only → lex+vec → 본문)
 orai shelf stop      # 이 프로젝트 index의 서버만 중지
@@ -368,7 +374,8 @@ orai shelf stop      # 이 프로젝트 index의 서버만 중지
 
 - 서버는 `127.0.0.1:<프로젝트 포트>`에서 실행하고, 포트는 `orai doctor`의 `shelf.server.detail.endpoint`로 확인한다. PID와 로그는 `~/.cache/qmd/mcp-orai-<id>.pid|log`에 있다. 다른 프로젝트 서버와 기존 Pockets `8181` 서버는 건드리지 않는다.
 - 포트가 다른 index의 서버에 점유돼 있으면 거부하고 그대로 둔다. `orai.toml`의 `integrations.shelf.port`로 다른 포트를 지정한다.
-- `init`·`refresh`는 검색이 없는 안전한 시점에 `orai shelf stop`을 먼저 실행한 뒤 수행한다.
+- `sync`는 서버가 떠 있는 채로 실행한다. 연결된 세션이 끊기지 않고 다음 검색부터 바뀐 문서가 나온다. 묶음 선언이 색인과 다르면 색인을 고치지 않고 `refresh`를 안내한다.
+- `init`·`refresh`는 묶음을 지우고 다시 등록할 수 있으므로 검색이 없는 시점에 `orai shelf stop`을 먼저 실행한 뒤 수행한다. 서버를 다시 시작하면 연결돼 있던 세션은 shelf에 다시 연결해야 할 수 있다.
 - 손상되었거나 다른 프로젝트의 DB를 자동으로 지우지 않는다. 검색 도중 자동 재색인, 모델 다운로드, 서버 재시작도 하지 않는다.
 - **모델 변경**은 명시적 재구축 작업이다. 서버를 중지하고, `.orai/shelf/orai-<id>.yml`의 `models.embed`를 바꾼 뒤 `QMD_CONFIG_DIR=.orai/shelf INDEX_PATH=.orai/shelf/index.sqlite qmd --index orai-<id> embed -f`를 실행하고 `orai shelf recover`로 검증한다. 모델 이름, revision, 파일 fingerprint, 메모리 요구량을 기록한다.
 - 기본 모델은 한국어·영어 혼합 문서용 초기 후보일 뿐이며 한국어 품질을 보장하지 않는다. `integrations.shelf.smoke`에 이 프로젝트 문서에만 있는 사실을 넣어 recall을 점검한다.
@@ -432,7 +439,7 @@ codegraph status --json <프로젝트 루트>
 | 프로젝트 이동·복사 경고 | `.orai/`를 검토한 뒤 `orai setup`으로 다시 연결하고, 역할은 `--fresh`로 시작 |
 | shelf 서버가 꺼져 있음(`shelf.server` blocked) | `orai shelf recover` |
 | shelf가 아직 만들어지지 않음 | QMD 설치 후 `orai shelf init` ([처음 준비](#처음-준비)) |
-| 문서를 고쳤는데 검색에 안 나옴(`shelf.index` degraded) | `orai shelf stop && orai shelf refresh` |
+| 문서를 고쳤는데 검색에 안 나옴(`shelf.index` degraded) | `orai shelf sync` |
 | 지운 묶음이 계속 검색되거나 같은 문서가 두 번 나옴(`shelf.collections` degraded) | `orai.toml`의 `collections`를 확인하고 `orai shelf stop && orai shelf refresh` |
 | 폴더 설명이 선언과 다름(`shelf.context` degraded) | `orai shelf recover` |
 | 역할 밖 설정의 주소가 다름(`shelf.registration` degraded) | Next steps에 나온 파일의 주소·이름을 고치고, `orai.toml`에 `port`를 고정한다 |

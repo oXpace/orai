@@ -116,12 +116,12 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 
 	if !truthy(status["totalDocuments"]) {
 		checks = append(checks, doctor.New(c+".index", doctor.NotReady, "the shelf index has no documents",
-			"Add Markdown files under "+strings.Join(s.collectionNames(), ", ")+", then `orai shelf stop && orai shelf refresh`"))
+			"Add Markdown files under "+strings.Join(s.collectionNames(), ", ")+", then `orai shelf sync`"))
 		return checks
 	}
 	if !truthy(status["hasVectorIndex"]) || truthy(status["needsEmbedding"]) {
-		chk := doctor.New(c+".index", doctor.Degraded, "some documents are not embedded yet (edited since the last refresh)",
-			"`orai shelf stop && orai shelf refresh`")
+		chk := doctor.New(c+".index", doctor.Degraded, "some documents are not embedded yet (edited since the last sync)",
+			"`orai shelf sync`")
 		checks = append(checks, chk.WithDetail(map[string]any{"needsEmbedding": status["needsEmbedding"]}))
 		return checks
 	}
@@ -191,7 +191,7 @@ func searchChecks(client mcpClient, s *Settings) []doctor.Check {
 			fmt.Sprintf("vector search failed: %v", err), "Check model/GPU availability in the QMD log")}
 	}
 	if len(vector) == 0 {
-		return []doctor.Check{doctor.New(c+".vector", doctor.Degraded, "vector search returned no results", "`orai shelf stop && orai shelf refresh`")}
+		return []doctor.Check{doctor.New(c+".vector", doctor.Degraded, "vector search returned no results", "`orai shelf sync`")}
 	}
 
 	var checks []doctor.Check
@@ -247,7 +247,7 @@ func searchChecks(client mcpClient, s *Settings) []doctor.Check {
 		checks = append(checks, doctor.New(c+".hybrid", doctor.Healthy, "lex+vec search and document read succeeded", ""))
 	} else {
 		checks = append(checks, doctor.New(c+".hybrid", doctor.Degraded, "document read returned no text",
-			"`orai shelf stop && orai shelf refresh` to rebuild the index from the current documents"))
+			"`orai shelf sync` to bring the index up to the current documents"))
 	}
 	return checks
 }

@@ -64,7 +64,11 @@ var ownServerRunning = func(s *Settings) (bool, error) {
 	return true, nil
 }
 
-// Lifecycle runs init | recover | refresh | check | stop. See docs/operations.md.
+// Lifecycle runs init | recover | sync | refresh | check | stop. See docs/operations.md.
+// sync is the everyday one: it re-indexes changed documents while the server keeps
+// running (QMD 2.8.3 was seen to serve an update and an embed at the next search), and
+// starts the server when it is down. Only a change to the collections needs the server
+// stopped, and that is refresh.
 // It never stops or deletes another project's server or DB: init/refresh refuse while
 // our own server is running, and a port already serving a different index is left
 // untouched.
@@ -198,7 +202,7 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 	if err := applyContexts(s, qmd, out); err != nil {
 		return err
 	}
-	if action == "init" || action == "refresh" {
+	if action == "init" || action == "refresh" || action == "sync" {
 		if _, err := runCommand(out, s.Argv(qmd, "update"), s, false); err != nil {
 			return err
 		}

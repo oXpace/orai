@@ -664,3 +664,46 @@ func TestSmokeDocumentBelongsToTheDeepestCollection(t *testing.T) {
 		t.Fatalf("expectedURI = %q", got)
 	}
 }
+
+// Editing documents is the everyday case and must not cost the server: sync re-indexes
+// and embeds while it runs, never stops it, and starts it only when it was down.
+func TestSyncReindexesWithoutStoppingTheServer(t *testing.T) {
+	for _, running := range []bool{true, false} {
+		s, calls := collectionProject(t, `{ docs = "docs" }`)
+		ownServerRunning = func(*Settings) (bool, error) { return running, nil }
+		if err := Lifecycle(s.Project, "sync", io.Discard); err != nil {
+			t.Fatalf("sync (running=%v): %v", running, err)
+		}
+		lines := joined(calls)
+		update, embed := indexOf(lines, "update"), indexOf(lines, "embed")
+		if update < 0 || embed != update+1 || containsStr(lines, "mcp stop") {
+			t.Fatalf("sync (running=%v) commands: %v", running, lines)
+		}
+		started := false
+		for _, line := range lines {
+			started = started || strings.HasPrefix(line, "mcp --http --daemon")
+			if strings.HasPrefix(line, "collection add") || strings.HasPrefix(line, "collection remove") {
+				t.Fatalf("sync changed the collections: %v", lines)
+			}
+		}
+		if started == running {
+			t.Fatalf("sync (running=%v) started=%v: %v", running, started, lines)
+		}
+	}
+}
+
+// A changed collection declaration is not sync's to apply: it says so and indexes nothing.
+func TestSyncLeavesCollectionChangesToRefresh(t *testing.T) {
+	s, calls := collectionProject(t, `{ core = { path = "docs", pattern = "*.md" } }`)
+	indexed := runCommand
+	runCommand = func(out io.Writer, argv []string, s *Settings, capture bool) (string, error) {
+		if capture && argv[len(argv)-1] == "core" {
+			return "Collection: core\n  Path:     " + s.Collections["core"] + "\n  Pattern:  **/*.md\n", nil
+		}
+		return indexed(out, argv, s, capture)
+	}
+	err := Lifecycle(s.Project, "sync", io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "orai shelf stop && orai shelf refresh") || containsStr(joined(calls), "update") {
+		t.Fatalf("sync with a changed collection: %v %v", err, joined(calls))
+	}
+}

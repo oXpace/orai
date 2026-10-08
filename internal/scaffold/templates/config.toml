@@ -9,7 +9,7 @@ session = "orai"            # mailbox name: .agent-mail/<session>/
 {{roles}}
 # Shelf: the Markdown folders below, searchable from role sessions (MCP server
 # `shelf`). Needs QMD (`npm install -g @tobilu/qmd`). After editing documents:
-# `orai shelf stop && orai shelf refresh`. Guide: `orai shelf --help`. Remove this table to opt out.
+# `orai shelf sync`. Guide: `orai shelf --help`. Remove this table to opt out.
 [integrations.shelf]
 collections = { docs = "docs" }   # name = folder. To split a folder, give part of it a pattern:
 #   { core = { path = "docs", pattern = "*.md" }, adr = "docs/adr" }

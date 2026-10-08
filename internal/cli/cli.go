@@ -31,7 +31,7 @@ const exitUsage = 2
 var commands = map[string]bool{"setup": true, "run": true, "status": true, "doctor": true, "msg": true, "shelf": true,
 	"_capture": true, "_channel": true, "help": true, "version": true}
 
-var shelfActions = map[string]bool{"init": true, "recover": true, "refresh": true, "check": true, "stop": true}
+var shelfActions = map[string]bool{"init": true, "recover": true, "sync": true, "refresh": true, "check": true, "stop": true}
 
 var renamed = map[string]string{"inbox": "orai msg inbox", "send": "orai msg send", "reply": "orai msg reply",
 	"qmd": "orai shelf", "wiki": "orai shelf", "init": "orai setup"}
@@ -53,7 +53,7 @@ commands:
   msg send <role|user> [--body TEXT | --file PATH] [--kind K] [--thread T] [--as user]
   msg reply <ID> [--body TEXT | --file PATH] [--kind K] [--as user]
                         Messages; the body defaults to piped stdin
-  shelf init|recover|refresh|check|stop
+  shelf init|recover|sync|refresh|check|stop
                         Project shelf (docs search) lifecycle
 
 options:
@@ -171,7 +171,7 @@ Messages between roles. Inside a role session the sender is that role. Outside o
 Output is JSON.
 `
 
-const shelfHelp = `usage: orai shelf init|recover|refresh|check|stop [--project PATH]
+const shelfHelp = `usage: orai shelf init|recover|sync|refresh|check|stop [--project PATH]
 
 The shelf makes this project's Markdown documents searchable. Role sessions reach it
 as the MCP server ` + "`shelf`" + `. It is a search index over the folders you register,
@@ -181,9 +181,11 @@ project: its index lives in .orai/shelf and its server listens on 127.0.0.1.
   init      first time: build the index and embeddings, start the server, verify
   recover   start the server again (after a reboot) without rebuilding, apply the
             contexts in orai.toml, verify
-  refresh   re-index after documents or the collections in orai.toml changed (a
-            collection that was removed or re-declared is dropped or re-registered),
-            then start and verify
+  sync      after editing documents: re-index what changed and verify. The server
+            keeps running (it is started if it was down); searches see the change
+            at once
+  refresh   after changing the collections in orai.toml: drop or re-register them,
+            re-index, start and verify. Needs the server stopped first
   check     verify the running server end to end; changes nothing
   stop      stop this project's server
 
@@ -196,8 +198,8 @@ first time:
   ` + "`orai setup`" + ` does steps 2-3 for you when QMD is installed.
 
 after editing documents:
-  orai shelf stop && orai shelf refresh
-  (refresh refuses while the server runs, so a search in progress is never cut off)
+  orai shelf sync
+  (no restart: sessions connected to the shelf stay connected)
 
 settings, in orai.toml under [integrations.shelf]:
   collections = { docs = "docs" }           name = folder (relative): every .md under it
@@ -316,7 +318,7 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 		}
 		return withProject(rest, nil, func(p *project.Project, o options) (int, error) {
 			if len(o.args) != 1 || !shelfActions[o.args[0]] {
-				return exitUsage, usagef("usage: orai shelf init|recover|refresh|check|stop (`orai shelf --help` explains each)")
+				return exitUsage, usagef("usage: orai shelf init|recover|sync|refresh|check|stop (`orai shelf --help` explains each)")
 			}
 			return 0, shelf.Lifecycle(p, o.args[0], stdout)
 		})
