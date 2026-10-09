@@ -50,9 +50,9 @@ orai setup --role lead=codex --role dev=claude
 |---|---|---|
 | `orai.toml` | 프로젝트가 공유하는 설정: 역할과 shelf·코드 그래프. 없을 때만 만들고, 있으면 `--role`로 요청한 역할만 덧붙인다 | 한다 |
 | `orai.local.toml` | 이 컴퓨터만의 설정(역할의 모델, 포트, 나만 쓰는 역할). 직접 만들 때만 있고 `orai.toml` 위에 키 단위로 겹친다 | 안 한다 |
-| `AGENTS.md` | Orai 설명 블록(진단, 문서 검색, 코드 구조, 커밋하지 않는 것, 역할 세션에서의 역할과 메시지). `orai:begin`~`orai:end` 사이만 관리하고 나머지는 그대로 둔다 | 한다 |
+| `AGENTS.md` | Orai 블록: 목적, 할 일별 도구와 스킬 진입점, 설정 위치. `orai:begin`~`orai:end` 사이만 관리하고 나머지는 그대로 둔다 | 한다 |
 | `CLAUDE.md` | 없을 때만 `@AGENTS.md` 한 줄로 만든다 | 한다 |
-| `.agents/skills/orai/SKILL.md`, `.claude/skills/orai` | 에이전트가 메시지를 주고받는 방법을 담은 스킬과, Claude Code용 링크 | 한다 |
+| `.agents/skills/orai/`, `.claude/skills/orai` | Orai 명령의 실행법을 담은 스킬(`SKILL.md`: 메시지, `references/`: 문서·코드 찾기, 상태 확인·복구)과 Claude Code용 링크 | 한다 |
 | `.gitignore` | Orai 블록: `/.orai/`, `/orai.local.toml`, `/.agent-mail/`, `/.codegraph/`, 역할 작업 폴더 | 한다 |
 | `.agents/.gitignore` | Orai 블록: `/roles/` (역할 지침을 저장소에 넣지 않는다) | 한다 |
 | `.agents/roles/<역할>.md` | 역할 지침. 이 컴퓨터에서 고쳐 쓴다 | 안 한다 |
@@ -88,7 +88,7 @@ orai shelf sync                         # docs를 고친 뒤 색인 갱신 (서�
 orai status && orai doctor
 ```
 
-- 역할 이름과 개수는 자유다. `--role 이름=codex|claude`를 필요한 만큼 붙인다. 역할 없이 시작했다가 나중에 `orai setup --role reviewer=claude`로 추가해도 된다. `--preset pm-staff`는 `--role pm=codex --role staff=claude`의 줄임이다.
+- 역할 이름과 개수는 자유다. `--role 이름=codex|claude`를 필요한 만큼 붙인다. 역할 없이 시작했다가 나중에 `orai setup --role reviewer=claude`로 추가해도 된다. `--preset manager-engineer`는 `--role manager=codex --role engineer=claude`의 줄임이고, `--preset manager-engineer:manager=pm,engineer=staff`처럼 역할 이름을 바꿔 쓸 수 있다.
 - `setup`은 여러 번 실행해도 안전하다.
 - shelf는 `orai.toml`의 `[integrations.shelf]`에 등록한 폴더를 검색한다. `adr = "docs/adr"`처럼 묶음을 나눠 등록할 수 있고, 폴더마다 한 줄 설명(`context`)을 달아 검색 결과에 붙일 수 있다. 역할 세션에는 `shelf`라는 MCP 서버로 연결된다. Desktop처럼 역할 세션 밖에서 쓰는 방법은 [운영 안내](docs/operations.md#역할-세션-밖에서-쓰기)에 있다.
 - 명령마다 `--help`가 있다. shelf 설정은 `orai shelf --help`, 진단 표시와 종료 코드는 `orai doctor --help`에 정리돼 있다.

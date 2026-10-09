@@ -65,7 +65,7 @@ func TestSetupTwiceIsANoOpWithEmbeddedTemplates(t *testing.T) {
 	if err := os.Mkdir(project, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	out, errOut, code := orai(t, project, "", "", "setup", "--preset", "pm-staff", "--no-tools")
+	out, errOut, code := orai(t, project, "", "", "setup", "--preset", "manager-engineer", "--no-tools")
 	if code != 0 && code != 1 {
 		t.Fatalf("setup: %d %s %s", code, out, errOut)
 	}
@@ -134,9 +134,9 @@ func TestRolesChosenAtSetupAndAddedLater(t *testing.T) {
 func TestDryRunHookPointsAtThisBinaryAndNotTheCheckout(t *testing.T) {
 	project := filepath.Join(t.TempDir(), "app")
 	_ = os.Mkdir(project, 0o755)
-	orai(t, project, "", "", "setup", "--preset", "pm-staff", "--no-tools")
-	_ = os.MkdirAll(filepath.Join(project, ".worktrees/staff"), 0o755)
-	out, errOut, code := orai(t, project, "", "", "pm", "--dry-run")
+	orai(t, project, "", "", "setup", "--preset", "manager-engineer", "--no-tools")
+	_ = os.MkdirAll(filepath.Join(project, ".worktrees/engineer"), 0o755)
+	out, errOut, code := orai(t, project, "", "", "manager", "--dry-run")
 	if code != 0 {
 		t.Fatalf("dry run: %d %s", code, errOut)
 	}
@@ -157,8 +157,8 @@ func TestDryRunHookPointsAtThisBinaryAndNotTheCheckout(t *testing.T) {
 func TestMessagesAndDoctorFromTheBinary(t *testing.T) {
 	project := filepath.Join(t.TempDir(), "app")
 	_ = os.Mkdir(project, 0o755)
-	orai(t, project, "", "", "setup", "--preset", "pm-staff", "--no-tools")
-	if _, errOut, code := orai(t, project, "hello from desktop", "", "msg", "send", "pm", "--as", "user"); code != 0 {
+	orai(t, project, "", "", "setup", "--preset", "manager-engineer", "--no-tools")
+	if _, errOut, code := orai(t, project, "hello from desktop", "", "msg", "send", "manager", "--as", "user"); code != 0 {
 		t.Fatalf("send: %s", errOut)
 	}
 	out, _, _ := orai(t, project, "", "", "status")
@@ -177,7 +177,7 @@ func TestMessagesAndDoctorFromTheBinary(t *testing.T) {
 	for _, c := range report.Checks {
 		components[c.Component] = true
 	}
-	for _, want := range []string{"project", "mail", "role.pm", "role.staff", "tool.codex", "tool.claude"} {
+	for _, want := range []string{"project", "mail", "role.manager", "role.engineer", "tool.codex", "tool.claude"} {
 		if !components[want] {
 			t.Fatalf("doctor lacks %s: %v", want, components)
 		}
@@ -208,12 +208,12 @@ func TestMessagesAndDoctorFromTheBinary(t *testing.T) {
 func TestChannelStartsAndStopsOnEOF(t *testing.T) {
 	dir := t.TempDir()
 	cmd := exec.Command(binary, "_channel")
-	cmd.Env = []string{"ORAI_RUN_NONCE=n", "ORAI_ROLE=staff", "ORAI_STATE_DIR=" + dir, "ORAI_MAIL_ROOT=" + filepath.Join(dir, "none")}
+	cmd.Env = []string{"ORAI_RUN_NONCE=n", "ORAI_ROLE=engineer", "ORAI_STATE_DIR=" + dir, "ORAI_MAIL_ROOT=" + filepath.Join(dir, "none")}
 	cmd.Stdin = strings.NewReader("")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v %s", err, out)
 	}
-	data, _ := os.ReadFile(filepath.Join(dir, "staff.channel.json"))
+	data, _ := os.ReadFile(filepath.Join(dir, "engineer.channel.json"))
 	if !strings.Contains(string(data), `"ready": false`) {
 		t.Fatalf("state %s", data)
 	}

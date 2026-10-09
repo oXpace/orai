@@ -10,7 +10,9 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -355,14 +357,14 @@ func TestGitignoreMinimalContainsStateDirOnly(t *testing.T) {
 	if !strings.Contains(text, "/.orai/") {
 		t.Fatalf(".gitignore missing /.orai/: %s", text)
 	}
-	if strings.Contains(text, "/.worktrees/staff/") {
-		t.Fatalf(".gitignore unexpectedly contains /.worktrees/staff/: %s", text)
+	if strings.Contains(text, "/.worktrees/engineer/") {
+		t.Fatalf(".gitignore unexpectedly contains /.worktrees/engineer/: %s", text)
 	}
 }
 
 func TestGitignorePmStaffContainsWorktreeAndGuidesCreated(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
-	actions, _ := mustPlan(t, root, "pm-staff", scaffold.DefaultBranch)
+	actions, _ := mustPlan(t, root, "manager-engineer", scaffold.DefaultBranch)
 	mustApply(t, root, actions)
 	data, err := os.ReadFile(filepath.Join(root, ".gitignore"))
 	if err != nil {
@@ -372,14 +374,14 @@ func TestGitignorePmStaffContainsWorktreeAndGuidesCreated(t *testing.T) {
 	if !strings.Contains(text, "/.orai/") {
 		t.Fatalf(".gitignore missing /.orai/: %s", text)
 	}
-	if !strings.Contains(text, "/.worktrees/staff/") {
-		t.Fatalf(".gitignore missing /.worktrees/staff/: %s", text)
+	if !strings.Contains(text, "/.worktrees/engineer/") {
+		t.Fatalf(".gitignore missing /.worktrees/engineer/: %s", text)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".agents/roles/pm.md")); err != nil {
-		t.Fatalf("pm.md not created: %v", err)
+	if _, err := os.Stat(filepath.Join(root, ".agents/roles/manager.md")); err != nil {
+		t.Fatalf("manager.md not created: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".agents/roles/staff.md")); err != nil {
-		t.Fatalf("staff.md not created: %v", err)
+	if _, err := os.Stat(filepath.Join(root, ".agents/roles/engineer.md")); err != nil {
+		t.Fatalf("engineer.md not created: %v", err)
 	}
 }
 
@@ -389,22 +391,22 @@ func TestExistingGuideFilesAreNeverOverwritten(t *testing.T) {
 		t.Fatal(err)
 	}
 	custom := "Custom PM guide, do not touch.\n"
-	if err := os.WriteFile(filepath.Join(root, ".agents/roles/pm.md"), []byte(custom), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".agents/roles/manager.md"), []byte(custom), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	actions, _ := mustPlan(t, root, "pm-staff", scaffold.DefaultBranch)
+	actions, _ := mustPlan(t, root, "manager-engineer", scaffold.DefaultBranch)
 	mustApply(t, root, actions)
 
-	data, err := os.ReadFile(filepath.Join(root, ".agents/roles/pm.md"))
+	data, err := os.ReadFile(filepath.Join(root, ".agents/roles/manager.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(data) != custom {
-		t.Fatalf("pm.md = %q, want unchanged %q", data, custom)
+		t.Fatalf("manager.md = %q, want unchanged %q", data, custom)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".agents/roles/staff.md")); err != nil {
-		t.Fatalf("staff.md not created: %v", err)
+	if _, err := os.Stat(filepath.Join(root, ".agents/roles/engineer.md")); err != nil {
+		t.Fatalf("engineer.md not created: %v", err)
 	}
 }
 
@@ -648,7 +650,7 @@ func TestPlanRebindActionAndNoteWhenProjectMoved(t *testing.T) {
 // --- template/loader drift -------------------------------------------------------------
 
 func TestTemplateFilesExistAsEmbeddedResources(t *testing.T) {
-	names := map[string]bool{"skill.md": true, "agents-block.md": true, "config.toml": true, "role.md": true, "docs-readme.md": true}
+	names := map[string]bool{"skill.md": true, "skill-search.md": true, "skill-diagnosis.md": true, "agents-block.md": true, "config.toml": true, "role.md": true, "docs-readme.md": true}
 	for _, preset := range scaffold.Presets {
 		for _, name := range preset.Guides {
 			names[name] = true
@@ -858,15 +860,15 @@ func TestRoleGuidesAreIgnoredByGitAndTheSkillIsNot(t *testing.T) {
 // guide for the new name and never touches an existing one.
 func TestMissingGuideOfAHandDeclaredRoleIsCreated(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
-	actions, _ := mustPlan(t, root, "pm-staff", scaffold.DefaultBranch)
+	actions, _ := mustPlan(t, root, "manager-engineer", scaffold.DefaultBranch)
 	mustApply(t, root, actions)
 	configPath := filepath.Join(root, project.ConfigName)
 	data, _ := os.ReadFile(configPath)
-	renamed := strings.NewReplacer("[roles.pm]", "[roles.lead]", ".agents/roles/pm.md", ".agents/roles/lead.md").Replace(string(data))
+	renamed := strings.NewReplacer("[roles.manager]", "[roles.lead]", ".agents/roles/manager.md", ".agents/roles/lead.md").Replace(string(data))
 	if err := os.WriteFile(configPath, []byte(renamed), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	staffBefore, _ := os.ReadFile(filepath.Join(root, ".agents/roles/staff.md"))
+	staffBefore, _ := os.ReadFile(filepath.Join(root, ".agents/roles/engineer.md"))
 
 	actions, _ = mustPlan(t, root, "minimal", scaffold.DefaultBranch)
 	mustApply(t, root, actions)
@@ -874,7 +876,7 @@ func TestMissingGuideOfAHandDeclaredRoleIsCreated(t *testing.T) {
 	if err != nil || !strings.Contains(string(guide), "`lead` 역할") {
 		t.Fatalf("lead guide: %v\n%s", err, guide)
 	}
-	staffAfter, _ := os.ReadFile(filepath.Join(root, ".agents/roles/staff.md"))
+	staffAfter, _ := os.ReadFile(filepath.Join(root, ".agents/roles/engineer.md"))
 	if string(staffBefore) != string(staffAfter) {
 		t.Fatal("an existing guide was rewritten")
 	}
@@ -883,20 +885,20 @@ func TestMissingGuideOfAHandDeclaredRoleIsCreated(t *testing.T) {
 	}
 }
 
-// The pm-staff preset now also adds its roles to a project that was set up without any.
+// The manager-engineer preset now also adds its roles to a project that was set up without any.
 func TestPresetAddsRolesToAnExistingProject(t *testing.T) {
 	root := resolvePath(t, t.TempDir())
 	actions, _ := mustPlan(t, root, "minimal", scaffold.DefaultBranch)
 	mustApply(t, root, actions)
-	actions, _ = mustPlan(t, root, "pm-staff", scaffold.DefaultBranch)
+	actions, _ = mustPlan(t, root, "manager-engineer", scaffold.DefaultBranch)
 	mustApply(t, root, actions)
 	cfg, err := config.Load(filepath.Join(root, project.ConfigName))
-	if err != nil || cfg.Roles["pm"].Provider != "codex" || cfg.Roles["staff"].Worktree != ".worktrees/staff" {
+	if err != nil || cfg.Roles["manager"].Provider != "codex" || cfg.Roles["engineer"].Worktree != ".worktrees/engineer" {
 		t.Fatalf("config %+v, %v", cfg, err)
 	}
-	guide, _ := os.ReadFile(filepath.Join(root, ".agents/roles/pm.md"))
-	if !strings.HasPrefix(string(guide), "# PM 역할") || strings.Contains(string(guide), "{{") {
-		t.Fatalf("pm guide is not the preset's:\n%s", guide)
+	guide, _ := os.ReadFile(filepath.Join(root, ".agents/roles/manager.md"))
+	if !strings.HasPrefix(string(guide), "# manager 역할") || strings.Contains(string(guide), "{{") {
+		t.Fatalf("manager guide is not the preset's:\n%s", guide)
 	}
 }
 
@@ -911,13 +913,13 @@ func TestRoleGuideCarriesOnlyTheProviderSpecificStart(t *testing.T) {
 	}
 	mustApply(t, root, actions)
 	preset := resolvePath(t, t.TempDir())
-	actions, _ = mustPlan(t, preset, "pm-staff", scaffold.DefaultBranch)
+	actions, _ = mustPlan(t, preset, "manager-engineer", scaffold.DefaultBranch)
 	mustApply(t, preset, actions)
 	for file, claude := range map[string]bool{
-		filepath.Join(root, ".agents/roles/lead.md"):    false,
-		filepath.Join(root, ".agents/roles/dev.md"):     true,
-		filepath.Join(preset, ".agents/roles/pm.md"):    false,
-		filepath.Join(preset, ".agents/roles/staff.md"): true,
+		filepath.Join(root, ".agents/roles/lead.md"):       false,
+		filepath.Join(root, ".agents/roles/dev.md"):        true,
+		filepath.Join(preset, ".agents/roles/manager.md"):  false,
+		filepath.Join(preset, ".agents/roles/engineer.md"): true,
 	} {
 		data, err := os.ReadFile(file)
 		text := string(data)
@@ -939,8 +941,169 @@ func TestSkillTemplateHasFrontmatterAndGeneratedMarker(t *testing.T) {
 	if !strings.HasPrefix(text, "---\nname: orai") {
 		t.Fatalf("skill.md does not start with frontmatter: %q", text[:min(40, len(text))])
 	}
-	if !strings.Contains(text, scaffold.Generated) {
-		t.Fatalf("skill.md missing Generated marker %q", scaffold.Generated)
+	for _, file := range scaffold.SkillFiles {
+		if !strings.Contains(scaffold.Template(file.Template), scaffold.Generated) {
+			t.Fatalf("%s missing Generated marker %q", file.Template, scaffold.Generated)
+		}
+	}
+}
+
+// Every file of the skill is Orai's: created when missing, rewritten with a backup when
+// it carries the marker, and a conflict when someone else wrote it.
+func TestEverySkillFileIsCreatedUpdatedAndGuarded(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, _ := mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	for _, file := range scaffold.SkillFiles {
+		path := filepath.Join(root, file.Rel)
+		if data, err := os.ReadFile(path); err != nil || string(data) != scaffold.Template(file.Template) {
+			t.Fatalf("%s was not created from %s: %v", file.Rel, file.Template, err)
+		}
+		if err := os.WriteFile(path, []byte(scaffold.Generated+" -->\nan older text\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	actions, _ = mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	for _, file := range scaffold.SkillFiles {
+		if a := findAction(actions, filepath.Join(root, file.Rel)); a == nil || !a.Backup {
+			t.Fatalf("%s: an older generated file is not updated with a backup", file.Rel)
+		}
+	}
+	mustApply(t, root, actions)
+	if actions, _ = mustPlan(t, root, "minimal", scaffold.DefaultBranch); len(actions) != 0 {
+		t.Fatalf("a second setup still plans %d action(s)", len(actions))
+	}
+
+	reference := scaffold.SkillFiles[1].Rel
+	if err := os.WriteFile(filepath.Join(root, reference), []byte("# written by the project\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if conflict := mustConflict(t, root); !strings.Contains(conflict.Error(), reference+" exists and was not generated by Orai") {
+		t.Fatalf("a project-written reference is not a conflict: %v", conflict)
+	}
+}
+
+// A skill file that is there but cannot be read is not taken for a missing one.
+func TestUnreadableSkillFileIsLeftAlone(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads every file")
+	}
+	root := resolvePath(t, t.TempDir())
+	actions, _ := mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	path := filepath.Join(root, scaffold.Skill)
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+	actions, _ = mustPlan(t, root, "minimal", scaffold.DefaultBranch)
+	if a := findAction(actions, path); a != nil {
+		t.Fatalf("an unreadable skill file is planned to be written: %s", a.Description)
+	}
+}
+
+var (
+	guidePath = regexp.MustCompile("`(\\.agents/skills/orai/[^`]+)`")
+	guideLink = regexp.MustCompile(`\]\(([^)#]+)\)`)
+)
+
+// AGENTS.md is where a reader finds the skill, so its block names every skill file, and
+// nothing the generated guidance points at is missing: a path from the project folder
+// or a link relative to the file that carries it.
+func TestGeneratedGuidancePointsOnlyAtFilesSetupWrites(t *testing.T) {
+	written := map[string]bool{}
+	for _, file := range scaffold.SkillFiles {
+		written[file.Rel] = true
+	}
+	block := scaffold.Template("agents-block.md")
+	for rel := range written {
+		if !strings.Contains(block, "`"+rel+"`") {
+			t.Errorf("the AGENTS.md block does not name %s", rel)
+		}
+	}
+	texts := map[string]string{"AGENTS.md": block}
+	for _, file := range scaffold.SkillFiles {
+		texts[file.Rel] = scaffold.Template(file.Template)
+	}
+	for _, name := range []string{"role.md", "manager.md", "engineer.md"} {
+		texts[".agents/roles/"+name] = scaffold.Template(name)
+	}
+	for from, text := range texts {
+		for _, m := range guidePath.FindAllStringSubmatch(text, -1) {
+			if !written[m[1]] {
+				t.Errorf("%s names %s, which setup does not write", from, m[1])
+			}
+		}
+		for _, m := range guideLink.FindAllStringSubmatch(text, -1) {
+			if target := path.Join(path.Dir(from), m[1]); !written[target] {
+				t.Errorf("%s links to %s (%s), which setup does not write", from, m[1], target)
+			}
+		}
+	}
+}
+
+// A preset's roles are slots. Given names take their place everywhere: orai.toml, the
+// guide files, and what one guide calls the other.
+func TestPresetRolesTakeTheGivenNames(t *testing.T) {
+	for _, file := range []string{"role.md", "manager.md", "engineer.md"} {
+		text := regexp.MustCompile(`\{\{[a-z]+\}\}`).ReplaceAllString(scaffold.Template(file), "")
+		for _, word := range regexp.MustCompile(`[A-Za-z]+`).FindAllString(text, -1) {
+			if word == "manager" || word == "engineer" {
+				t.Errorf("%s fixes the role name %q; use {{%s}}", file, word, word)
+			}
+		}
+	}
+
+	root := resolvePath(t, t.TempDir())
+	actions, _ := mustPlan(t, root, "manager-engineer:manager=pm,engineer=staff", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	cfg, err := config.Load(filepath.Join(root, project.ConfigName))
+	if err != nil || len(cfg.Roles) != 2 || cfg.Roles["pm"].Provider != "codex" || cfg.Roles["staff"].Worktree != ".worktrees/staff" {
+		t.Fatalf("roles: %+v %v", cfg, err)
+	}
+	pm, _ := os.ReadFile(filepath.Join(root, ".agents/roles/pm.md"))
+	staff, _ := os.ReadFile(filepath.Join(root, ".agents/roles/staff.md"))
+	if !strings.HasPrefix(string(pm), "# pm 역할") || !strings.Contains(string(pm), "작업을 `staff` 역할에 배정한다") ||
+		!strings.HasPrefix(string(staff), "# staff 역할") || !strings.Contains(string(staff), "`pm` 역할이 정한다") ||
+		strings.Contains(string(pm)+string(staff), "{{") {
+		t.Fatalf("guides do not carry the given names:\n%s\n%s", pm, staff)
+	}
+
+	// The name earlier versions used still works and means the same roles.
+	if old, err := scaffold.ResolvePreset("pm-staff"); err != nil || old.Roles[0].Name != "pm" || old.Guides["staff"] != "engineer.md" {
+		t.Fatalf("pm-staff: %+v %v", old, err)
+	}
+	// One name given: the other slot keeps its own.
+	if preset, err := scaffold.ResolvePreset("manager-engineer:engineer=dev"); err != nil ||
+		preset.Roles[0].Name != "manager" || preset.Roles[1].Name != "dev" || preset.Guides["dev"] != "engineer.md" {
+		t.Fatalf("partial: %+v %v", preset, err)
+	}
+	for _, bad := range []string{"pm-pm", "manager-engineer:lead=pm", "manager-engineer:manager", "manager-engineer:manager=user",
+		"manager-engineer:manager=dev,engineer=dev", "manager-engineer:engineer=manager"} {
+		if _, err := scaffold.ResolvePreset(bad); err == nil {
+			t.Errorf("--preset %s was accepted", bad)
+		}
+	}
+}
+
+// The block and the skill say how to use the tools. Who may do what is the project's:
+// the block stays an entry point and says so, and the commands live in the skill.
+func TestTheAgentsBlockIsAnEntryPoint(t *testing.T) {
+	block := scaffold.Template("agents-block.md")
+	if !strings.Contains(block, "역할 권한, 완료 기준, 보고·승인 절차는 프로젝트 규칙과 역할 지침이 정한다") {
+		t.Fatal("the block does not leave role rules to the project")
+	}
+	for _, command := range []string{"orai msg send", "orai msg inbox", "orai msg reply", "orai shelf sync", "--deep"} {
+		if strings.Contains(block, command) {
+			t.Errorf("the block carries %q; it belongs in the skill", command)
+		}
+	}
+	skill := scaffold.Template("skill.md")
+	for _, kept := range []string{"orai msg inbox <ID>", "orai msg reply <받은-ID>", "already_received", "--again", "--peek",
+		"--as user", "세션을 시작하거나 다시 열었을 때", "ORAI_*"} {
+		if !strings.Contains(skill, kept) {
+			t.Errorf("the skill lost %q", kept)
+		}
 	}
 }
 

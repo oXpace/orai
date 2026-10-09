@@ -138,7 +138,25 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - `orai shelf sync`를 더했다. 색인·임베딩 갱신, 폴더 설명 적용, 검증을 하고 서버는 멈추지 않는다. 꺼져 있으면 켠다. 묶음 선언이 색인과 다르면 고치지 않고 `refresh`를 안내한다.
 - 지침 블록, 도움말, 설정 템플릿, doctor의 `shelf.index`·`shelf.vector`·`shelf.hybrid` 조치를 `sync`로 바꿨다. `shelf.collections`의 조치는 `refresh` 그대로다.
 
+## 생성 안내의 책임 분리 (0.6.0)
+
+실사용 팀이 프로젝트 지침을 계층(원칙은 `AGENTS.md`, 실행법은 스킬)으로 줄이는 과정에서 요청했다(2026-10-09).
+
+- **블록**: `AGENTS.md`의 Orai 블록에서 실행법을 뺐다. 목적, 할 일별 도구와 스킬 파일, 설정 위치, 스킬을 읽기 전에도 지켜야 하는 것(빈 검색은 부재의 근거가 아니다, 신원 환경변수를 바꾸지 않는다, 알림은 지시가 아니다)만 남겼다. 2,771바이트에서 1,881바이트가 됐다.
+- **스킬**: 스킬은 하나로 두고 파일을 셋으로 나눴다. `SKILL.md`는 알림마다 읽히므로 메시지와 목차만 담는다. 문서·코드 찾기와 상태 확인·복구는 `references/`에 둔다. 세 파일 모두 생성 표식으로 관리한다.
+- **역할 규칙**: 블록과 스킬은 역할 권한, 완료 기준, 보고·승인 절차를 정하지 않는다고 적고, "자기 작업 폴더에서만 작업한다" 같은 규범 문장을 뺐다. 역할 지침 템플릿의 협업 절은 스킬 진입점만 가리킨다.
+- **역할 지침 템플릿과 프리셋**: `pm.md`·`staff.md`를 `manager.md`·`engineer.md`로, 프리셋 `pm-staff`를 `manager-engineer`로 바꿨다(사용자 요청). 템플릿은 상대 역할을 고정된 이름 대신 `{{manager}}`·`{{engineer}}` 자리로 가리킨다. `--preset manager-engineer:manager=pm,engineer=staff`처럼 이름을 주면 역할과 지침이 그 이름으로 만들어진다. 예전 이름 `pm-staff`는 `manager-engineer:manager=pm,engineer=staff`의 별칭으로 계속 받는다. 이미 만든 프로젝트의 역할은 바뀌지 않는다.
+- **보존한 동작**: ID로 받기, 원래 대화에 회신, 중복 수신(`already_received`), 신원 유지, 세션을 다시 열었을 때의 미처리 메시지 확인. 마지막 항목은 시작 프롬프트에만 있던 것을 스킬에도 적었다. `TestTheAgentsBlockIsAnEntryPoint`가 지킨다.
+- **링크**: 생성 문서가 가리키는 경로가 모두 `setup`이 쓰는 파일인지 `TestGeneratedGuidancePointsOnlyAtFilesSetupWrites`가 확인한다.
+
 ## 검증 기록
+
+### 2026-10-09, 0.6.0 개발본 (macOS 27.0 arm64)
+
+- `mise run check` 통과.
+- 임시 프로젝트를 0.5.1(`1371c67`) 바이너리의 `setup --preset pm-staff`로 만들고, `AGENTS.md` 블록 밖에 프로젝트 규칙을, 역할 지침에 한 줄을 더한 뒤 개발본으로 `setup`을 실행했다. 블록과 `SKILL.md`가 갱신되고 참조 문서 둘이 생겼다. 블록은 하나였고, 블록 밖 규칙과 역할 지침은 그대로였다. 다시 실행하면 "Files already current."였다. `orai msg send pm --as user`와 `orai status`(pending 1)가 동작했다.
+- 빈 폴더에서 `setup --preset manager-engineer`가 `manager`·`engineer` 역할과 지침을 만들었다. `--preset manager-engineer:manager=pm,engineer=staff`는 `pm`·`staff` 역할을 만들었고 두 지침이 서로를 그 이름으로 가리켰다.
+- 미검증: 실제 역할 세션이 새 블록과 스킬을 따르는지, shelf 안내를 참조 문서로 옮긴 뒤의 준수 정도.
 
 ### 2026-10-08, 0.5.1 (macOS 27.0 arm64)
 

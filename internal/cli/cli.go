@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/oXpace/orai/internal/channel"
@@ -42,7 +41,7 @@ Run Codex and Claude Code as role sessions with exact resume, notifications and
 diagnostics. ` + "`orai <role>`" + ` is short for ` + "`orai run <role>`" + `.
 
 commands:
-  setup [--role NAME=PROVIDER ...] [--preset NAME] [--dry-run] [--no-tools]
+  setup [--role NAME=PROVIDER ...] [--preset NAME[:SLOT=ROLE,...]] [--dry-run] [--no-tools]
                         Set up this project, or add roles to it (safe to re-run)
   run <role> [--fresh] [--dry-run]
                         Start or exactly resume a role
@@ -62,7 +61,7 @@ options:
   -h, --help            show this help; ` + "`orai <command> --help`" + ` explains one command
 `
 
-const setupHelp = `usage: orai setup [--role NAME=PROVIDER[:WORKTREE] ... [--local]] [--preset minimal|pm-staff]
+const setupHelp = `usage: orai setup [--role NAME=PROVIDER[:WORKTREE] ... [--local]] [--preset NAME[:SLOT=ROLE,...]]
                   [--branch NAME] [--dry-run] [--no-tools] [--project PATH]
 
 Set up the project in this folder: Git repository, orai.toml, agent instructions,
@@ -79,8 +78,12 @@ roles:
                         orai.toml with a guide in .agents/roles/NAME.md.
   --local               Declare the roles of this run in orai.local.toml instead, so
                         they exist on this computer only (see below).
-  --preset pm-staff     Shorthand for --role pm=codex --role staff=claude, with
-                        guides written for that pair. Default: minimal (no roles).
+  --preset manager-engineer
+                        Shorthand for --role manager=codex --role engineer=claude,
+                        with guides written for that pair. Default: minimal (no roles).
+  --preset manager-engineer:manager=pm,engineer=staff
+                        The same pair under your own role names. The guides refer
+                        to each other by those names.
 
 shared and local settings:
   orai.toml             what the project shares, committed: collections, contexts,
@@ -89,8 +92,8 @@ shared and local settings:
                         committed. Optional: without it orai.toml is used as it is.
   The local file is laid over the shared one key by key. A value replaces the shared
   value; a role, collection or context that is only local is added:
-      [roles.pm]                  # orai.local.toml
-      model = "..."               # replaces the shared model of pm, nothing else
+      [roles.manager]             # orai.local.toml
+      model = "..."               # replaces the shared model of manager, nothing else
       [integrations.shelf]
       port = 18401                # this computer uses another port
   Paths are relative to the project folder in both files. The local file cannot remove
@@ -380,16 +383,8 @@ func runSetup(argv []string, stdout io.Writer) (int, error) {
 		return exitUsage, usagef("--local goes with --role: it says where the new role is declared")
 	}
 	preset := o.get("preset")
-	if preset == "" {
-		preset = "minimal"
-	}
-	if _, ok := scaffold.Presets[preset]; !ok {
-		names := make([]string, 0, len(scaffold.Presets))
-		for name := range scaffold.Presets {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		return exitUsage, usagef("--preset must be one of: %s", strings.Join(names, ", "))
+	if _, err := scaffold.ResolvePreset(preset); err != nil {
+		return exitUsage, usagef("%v", err)
 	}
 	opts := scaffold.Options{Preset: preset, Branch: o.get("branch"), Local: o.flag("local")}
 	for _, text := range o.lists["role"] {

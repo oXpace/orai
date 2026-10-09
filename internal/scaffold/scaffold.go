@@ -11,7 +11,9 @@ package scaffold
 
 import (
 	"embed"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,8 +33,8 @@ import (
 //go:embed templates/*
 var templatesFS embed.FS
 
-// Generated marks files Orai owns outright (e.g. SKILL.md): a file carrying it may be
-// rewritten wholesale on template change; one without it belongs to the user.
+// Generated marks files Orai owns outright (the skill's files): a file carrying it may
+// be rewritten wholesale on template change; one without it belongs to the user.
 const Generated = "<!-- orai:generated"
 
 // DefaultBranch is the branch a new Git repository is initialized on.
@@ -43,8 +45,10 @@ const DefaultBranch = "trunk"
 const InstallSpec = "github:oXpace/orai"
 
 const (
-	// Skill is the project-owned copy of the messaging skill Orai regenerates.
-	Skill = ".agents/skills/orai/SKILL.md"
+	// SkillDir holds the Orai skill, which Orai regenerates.
+	SkillDir = ".agents/skills/orai"
+	// Skill is the skill's entry: messaging, and where the references are.
+	Skill = SkillDir + "/SKILL.md"
 	// AgentsIgnore keeps the role guides (.agents/roles/) untracked.
 	AgentsIgnore = ".agents/.gitignore"
 	// ClaudeSkillLink is the Claude Code skill symlink Orai maintains for Skill.
@@ -52,6 +56,15 @@ const (
 	// ClaudeSkillTarget is ClaudeSkillLink's relative link target.
 	ClaudeSkillTarget = "../../.agents/skills/orai"
 )
+
+// SkillFiles are the skill's files and the template each is written from. The entry is
+// read on every mail notification, so what is needed less often (finding documents and
+// code, diagnosis and recovery) sits in references it points to.
+var SkillFiles = []struct{ Rel, Template string }{
+	{Skill, "skill.md"},
+	{SkillDir + "/references/search.md", "skill-search.md"},
+	{SkillDir + "/references/diagnosis.md", "skill-diagnosis.md"},
+}
 
 // miseFiles are the mise config files checked for an Orai pin, in lookup order.
 var miseFiles = []string{"mise.toml", ".mise.toml", "mise.local.toml"}
@@ -81,26 +94,86 @@ func ParseRole(text string) (RoleSpec, error) {
 	return spec, nil
 }
 
-// Preset is a named starting set of roles. Guides names the embedded template for a
-// role's guide file; a role without one gets the generic role.md.
+// Preset is a named starting set of roles. Each role is a slot: the kind of work its
+// guide template describes. Guides names the embedded template of a slot; a role
+// without one gets the generic role.md. A template refers to the other slots as
+// {{slot}}, never by a fixed name, so the roles can be named anything (ResolvePreset).
 type Preset struct {
 	Roles  []RoleSpec
 	Guides map[string]string
+	// Names maps each slot to the name its role was given.
+	Names map[string]string
 }
 
-// Presets are shorthands for `--role` lists: `--preset pm-staff` equals
-// `--role pm=codex --role staff=claude` with role guides written for that pair.
+// Presets are shorthands for `--role` lists: `--preset manager-engineer` equals
+// `--role manager=codex --role engineer=claude` with role guides written for that pair.
 var Presets = map[string]Preset{
 	"minimal": {},
-	"pm-staff": {
-		Roles:  []RoleSpec{{"pm", "codex", ""}, {"staff", "claude", ""}},
-		Guides: map[string]string{"pm": "pm.md", "staff": "staff.md"},
+	"manager-engineer": {
+		Roles:  []RoleSpec{{"manager", "codex", ""}, {"engineer", "claude", ""}},
+		Guides: map[string]string{"manager": "manager.md", "engineer": "engineer.md"},
 	},
+}
+
+// presetAliases are names earlier versions used, kept working: each stands for a preset
+// value of today.
+var presetAliases = map[string]string{"pm-staff": "manager-engineer:manager=pm,engineer=staff"}
+
+// ResolvePreset reads a `--preset` value: NAME, or NAME:SLOT=ROLE[,SLOT=ROLE...] to
+// name the preset's roles (`manager-engineer:manager=pm,engineer=staff`). The guides
+// keep their templates and refer to each other by the given names.
+func ResolvePreset(text string) (Preset, error) {
+	if text == "" {
+		text = "minimal"
+	}
+	if current, ok := presetAliases[text]; ok {
+		text = current
+	}
+	name, renames, renamed := strings.Cut(text, ":")
+	base, ok := Presets[name]
+	if !ok {
+		return Preset{}, fmt.Errorf("unknown preset %q; choose from %s", name, strings.Join(PresetNames(), ", "))
+	}
+	preset := Preset{Guides: map[string]string{}, Names: map[string]string{}}
+	for _, role := range base.Roles {
+		preset.Names[role.Name] = role.Name
+	}
+	if renamed {
+		for _, pair := range strings.Split(renames, ",") {
+			slot, role, ok := strings.Cut(pair, "=")
+			if _, known := preset.Names[slot]; !ok || !known {
+				slots := make([]string, len(base.Roles))
+				for i, r := range base.Roles {
+					slots[i] = r.Name
+				}
+				return Preset{}, fmt.Errorf("--preset %q: expected %s:SLOT=ROLE[,SLOT=ROLE] with SLOT one of: %s",
+					text, name, strings.Join(slots, ", "))
+			}
+			if !config.NamePattern.MatchString(role) || config.Reserved[role] {
+				return Preset{}, fmt.Errorf("--preset %q: the role name %q must match %s and not be a reserved word", text, role, config.NamePattern)
+			}
+			preset.Names[slot] = role
+		}
+	}
+	taken := map[string]bool{}
+	for _, role := range base.Roles {
+		given := preset.Names[role.Name]
+		if taken[given] {
+			return Preset{}, fmt.Errorf("--preset %q: two roles are named %q", text, given)
+		}
+		taken[given] = true
+		if guide, ok := base.Guides[role.Name]; ok {
+			preset.Guides[given] = guide
+		}
+		role.Name = given
+		preset.Roles = append(preset.Roles, role)
+	}
+	return preset, nil
 }
 
 // Options selects what Plan sets up beyond the files every project gets.
 type Options struct {
-	Preset string     // "" means "minimal"
+	Preset string     // a `--preset` value (ResolvePreset); "" means "minimal"
 	Branch string     // "" means DefaultBranch; used only when a repository is created
 	Roles  []RoleSpec // roles to declare, after the preset's
 	Local  bool       // declare them in orai.local.toml (this computer only), not orai.toml
@@ -192,8 +265,11 @@ func roleGuide(preset Preset, role RoleSpec) string {
 	if !ok {
 		name = "role.md"
 	}
-	return strings.NewReplacer("{{name}}", role.Name, "{{worktree}}", role.Worktree,
-		"{{start}}", startSection(role.Provider)).Replace(Template(name))
+	pairs := []string{"{{name}}", role.Name, "{{worktree}}", role.Worktree, "{{start}}", startSection(role.Provider)}
+	for slot, given := range preset.Names {
+		pairs = append(pairs, "{{"+slot+"}}", given)
+	}
+	return strings.NewReplacer(pairs...).Replace(Template(name))
 }
 
 // marker is one style's begin/end pair.
@@ -483,15 +559,12 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if opts.Preset == "" {
-		opts.Preset = "minimal"
-	}
 	if opts.Branch == "" {
 		opts.Branch = DefaultBranch
 	}
-	preset, ok := Presets[opts.Preset]
-	if !ok {
-		return nil, nil, &Conflict{[]string{fmt.Sprintf("Unknown preset %q; choose from %s", opts.Preset, strings.Join(PresetNames(), ", "))}}
+	preset, err := ResolvePreset(opts.Preset)
+	if err != nil {
+		return nil, nil, &Conflict{[]string{err.Error()}}
 	}
 
 	var actions []Action
@@ -632,19 +705,23 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 		}
 	}
 
-	wanted := Template("skill.md")
-	if skillPath, ok := regular(Skill); ok {
-		if _, err := os.Stat(skillPath); err == nil {
-			current, rerr := os.ReadFile(skillPath)
-			if rerr == nil && string(current) != wanted {
-				if strings.Contains(string(current), Generated) {
-					actions = append(actions, Action{Description: "Update generated " + Skill, Path: skillPath, Data: []byte(wanted), Mode: 0o644, Backup: true})
-				} else {
-					conflicts = append(conflicts, Skill+" exists and was not generated by Orai")
-				}
-			}
-		} else {
-			actions = append(actions, Action{Description: "Create " + Skill, Path: skillPath, Data: []byte(wanted), Mode: 0o644})
+	for _, file := range SkillFiles {
+		wanted := Template(file.Template)
+		path, ok := regular(file.Rel)
+		if !ok {
+			continue
+		}
+		current, err := os.ReadFile(path)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			actions = append(actions, Action{Description: "Create " + file.Rel, Path: path, Data: []byte(wanted), Mode: 0o644})
+		case err != nil:
+			// A file that is there but cannot be read is left as it is.
+		case string(current) == wanted:
+		case strings.Contains(string(current), Generated):
+			actions = append(actions, Action{Description: "Update generated " + file.Rel, Path: path, Data: []byte(wanted), Mode: 0o644, Backup: true})
+		default:
+			conflicts = append(conflicts, file.Rel+" exists and was not generated by Orai")
 		}
 	}
 

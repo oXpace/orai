@@ -232,7 +232,7 @@ func TestFreshPromptBootstrapsOnceAndChannelFollowsProvider(t *testing.T) {
 			"- 프로젝트 폴더: " + f.p.Root,
 			"- 프로젝트 지침: AGENTS.md",
 			"- 역할 지침: " + role.Guide,
-			"- 메시지 사용법: .agents/skills/orai/SKILL.md",
+			"- Orai 사용법: .agents/skills/orai/SKILL.md",
 		} {
 			if !strings.Contains(prompt, line+"\n") {
 				t.Fatalf("%s prompt lacks %q:\n%s", name, line, prompt)
@@ -300,7 +300,7 @@ func TestFreshPromptBootstrapsOnceAndChannelFollowsProvider(t *testing.T) {
 		"## 문서 (경로는 프로젝트 폴더 기준)",
 		"- 프로젝트 지침: AGENTS.md",
 		"- 역할 지침: " + away.Guide,
-		"- 메시지 사용법: .agents/skills/orai/SKILL.md",
+		"- Orai 사용법: .agents/skills/orai/SKILL.md",
 	} {
 		if !strings.Contains(prompt, line+"\n") {
 			t.Fatalf("worktree prompt lacks %q:\n%s", line, prompt)

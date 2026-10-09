@@ -92,7 +92,7 @@ func guideStart(p *project.Project, role config.Role) (section, channel bool) {
 //
 // A new conversation gets who it is, the project's root folder (the one absolute path,
 // so the session knows where the project lives), the documents to read (project instructions, the
-// role's guide from orai.toml, the messaging skill) and the start steps. A reopened one
+// role's guide from orai.toml, the Orai skill) and the start steps. A reopened one
 // already knows all that, so it gets the steps and one line of pointers.
 //
 // The steps every role shares are written here. What only some roles need (a Claude
@@ -138,7 +138,7 @@ func Kickoff(p *project.Project, role config.Role, resumed bool) string {
 		"",
 		"- 프로젝트 지침: " + agents,
 		"- 역할 지침: " + guide,
-		"- 메시지 사용법: .agents/skills/orai/SKILL.md",
+		"- Orai 사용법: .agents/skills/orai/SKILL.md",
 		"",
 		"## 시작",
 		"",

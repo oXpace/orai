@@ -1,6 +1,6 @@
 # 운영 안내
 
-이 문서는 설치, 초기화, 시작·중지, 진단, 복구 절차를 소유한다. 설계 근거는 [아키텍처](architecture.md), 버전 요구는 [호환성](compatibility.md)을 따른다. 에이전트의 메시지 사용법은 `orai setup`이 배포하는 `.agents/skills/orai/SKILL.md`에 있다.
+이 문서는 설치, 초기화, 시작·중지, 진단, 복구 절차를 소유한다. 설계 근거는 [아키텍처](architecture.md), 버전 요구는 [호환성](compatibility.md)을 따른다. 에이전트가 읽는 실행법은 `orai setup`이 배포하는 스킬 `.agents/skills/orai/`에 있다.
 
 ## 설치
 
@@ -44,6 +44,18 @@ git add -A && git commit -m "Update Orai"
 - 저장된 대화, 메일함, shelf 색인은 그대로 남는다. 실행 중인 역할 세션은 예전 버전으로 계속 돌므로, 끝낸 뒤 `orai <역할>`로 다시 연다. 같은 대화로 이어진다.
 - 같은 저장소를 쓰는 다른 사람은 변경을 받은 뒤 `mise install`과 `orai setup`을 실행한다.
 - 되돌리려면 `mise.toml`의 버전을 이전 번호로 바꾸고 `orai setup`을 다시 실행한다.
+
+### 0.5.x → 0.6.0
+
+`orai setup`이 `AGENTS.md`의 Orai 블록과 스킬을 새 구성으로 바꾼다. 블록은 진입점만 남고, 실행법은 스킬(`SKILL.md`)과 참조 문서(`references/search.md`, `references/diagnosis.md`)로 옮겨졌다. 새 파일은 커밋한다.
+
+| 대상 | 해야 할 일 |
+|---|---|
+| `AGENTS.md`의 Orai 블록, `.agents/skills/orai/` | 없다. `setup`이 바꾸고 원본을 `.orai/backups/`에 둔다 |
+| 이미 만들어진 역할 지침 | `setup`은 고치지 않는다. 메시지 명령을 적어 둔 문장은 그대로 동작한다. 줄이려면 "메시지 실행법은 `.agents/skills/orai/SKILL.md`에 있다" 한 줄로 바꾼다 |
+| 프로젝트 지침에 옮겨 적은 예전 블록의 문장 | 블록 밖 내용은 `setup`이 건드리지 않는다. 중복이면 직접 지운다 |
+| `--preset pm-staff` | 그대로 동작한다. `--preset manager-engineer:manager=pm,engineer=staff`와 같다 |
+| 실행 중인 역할 세션 | 끝낸 뒤 `orai <역할>`로 다시 연다. 시작 프롬프트가 스킬을 "Orai 사용법"으로 가리킨다 |
 
 ### 0.5.0 → 0.5.1
 
@@ -118,7 +130,8 @@ Orai가 독립 프로젝트가 되기 전의 방식(Pockets의 `scripts/orai`와
 orai setup                        # 역할 없이 준비 (여러 번 실행해도 안전)
 orai setup --role lead=codex --role dev=claude   # 역할을 정해 준비
 orai setup --role reviewer=claude # 기존 프로젝트에 역할 추가
-orai setup --preset pm-staff      # --role pm=codex --role staff=claude 의 줄임
+orai setup --preset manager-engineer   # --role manager=codex --role engineer=claude 의 줄임
+orai setup --preset manager-engineer:manager=pm,engineer=staff   # 같은 구성을 원하는 역할 이름으로
 orai setup --dry-run              # 바꿀 내용만 출력
 orai setup --no-tools             # 파일만 준비 (shelf 서버·코드 그래프 생략, CI 등)
 orai setup --branch <이름>        # 새 저장소의 기본 브랜치 (기본 trunk)
@@ -133,7 +146,7 @@ orai setup --help                 # 옵션과 예시
 - 이미 `orai.toml`이 있으면 새 역할의 표만 파일 끝에 덧붙인다. 원본은 `.orai/backups/`에 남는다. 이미 선언된 역할은 그대로 두고, provider가 다르면 충돌로 보고한 뒤 아무것도 바꾸지 않는다.
 - 세션을 열 때의 공통 단계(문서 읽기, 메시지 확인, 할 일이 없으면 턴 종료)는 프롬프트에 있다. 일부 역할에만 필요한 단계는 역할 지침의 "세션 시작" 절에 둔다. `setup`은 Claude 역할의 지침에 이 절(`channel_ready` 호출)을 써 넣고, Codex 역할에는 넣지 않는다. 역할마다 세션을 열 때 할 일을 더 정하려면 이 절에 적는다. Codex 역할을 Claude로 바꿀 때는 따로 할 일이 없다(절에 `channel_ready`가 없으면 프롬프트가 직접 알려 준다). Claude 역할을 Codex로 바꿀 때는 이 절을 지운다.
 - 역할 지침(`.agents/roles/`)은 커밋되지 않는다. 컴퓨터마다 `setup`이 틀을 만들고 각자 고쳐 쓴다. 팀이 같은 지침을 공유하려면 `orai.toml`의 `guide`를 `docs/roles/dev.md`처럼 저장소에 넣는 경로로 바꾼다. 예전 버전에서 이미 커밋한 지침은 `git rm -r --cached .agents/roles`로 추적만 해제한다(파일은 남는다).
-- 역할 이름을 바꾸거나 역할을 없앨 때는 `orai.toml`의 `[roles.<이름>]` 표를 직접 고치거나 지운 뒤 `orai setup`을 실행한다. 새 이름의 메일함과, 없는 지침 파일(`guide`에 적은 경로)이 만들어진다. 예전 이름의 메일함과 지침 파일, 저장된 대화는 지우지 않으므로 필요하면 직접 정리한다. 이름을 바꾼 역할은 새 대화로 시작한다. `pm-staff`로 만든 프로젝트도 이 방법으로 원하는 구성으로 바꾼다.
+- 역할 이름을 바꾸거나 역할을 없앨 때는 `orai.toml`의 `[roles.<이름>]` 표를 직접 고치거나 지운 뒤 `orai setup`을 실행한다. 새 이름의 메일함과, 없는 지침 파일(`guide`에 적은 경로)이 만들어진다. 예전 이름의 메일함과 지침 파일, 저장된 대화는 지우지 않으므로 필요하면 직접 정리한다. 이름을 바꾼 역할은 새 대화로 시작한다. 프리셋으로 만든 프로젝트도 이 방법으로 원하는 구성으로 바꾼다.
 - 별도 작업 폴더를 쓰는 역할은 첫 커밋 뒤에 `git worktree add .worktrees/<이름>`으로 폴더를 만든다. `setup`과 `doctor`가 이 명령을 보여준다. 이 컴퓨터에서 한 번도 시작하지 않은 역할은 선택 항목으로, 시작한 적이 있는데 폴더가 없어진 역할은 문제로 나온다.
 - 이 컴퓨터에서만 쓸 역할은 `--local`을 붙인다. `orai.toml` 대신 `orai.local.toml`에 선언된다([공유 설정과 로컬 설정](#공유-설정과-로컬-설정)).
 
@@ -191,8 +204,8 @@ port = 18401                   # 이 컴퓨터에서 포트가 겹칠 때
 1. **Git 저장소**: 저장소 밖이면 `git init -b trunk`로 만든다. 이미 저장소 안이면(모노레포 포함) 건드리지 않는다.
 2. **파일**:
    - `orai.toml`: 없으면 만든다. 있으면 검증하고, `--role`로 요청한 새 역할만 덧붙인다. `orai.local.toml`은 읽기만 하고, `--local`로 요청한 역할만 덧붙인다.
-   - `AGENTS.md`, `.gitignore`, `.agents/.gitignore`: `orai:begin`/`orai:end` 관리 블록만 추가하거나 교체한다. 블록 밖 내용은 바꾸지 않는다. `AGENTS.md` 블록은 역할이 없어도 누구나 쓰는 것(진단, 문서 검색, 코드 구조)을 먼저 적고, 역할 세션에서만 해당하는 것(역할, 메시지)을 뒤에 적는다. 원칙과 진입점만 담고, 설정과 명령의 상세는 도움말과 이 문서가 맡는다. `.agents/.gitignore` 블록은 `/roles/`를 제외해 역할 지침을 저장소에 넣지 않는다.
-   - `.agents/skills/orai/SKILL.md`: 생성 표식이 있는 파일만 갱신한다. 표식 없이 사용자가 만든 파일이 있으면 충돌로 보고한다.
+   - `AGENTS.md`, `.gitignore`, `.agents/.gitignore`: `orai:begin`/`orai:end` 관리 블록만 추가하거나 교체한다. 블록 밖 내용은 바꾸지 않는다. `AGENTS.md` 블록은 Orai의 목적, 할 일별로 쓰는 도구와 실행법이 있는 스킬 파일, 설정 위치만 담는다. 역할 권한, 완료 기준, 보고·승인 절차는 정하지 않는다. `.agents/.gitignore` 블록은 `/roles/`를 제외해 역할 지침을 저장소에 넣지 않는다.
+   - `.agents/skills/orai/`: `SKILL.md`(메시지, 참조 문서 목차), `references/search.md`(문서와 코드 찾기), `references/diagnosis.md`(상태 확인과 복구). 생성 표식이 있는 파일만 갱신한다. 표식 없이 사용자가 만든 파일이 있으면 충돌로 보고한다.
    - `.claude/skills/orai` 심볼릭 링크를 만든다.
    - `CLAUDE.md`: 없을 때만 `@AGENTS.md`로 만든다.
    - 역할 지침(`guide`에 적은 파일, 기본 `.agents/roles/<이름>.md`): 선언된 역할의 지침 파일이 없을 때만 만든다.
