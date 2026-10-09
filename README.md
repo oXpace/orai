@@ -23,7 +23,7 @@ Orai는 [AMQ](https://github.com/avivsinai/agent-message-queue)를 실행하지 
 
 ## 프로젝트에 추가하기
 
-Orai는 프로젝트마다 설치하고 버전을 고정한다. 준비물은 [mise](https://mise.jdx.dev)와 Git이다. 아래 명령은 최신 릴리스를 받아 그 버전을 프로젝트의 `mise.toml`에 적는다. 특정 버전을 쓰려면 `mise use github:oXpace/orai@0.5.1`처럼 `v` 없이 번호를 붙인다. 막 나온 릴리스는 mise의 버전 목록에 늦게 나타날 수 있다. `mise.toml`에 적힌 버전이 위 배지보다 낮으면 번호를 직접 붙여 다시 실행한다.
+Orai는 프로젝트마다 설치하고 버전을 고정한다. 준비물은 [mise](https://mise.jdx.dev)와 Git이다. 아래 명령은 최신 릴리스를 받아 그 버전을 프로젝트의 `mise.toml`에 적는다. 특정 버전을 쓰려면 `mise use github:oXpace/orai@0.6.0`처럼 `v` 없이 번호를 붙인다. 막 나온 릴리스는 mise의 버전 목록에 늦게 나타날 수 있다. `mise.toml`에 적힌 버전이 위 배지보다 낮으면 번호를 직접 붙여 다시 실행한다.
 
 **새 프로젝트**
 

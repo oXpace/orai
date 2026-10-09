@@ -151,7 +151,7 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 
 ## 검증 기록
 
-### 2026-10-09, 0.6.0 개발본 (macOS 27.0 arm64)
+### 2026-10-09, 0.6.0 (macOS 27.0 arm64)
 
 - `mise run check` 통과.
 - 임시 프로젝트를 0.5.1(`1371c67`) 바이너리의 `setup --preset pm-staff`로 만들고, `AGENTS.md` 블록 밖에 프로젝트 규칙을, 역할 지침에 한 줄을 더한 뒤 개발본으로 `setup`을 실행했다. 블록과 `SKILL.md`가 갱신되고 참조 문서 둘이 생겼다. 블록은 하나였고, 블록 밖 규칙과 역할 지침은 그대로였다. 다시 실행하면 "Files already current."였다. `orai msg send pm --as user`와 `orai status`(pending 1)가 동작했다.
