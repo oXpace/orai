@@ -2,7 +2,7 @@
 
 ## Why
 
-QMD 2.8.3의 MCP `status`는 문서가 없는 묶음을 목록에서 뺀다. Orai는 이를 다른 index의 서버로 판정해, 빈 `openspec/specs`가 있는 새 프로젝트에서 `setup`, `init`, `recover`, `sync`, 자동 sync가 실패했다(2026-11-22 macOS에서 재현). 첫 문서를 넣어도 `sync`가 거부돼 풀리지 않았다.
+QMD 2.8.3의 MCP `status`는 문서가 없는 묶음을 목록에서 뺀다. Orai는 이를 다른 index의 서버로 판정해, 빈 `openspec/specs`가 있는 새 프로젝트에서 `setup`, `init`, `recover`, `sync`, 자동 sync가 실패했다. 첫 문서를 넣어도 `sync`가 거부돼 풀리지 않았다.
 
 ## What Changes
 
@@ -22,4 +22,4 @@ QMD 2.8.3의 MCP `status`는 문서가 없는 묶음을 목록에서 뺀다. Ora
 ## Impact
 
 - 코드: `internal/shelf/client.go`, `internal/shelf/probe.go`.
-- 다른 index의 서버를 건드리지 않는 계약은 유지한다(`TestIdentityStillRefusesAnotherIndex`).
+- 다른 index의 서버를 건드리지 않는 계약은 유지한다.

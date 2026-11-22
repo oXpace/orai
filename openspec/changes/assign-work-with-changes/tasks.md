@@ -2,8 +2,8 @@
 
 ## 1. 규칙
 
-- [x] 1.1 `internal/scaffold/assign_work_test.go`의 실패를 보고 템플릿을 고친 뒤 통과를 확인한다
-- [x] 1.2 실제 바이너리로 thread 유지와 검색 표시, 실제 OpenSpec으로 `x-after`의 strict 검증을 확인한다
+- [x] 1.1 작업 흐름에 thread, 첫 줄, `x-after` 규칙을 넣는다
+- [x] 1.2 역할 지침 템플릿에 맡기는 주체를 적는다
 
 ## 2. 정리
 

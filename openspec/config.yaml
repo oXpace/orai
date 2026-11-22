@@ -1,5 +1,13 @@
 schema: spec-driven
 
+context: |
+  openspec/specs는 기획(요구와 동작 계약)만 담는다. change는 설계·기술 결정(ADR 성격)과
+  구현 단계만 담는다. 실검증, 재검증, 테스트 보강, 버그는 GitHub 이슈(oXpace/orai)로 관리한다.
+
+rules:
+  tasks:
+    - 설계와 구현 단계만 적고 검증, 테스트, 버그는 항목으로 넣지 않는다
+
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
 # Include constraints an agent cannot infer by reading the code.

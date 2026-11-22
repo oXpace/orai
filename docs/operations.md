@@ -476,6 +476,7 @@ openspec validate --specs                    # 본 스펙 검증 (`orai doctor -
 ```
 
 - **규칙 두는 곳**: 프로젝트 규칙은 `openspec/config.yaml`의 `context`, `rules`(산출물별), `operations`(apply·archive 안내)에 둔다. 작업 흐름 안내는 `orai setup`이 갱신하므로 `openspec update`는 필요 없다.
+- **기록할 곳**: 스펙은 요구와 동작 계약, change는 설계·기술 결정과 구현 단계, 이슈 트래커는 실검증·재검증·테스트 보강·버그를 담는다. 새 프로젝트의 시작 규칙에 들어 있고, 기존 `config.yaml`에는 직접 적는다.
 - **텔레메트리**: OpenSpec은 명령 이름과 버전을 보낸다. Orai는 역할 세션과 자기 실행에 `OPENSPEC_TELEMETRY=0`을 넣는다. 켜려면 `[integrations.openspec]`에 `telemetry = true`를 적는다. 역할 세션 밖에서 직접 실행할 때는 사용자의 설정을 따른다.
 - **전역 파일**: `openspec init`은 OpenSpec 자체의 프로젝트 목록(`~/.local/share/openspec/projects.json`)을 갱신한다. Orai는 이 파일과 `~/.config/openspec/`을 읽거나 쓰지 않는다.
 - **쓰지 않으려면**: `orai.toml`에서 `[integrations.openspec]`을 지운다. 진단에서 빠지고, 스킬의 흐름은 프로젝트 규칙이 정한 스펙 위치를 따른다.
