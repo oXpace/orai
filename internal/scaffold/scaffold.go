@@ -525,7 +525,7 @@ func misePinNote(root string) string {
 		}
 		tools, _ := doc["tools"].(map[string]any)
 		for key := range tools {
-			if !strings.HasPrefix(key, "github:") && !strings.HasPrefix(key, "pypi:") {
+			if !strings.HasPrefix(key, "github:") {
 				continue
 			}
 			if strings.HasSuffix(strings.TrimRight(key, "/"), "/orai") {

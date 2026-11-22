@@ -149,6 +149,17 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **보존한 동작**: ID로 받기, 원래 대화에 회신, 중복 수신(`already_received`), 신원 유지, 세션을 다시 열었을 때의 미처리 메시지 확인. 마지막 항목은 시작 프롬프트에만 있던 것을 스킬에도 적었다. `TestTheAgentsBlockIsAnEntryPoint`가 지킨다.
 - **링크**: 생성 문서가 가리키는 경로가 모두 `setup`이 쓰는 파일인지 `TestGeneratedGuidancePointsOnlyAtFilesSetupWrites`가 확인한다.
 
+## 0.3 이하 이전 경로 제거 (0.7.0)
+
+사용자 결정(2026-11-22)으로 0.1~0.3에서 올라오는 경로를 지웠다. 0.3 이하의 프로젝트는 0.6.0을 거쳐 올린다. 0.x 정책대로 minor 버전에서 호환을 끊는다.
+
+- **schema 1**: `orai.toml`의 schema 1과 `[integrations.wiki]`를 읽지 않는다. 고칠 두 줄을 담은 오류로 거부한다(`TestSchemaOneIsRefusedWithTheEdit`, `TestProjectFromZeroThreeIsToldWhatToEdit`). doctor의 "schema 1을 쓰고 있다" degraded 항목도 함께 없어졌다.
+- **`.orai/wiki` 색인 이전**: `recover`·`stop`·`setup`이 0.3 색인을 옮기던 경로와 doctor·`check`의 안내를 지웠다.
+- **예전 명령 이름 안내**: `orai inbox|send|reply|qmd|wiki|init`이 새 이름을 알려 주던 표를 지웠다. 예약어 목록에는 남겨 역할 이름이 될 수 없다.
+- **`pypi:` 고정**: setup의 고정 검사가 0.1.0의 `pypi:oXpace/orai`를 Orai 고정으로 보지 않는다.
+- **남긴 것**: 0.6.0에서 생긴 `--preset pm-staff` 별칭, 이전 문구의 관리 블록 표식을 접두어로 찾아 교체하는 동작, 같은 포트를 다른 이름으로 등록한 MCP 설정 진단은 0.3 이전용이 아니라서 그대로 둔다.
+- **문서**: 운영 안내의 0.1~0.4 마이그레이션 절을 "0.3 이하에서 올릴 때" 한 절로 줄이고 0.6.0 태그의 안내를 가리키게 했다.
+
 ## 검증 기록
 
 ### 2026-11-22, 0.6.0 실사용 확인 (macOS)

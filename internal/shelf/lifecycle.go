@@ -91,9 +91,6 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 			if _, err := lookPath("qmd"); err != nil {
 				return errors.New("The shelf is not set up yet and its engine QMD is not installed. " + InstallHint)
 			}
-			if s.legacyOnly() {
-				return errors.New("The index is still where Orai 0.3 kept it (.orai/wiki). Run `orai shelf recover` to move it to .orai/shelf.")
-			}
 			return errors.New("The shelf is not set up yet. Run `orai shelf init`.")
 		}
 		return verify(s, out)
@@ -101,9 +98,6 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 	qmd, err := lookPath("qmd")
 	if err != nil {
 		return errors.New("The shelf engine QMD is not installed. " + InstallHint)
-	}
-	if err := adoptLegacy(s, qmd, action, out); err != nil {
-		return err
 	}
 	if err := state.PrivateDirs(s.Directory); err != nil {
 		return err
@@ -228,29 +222,6 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 		}
 	}
 	return verify(s, out)
-}
-
-// adoptLegacy moves an index Orai 0.3 built in .orai/wiki to .orai/shelf. The server
-// that index started is stopped first (its PID file is keyed by the index name, which
-// did not change), so nothing keeps the old path open. The index itself is not rebuilt.
-// For `stop` the move is all that happens here: the action stops the server itself, and
-// stopping twice would fail the second time.
-func adoptLegacy(s *Settings, qmd, action string, out io.Writer) error {
-	if !s.legacyOnly() {
-		return nil
-	}
-	fmt.Fprintf(out, "Moving the index from %s to %s (made by Orai 0.3)\n", s.LegacyDirectory(), s.Directory)
-	if action != "stop" {
-		// A server that is not running makes `mcp stop` fail; that is the state we want.
-		_, _ = runCommand(out, s.Argv(qmd, "mcp", "stop"), s, false)
-	}
-	// Left behind by an interrupted move; os.Remove only succeeds on an empty folder.
-	_ = os.Remove(filepath.Join(s.Directory, "setup.lock"))
-	_ = os.Remove(s.Directory)
-	if err := os.Rename(s.LegacyDirectory(), s.Directory); err != nil {
-		return fmt.Errorf("cannot move %s to %s: %w", s.LegacyDirectory(), s.Directory, err)
-	}
-	return nil
 }
 
 // overlapFix is what to change when two collections cover the same documents.

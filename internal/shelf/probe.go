@@ -42,11 +42,6 @@ func diagnose(s *Settings, deep bool) []doctor.Check {
 			fmt.Sprintf("collection folder(s) missing: %s", strings.Join(missing, ", ")),
 			"Create the folder(s) or fix integrations.shelf.collections in orai.toml")}
 	}
-	if s.legacyOnly() {
-		return []doctor.Check{doctor.New("shelf", doctor.NotReady,
-			"the index is still where Orai 0.3 kept it (.orai/wiki)",
-			"`orai shelf recover` moves it to .orai/shelf and restarts the server; nothing is rebuilt")}
-	}
 	if !exists(s.ConfigFile) || !exists(s.DB) {
 		c := doctor.New("shelf", doctor.NotReady, "the shelf has not been built for this project yet",
 			"`orai shelf init` (the first run downloads the embedding model, about 0.6 GB)")
