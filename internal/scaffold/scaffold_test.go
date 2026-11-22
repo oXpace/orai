@@ -1007,9 +1007,10 @@ var (
 	guideLink = regexp.MustCompile(`\]\(([^)#]+)\)`)
 )
 
-// AGENTS.md is where a reader finds the skill, so its block names every skill file, and
-// nothing the generated guidance points at is missing: a path from the project folder
-// or a link relative to the file that carries it.
+// AGENTS.md is where a reader finds the skill, so its block names every guidance file
+// (the .md ones; the license notice is not read for guidance), and nothing the
+// generated guidance points at is missing: a path from the project folder or a link
+// relative to the file that carries it.
 func TestGeneratedGuidancePointsOnlyAtFilesSetupWrites(t *testing.T) {
 	written := map[string]bool{}
 	for _, file := range scaffold.SkillFiles {
@@ -1017,7 +1018,7 @@ func TestGeneratedGuidancePointsOnlyAtFilesSetupWrites(t *testing.T) {
 	}
 	block := scaffold.Template("agents-block.md")
 	for rel := range written {
-		if !strings.Contains(block, "`"+rel+"`") {
+		if strings.HasSuffix(rel, ".md") && !strings.Contains(block, "`"+rel+"`") {
 			t.Errorf("the AGENTS.md block does not name %s", rel)
 		}
 	}

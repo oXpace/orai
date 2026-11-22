@@ -10,6 +10,7 @@
 | 기능 작업을 시작·인계·보고할 때 (스펙과 테스트 우선) | OpenSpec (`openspec/`가 있을 때), 프로젝트 테스트 | `.agents/skills/orai/references/workflow.md` |
 | 도구 상태 확인·복구 | `orai doctor` | `.agents/skills/orai/references/diagnosis.md` |
 
+- **기록할 곳**: `openspec/specs`에는 요구와 동작 계약만, change에는 설계·기술 결정과 구현 단계만 적는다. 실검증·재검증·테스트 보강·버그는 프로젝트의 이슈 트래커(GitHub 이슈 등)에 둔다.
 - **설정**: 프로젝트가 공유하는 설정은 `orai.toml`, 이 컴퓨터만의 설정은 `orai.local.toml`(없을 수 있다)에 있다. 항목은 `orai setup --help`에 있다.
 - **역할 없이 쓰는 것**: 문서·코드 찾기와 읽기, 상태 확인은 역할이 없어도 쓴다. 메일함과 역할 신원은 역할 세션에서, 또는 사용자가 전달을 요청했을 때만 쓴다.
 - **검색 결과**: 검색이 실패하거나 결과가 비어도 대상이 없다는 근거가 아니다. `rg`와 원문 읽기로 이어간다.

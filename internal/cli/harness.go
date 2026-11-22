@@ -82,10 +82,10 @@ and the folder's declared purpose. Then open what you need with ` + "`orai read`
   --limit N     results per source (default 5)
   --json        machine-readable output
 
-Each source gets a status line first. When the shelf server cannot answer, the files
-are scanned by keyword instead (sections ranked by rare words, title and heading hits
-first) and the line says why and what fixes it; an index
-that is behind its documents is noted too. Searching changes nothing: it receives no
+Each source gets a status line first. Documents use the built-in keyword search
+(sections ranked by rare words, title and heading hits first). Where QMD is on and its
+server cannot answer, that search stands in and the line says why and what fixes it;
+an index that is behind its documents is noted too. Searching changes nothing: it receives no
 message (messages not yet received are only counted; ` + "`orai inbox`" + ` receives them),
 starts no server and syncs no index.
 

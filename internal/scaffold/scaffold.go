@@ -65,6 +65,7 @@ var SkillFiles = []struct{ Rel, Template string }{
 	{SkillDir + "/references/search.md", "skill-search.md"},
 	{SkillDir + "/references/diagnosis.md", "skill-diagnosis.md"},
 	{SkillDir + "/references/workflow.md", "skill-workflow.md"},
+	{SkillDir + "/references/openspec-license.txt", "openspec-license.txt"},
 }
 
 // OpenSpecConfig is OpenSpec's project configuration, which setup writes once with

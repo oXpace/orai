@@ -24,16 +24,18 @@ type Hit struct {
 	URI     string  `json:"shelf_uri,omitempty"` // <collection>/<path>, as the MCP server names it
 }
 
-// SearchOutcome is what a document search did. Mode is "engine" (the shelf server
-// answered: keyword + meaning) or "keyword" (the files were scanned directly because
-// the server could not answer; Reason says why and Fix what to run).
+// SearchOutcome is what a document search did. Mode is "builtin" (the standard keyword
+// search), "engine" (the QMD server answered: keyword + meaning) or "keyword" (QMD is on
+// but could not answer, so the files were scanned; Reason says why and Fix what to run).
 type SearchOutcome struct {
 	Mode   string   `json:"mode"`
 	Reason string   `json:"reason,omitempty"`
 	Fix    string   `json:"fix,omitempty"`
 	Stale  []string `json:"stale,omitempty"` // documents changed since the last sync
 	Port   int      `json:"port,omitempty"`
-	Hits   []Hit    `json:"hits"`
+	// Built-in search only: declared collection folders that do not exist.
+	Missing string `json:"missing,omitempty"`
+	Hits    []Hit  `json:"hits"`
 	// Keyword scans only: Weak says nothing matched or the top result covers little of
 	// the query, so other words for the same question may do better;
 	// Unknown lists the query words no document contains.
@@ -47,12 +49,20 @@ var searchTimeout = 120 * time.Second
 
 // Search finds documents for query, at most limit. Each of also is another phrasing of
 // the same question: the server gets every phrasing in one query, and the keyword scan
-// ranks each and fuses the rankings. It asks the shelf server first and
-// scans the declared folders itself when the server is missing, refuses, serves
+// ranks each and fuses the rankings. Without QMD it is the built-in search. With QMD
+// it asks the shelf server first and scans the declared folders itself when the server is missing, refuses, serves
 // another project or fails; the outcome says which happened. It never starts, stops or
 // re-indexes anything.
 func Search(s *Settings, query string, limit int, also ...string) SearchOutcome {
 	phrasings := append([]string{query}, also...)
+	if !s.usesQMD() {
+		outcome := SearchOutcome{Mode: "builtin"}
+		if check, missing := missingFolders(s); missing {
+			outcome.Missing = check.Reason
+		}
+		outcome.Hits, outcome.Weak, outcome.Unknown = s.keywordSearch(phrasings, limit)
+		return outcome
+	}
 	outcome := SearchOutcome{Port: s.Port, Stale: s.staleDocuments()}
 	hits, reason, fix := engineSearch(s, phrasings, limit)
 	if reason == "" {
@@ -85,6 +95,10 @@ func engineSearch(s *Settings, phrasings []string, limit int) ([]Hit, string, st
 	}
 	if mismatch := identity(status, s); mismatch != "" {
 		return nil, fmt.Sprintf("port %d serves another index (%s)", s.Port, mismatch), "orai doctor"
+	}
+	if absent := unindexed(status, s); len(absent) > 0 {
+		// The engine would answer without these documents and look complete.
+		return nil, fmt.Sprintf("collection(s) %s have documents that are not in the index yet", strings.Join(absent, ", ")), unindexedFix
 	}
 	var searches []map[string]any
 	for _, q := range phrasings {

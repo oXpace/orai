@@ -22,6 +22,9 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 		return []doctor.Check{doctor.New("shelf", doctor.NotConfigured, "no [integrations.shelf] in orai.toml", "")}
 	}
 	s := NewSettings(p)
+	if !s.usesQMD() {
+		return diagnoseBuiltIn(s, deep)
+	}
 	// The index and server first, then what the project's own MCP settings say about it.
 	return append(diagnose(s, deep), registration(s, deep))
 }
@@ -30,17 +33,8 @@ func diagnose(s *Settings, deep bool) []doctor.Check {
 	if _, err := lookPath("qmd"); err != nil {
 		return []doctor.Check{doctor.New("shelf", doctor.Blocked, "the shelf engine QMD (qmd) is not on PATH", InstallHint)}
 	}
-	var missing []string
-	for _, name := range s.collectionNames() {
-		info, err := os.Stat(s.Collections[name])
-		if err != nil || !info.IsDir() {
-			missing = append(missing, name)
-		}
-	}
-	if len(missing) > 0 {
-		return []doctor.Check{doctor.New("shelf", doctor.NotReady,
-			fmt.Sprintf("collection folder(s) missing: %s", strings.Join(missing, ", ")),
-			"Create the folder(s) or fix integrations.shelf.collections in orai.toml")}
+	if check, missing := missingFolders(s); missing {
+		return []doctor.Check{check}
 	}
 	if !exists(s.ConfigFile) || !exists(s.DB) {
 		c := doctor.New("shelf", doctor.NotReady, "the shelf has not been built for this project yet",
@@ -48,6 +42,23 @@ func diagnose(s *Settings, deep bool) []doctor.Check {
 		return []doctor.Check{c.WithDetail(map[string]any{"version": doctor.VersionOf("qmd")})}
 	}
 	return probe(s, deep)
+}
+
+// missingFolders is the check for declared collection folders that do not exist.
+func missingFolders(s *Settings) (doctor.Check, bool) {
+	var missing []string
+	for _, name := range s.collectionNames() {
+		info, err := os.Stat(s.Collections[name])
+		if err != nil || !info.IsDir() {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) == 0 {
+		return doctor.Check{}, false
+	}
+	return doctor.New("shelf", doctor.NotReady,
+		fmt.Sprintf("collection folder(s) missing: %s", strings.Join(missing, ", ")),
+		"Create the folder(s) or fix integrations.shelf.collections in orai.toml"), true
 }
 
 // probe runs the layered checks: reachable → MCP handshake → identity → index →
@@ -99,6 +110,10 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
 			fmt.Sprintf("the index still has collection(s) orai.toml no longer declares: %s (their documents still show up in searches)", strings.Join(extra, ", ")),
 			"`orai shelf stop && orai shelf refresh`"))
+	} else if absent := unindexed(status, s); len(absent) > 0 {
+		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
+			fmt.Sprintf("collection(s) %s have documents that are not in the index yet", strings.Join(absent, ", ")),
+			"`orai shelf sync`, or after adding a collection `orai shelf stop && orai shelf refresh`"))
 	} else if pairs := s.overlapping(); len(pairs) > 0 {
 		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
 			fmt.Sprintf("collections %s cover the same documents, so searches return them twice", strings.Join(pairs, "; ")),

@@ -5,7 +5,8 @@ name = "orai"
 session = "orai"
 
 [integrations.shelf]
-collections = { docs = "docs" }
+engine = "builtin"
+collections = { docs = "docs", specs = "openspec/specs" }
 
 [integrations.shelf.smoke]
 lex = "nonce"
@@ -13,7 +14,10 @@ vec = "이전 실행이 남긴 낡은 hook이 세션 신원을 덮어쓰지 못�
 expect = "docs/architecture.md"
 
 [integrations.shelf.context]
+"openspec/specs" = "OpenSpec 스펙: 기능별 요구(SHALL)와 시나리오(WHEN/THEN). 구현과 테스트의 기준"
 "docs" = "Orai의 설계, 운영 절차, 호환성, 이력, 배포 문서. 문서마다 맡은 범위는 AGENTS.md의 문서 책임 표에 있다"
 
 [integrations.codegraph]
 smoke_symbol = "ValidateSaved"
+
+[integrations.openspec]

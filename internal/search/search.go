@@ -105,7 +105,10 @@ func docs(p *project.Project, o Options, asked bool, r *Result) Source {
 	out := shelf.Search(s, o.Query, o.Limit, o.Also...)
 	r.Docs = out.Hits
 	src := Source{Name: "docs", State: "ok", Detail: fmt.Sprintf("keyword + meaning (shelf :%d)", out.Port)}
-	if out.Mode != "engine" {
+	switch out.Mode {
+	case "builtin":
+		src.Detail = shelf.BuiltIn
+	case "keyword":
 		src.State, src.Detail, src.Reason, src.Fix = "fallback", "keyword scan of the files", out.Reason, out.Fix
 	}
 	if out.Mode != "engine" && out.Weak {
@@ -117,6 +120,9 @@ func docs(p *project.Project, o Options, asked bool, r *Result) Source {
 			note += "; no document contains " + strings.Join(first(out.Unknown, 5), ", ")
 		}
 		src.Notes = append(src.Notes, note+". Ask again with --also '<the same question in other words>'")
+	}
+	if out.Missing != "" {
+		src.Notes = append(src.Notes, out.Missing+": orai doctor")
 	}
 	if n := len(out.Stale); n > 0 {
 		src.Notes = append(src.Notes, fmt.Sprintf("%d document(s) changed since the last sync, so the index may be behind (%s): orai shelf sync",

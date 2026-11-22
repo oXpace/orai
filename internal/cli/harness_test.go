@@ -60,7 +60,7 @@ func TestShortMessageCommandsMatchMsg(t *testing.T) {
 func TestSearchCoversTheRolesMailboxAndDocsWithoutReceiving(t *testing.T) {
 	clearEnv(t)
 	p := newProject(t, t.TempDir())
-	cfg := twoRoles + "\n[integrations.shelf]\ncollections = { docs = \"docs\" }\n"
+	cfg := twoRoles + "\n[integrations.shelf]\nengine = \"qmd\"\ncollections = { docs = \"docs\" }\n"
 	if err := os.WriteFile(filepath.Join(p.Root, "orai.toml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -151,5 +151,36 @@ func TestReadPrintsLineRangesAndStaysInsideTheProject(t *testing.T) {
 	}
 	if r := run("", "read", outside); r.code != 1 {
 		t.Fatalf("an absolute path outside the project must not be read: %+v", r)
+	}
+}
+
+// 시나리오: 내장 검색
+func TestSearchDefaultsToTheBuiltInEngine(t *testing.T) {
+	clearEnv(t)
+	p := newProject(t, t.TempDir())
+	cfg := twoRoles + "\n[integrations.shelf]\ncollections = { docs = \"docs\" }\n"
+	if err := os.WriteFile(filepath.Join(p.Root, "orai.toml"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(filepath.Join(p.Root, "docs"), 0o755)
+	_ = os.WriteFile(filepath.Join(p.Root, "docs", "deploy.md"), []byte("# 배포\n\n배포 절차는 태그부터\n"), 0o644)
+	t.Chdir(p.Root)
+	r := run("", "search", "배포", "절차", "--in", "docs")
+	if r.code != 0 || !strings.HasPrefix(r.out, "docs: built-in keyword search") || !strings.Contains(r.out, "[docs] docs/deploy.md:3") {
+		t.Fatalf("search: %+v", r)
+	}
+}
+
+// 시나리오: 없는 묶음 폴더
+func TestBuiltInSearchNotesAMissingFolder(t *testing.T) {
+	clearEnv(t)
+	p := newProject(t, t.TempDir())
+	cfg := twoRoles + "\n[integrations.shelf]\ncollections = { gone = \"gone\" }\n"
+	if err := os.WriteFile(filepath.Join(p.Root, "orai.toml"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(p.Root)
+	if r := run("", "search", "anything", "--in", "docs"); !strings.Contains(r.out, "note: collection folder(s) missing: gone") {
+		t.Fatalf("search: %+v", r)
 	}
 }

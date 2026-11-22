@@ -160,7 +160,7 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **남긴 것**: 0.6.0에서 생긴 `--preset pm-staff` 별칭, 이전 문구의 관리 블록 표식을 접두어로 찾아 교체하는 동작, 같은 포트를 다른 이름으로 등록한 MCP 설정 진단은 0.3 이전용이 아니라서 그대로 둔다.
 - **문서**: 운영 안내의 0.1~0.4 마이그레이션 절을 "0.3 이하에서 올릴 때" 한 절로 줄이고 0.6.0 태그의 안내를 가리키게 했다.
 
-## AMQ 0.85.0 이후 수정 반영 (미배포)
+## AMQ 0.85.0 이후 수정 반영 (0.7.0)
 
 2026-11-22, 사용자 요청: AMQ가 0.85.0부터 0.160.0까지 고친 설계·성능·버그 가운데 Orai 메일함에 해당하는 것을 반영했다. 근거는 AMQ 릴리스 노트(0.117~0.160 구간과 0.124.0·0.128.0·0.132.0·0.133.0·0.135.0·0.137.0·0.139.0의 상세)다. 0.86~0.116 구간은 읽지 못했다. 디스크 형식은 바꾸지 않았고, 실제 AMQ와의 교차 테스트는 사용자 판단으로 다시 돌리지 않았다.
 
@@ -170,7 +170,7 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **알림 경로의 파싱**: notifier와 채널이 2초마다, 그리고 변경마다 `inbox/new`의 모든 메시지를 읽고 파싱했다. 필요한 것은 ID뿐이라 이제 파일 이름만 읽는다. 첫 번째 문제가 알림을 막던 경로도 이것으로 끊긴다.
 - **todo 답장**: AMQ 0.124.0부터 todo에 대한 답장은 status다. Orai는 todo를 그대로 이었다. 이제 status(우선순위 low)를 붙인다.
 
-## 통합 검색과 코드 그래프 운영
+## 통합 검색과 코드 그래프 운영 (0.7.0)
 
 사용자 요청(2026-11-22)이다. 실사용에서 shelf를 잘 쓰지 않게 된다는 보고가 출발점이었다. 원인은 세 가지로 봤다. 검색이 MCP로만 돼서 Codex는 경로·제목만 받았다(0.5.0 확인, 아래 호환성 절). 역할 세션 밖에서는 MCP를 따로 등록해야 했다. 문서를 고칠 때마다 `sync`·`recover`·`refresh` 중에 골라야 했다. 0.5.0 기록이 "Codex에 본문과 설명을 전달하려면 검색 결과를 글로 내주는 명령이 필요하다"며 미뤄 둔 일이다. 사용자는 문서·메일 통합 검색, 자동 sync, 코드 검색까지 넣는 안을 골랐고, CodeGraph는 엔진을 다시 만들지 않고 운영만 맡기로 했다.
 
@@ -184,7 +184,7 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **지침**: `AGENTS.md` 블록과 스킬을 다섯 명령 중심으로 바꿨다. `references/search.md`는 검색 결과를 자세히 읽는 참조로 남겼다. Kickoff 프롬프트의 메시지 확인 단계도 `orai inbox`로 바꿨다.
 - **하지 않은 것**: 엔진 재구현(다중 언어 파서가 의존성을 늘린다), 메일의 의미 검색, 검색 중 자동 sync.
 
-## 키워드 검색 개선 (wikimap 검토)
+## 키워드 검색 개선 (wikimap 검토, 0.7.0)
 
 사용자 요청(2026-11-22)이다. 사용자가 QMD 대안으로 [wikimap](https://github.com/dhha22/wikimap)을 찾아왔다. 커밋 `9991f60`(1.5.1, MIT, Python 단일 파일, 표준 라이브러리만 사용)의 소스를 읽고 비교했다. 받아 온 코드를 실행하는 것은 작업 환경이 막아서 실행해 보지는 않았다.
 
@@ -193,7 +193,7 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **바뀐 동작**: 대체 검색은 문서 전체가 아니라 절을 순위 매기므로 결과 줄과 제목(`문서 제목 › 절 제목`)이 달라진다. 메일 검색도 같은 낱말 형태(`Terms`)를 쓰므로, 한글 낱말 꼬리를 두 음절까지 자른 형태와 라틴 문자 부분이 맞는다. `orai search --also`를 더했다.
 - **하지 않은 것**: wikimap의 답 메모·연결 층, 색인 파일(매번 파일을 읽는다), HTML·PDF 색인.
 
-## 스펙과 테스트 주도 기본 환경 (다음 버전)
+## 스펙과 테스트 주도 기본 환경 (0.7.0)
 
 사용자가 Orai를 설치하면 역할 세션이 스펙 주도와 테스트 주도 흐름을 이해하는 환경이 기본으로 갖춰지기를 요청했고, 쓰고 있던 OpenSpec(Fission-AI/OpenSpec)의 도입을 검토하게 했다(2026-11-22). 스펙 형식을 Orai가 새로 만들지 않고 OpenSpec을 shelf·CodeGraph와 같은 선택 연동으로 붙이기로 했다(사용자 결정: 기본 포함, 미설치 시 안내).
 
@@ -204,7 +204,93 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **텔레메트리**: 역할 세션과 Orai의 실행에 `OPENSPEC_TELEMETRY=0`. `telemetry = true`로 켠다.
 - **하지 않은 것**: 흐름을 강제하는 hook(테스트 없는 수정 차단, 테스트 통과 전 종료 금지). 업무 규칙의 강제는 프로젝트 소유이고, provider마다 hook 능력이 다르다.
 
+## 내장 검색을 표준으로, QMD는 선택형 (0.7.0)
+
+사용자 결정(2026-11-22)이다. "qmd 관리가 어려운 부분들이 많으니까 그건 앞으로 플러그인 기능으로 놓고" wikimap 방식을 표준 탐색으로 두자고 했고, 외부 wikimap 대신 이미 Go로 옮긴 `internal/lexical`을 쓰기로 했다.
+
+- **표준**: 내장 키워드 검색. `setup`은 QMD를 실행하거나 설치를 요구하지 않고, 검색은 종료 코드 0이다.
+- **선택**: `engine = "qmd"`일 때 의미 검색, 서버, MCP, 자동 sync. QMD는 별도 플러그인 형식을 만들지 않고 기존 `engine` 키로 켠다.
+- **이어 쓰기**: `engine`이 없어도 이 컴퓨터에 색인이 있으면 QMD를 계속 쓴다. 0.6.0까지 `engine`을 적을 필요가 없었기 때문이다. `engine = "builtin"`으로 끈다.
+- **한계**: 내장 검색에는 의미 검색이 없다. `engine`을 적지 않은 프로젝트는 컴퓨터마다 색인 유무에 따라 엔진이 다를 수 있다.
+
+## 스킬 하나로 통합 (0.7.0)
+
+사용자 요청(2026-11-22)이다. OpenSpec 스킬을 흡수해 스킬을 `orai` 하나로 두고, 오사용을 막는 절차를 넣었다.
+
+- **원천**: OpenSpec 2.1.1(MIT, Copyright (c) 2025 FISSION AI INC)의 스킬과 spec-driven 스키마를 줄여 `references/workflow.md`에 옮겼다. 고지는 `references/openspec-license.txt`다.
+- **init**: `--tools none`. 스킬을 만들지 않고, 준비 여부는 `openspec/changes`로 본다.
+- **재현한 함정**: 같은 요구를 고친 change 둘을 차례로 보관하면 나중 것이 앞 것을 되돌리고 `validate --strict`는 통과한다(보관 전 diff로만 보인다). `--yes`는 열린 task도 통과시키므로 첫 실행에는 붙이지 않는다.
+- **남는 것**: 이미 설치된 프로젝트·전역 `openspec-*` 스킬은 지우지 않으므로 세션에 함께 보일 수 있다.
+
+## 작업 목록은 규칙으로 (0.7.0)
+
+사용자 결정(2026-11-22)이다. 작업 배정·임대·의존성을 저장하는 기능(`add-role-task-board`) 대신 OpenSpec change와 메일 규칙으로 정리했다.
+
+- **규칙**: thread `change/<이름>`, 본문 첫 줄의 change와 task 번호, change 사이의 `x-after`. 강제하지 않는다.
+- **메일 검색의 한계**: 이름을 하이픈 단위로 나눠 맞추므로 비슷한 change가 함께 나온다. thread로 가린다.
+- **하지 않은 것**: 임대, 다른 역할 메일함 읽기. 읽기 전용 현황 명령은 0.8(`add-work-status-view`)이다.
+
+## Codex hook 신뢰는 실행 파일과 프로젝트에 묶인다 (0.7.0)
+
+2026-11-22, Codex 0.171.0의 `app-server` `hooks/list`를 격리한 `CODEX_HOME`에서 실행해 확인했다.
+
+- `-c`로 넘긴 SessionStart hook의 신뢰는 키 `/<session-flags>/config.toml:session_start:0:0` 하나에 저장된다.
+- 같은 명령은 `trusted`였고, Orai 버전 경로만 바꾸거나 프로젝트 경로만 바꿔도 `modified`였다. 그래서 업그레이드와 프로젝트 전환 때마다 재승인이 필요하다.
+- 명령을 고정 문자열로 바꾸면 재승인은 줄지만 신뢰가 실행 파일을 묶지 못한다. 0.7.0에서는 바꾸지 않고 안내만 한다. 실제 TUI의 재승인 화면은 확인하지 않았다.
+
+## 기획, 설계, 검증의 기록 위치 (0.7.0)
+
+사용자 규칙(2026-11-22)이다. 스펙은 기획, change는 설계·기술 결정과 구현 단계, GitHub 이슈는 검증·재검증·테스트 보강·버그를 담는다. `verify-real-hosts`와 `close-test-gaps`는 change에서 빼 이슈로 옮긴다. 보관된 change와 이전 기록의 언급은 당시 그대로 둔다.
+
 ## 검증 기록
+
+### 2026-11-22, 0.7.0 수정 뒤 재검증 (macOS)
+
+아래 실검증 기록의 알려진 문제 1(`0ce1c00`)과 2(`5da556f`)를 고치고, 내장 검색을 표준으로 바꾼 뒤 브랜치 빌드로 확인했다. 격리 방법은 아래 기록과 같다.
+
+| 범위 | 종류 | 결과 |
+|---|---|---|
+| gofmt, go vet, `go test -race ./...` | fake·fixture | 통과. `amq`는 PATH에서 뺐다 |
+| 빈 `specs` 묶음의 QMD init, 첫 스펙 자동 sync | 실제 QMD, fake provider | 통과 |
+| 잘못된 스펙의 `doctor --deep` | 실제 OpenSpec | degraded와 스펙 이름 |
+| 새 프로젝트(QMD가 PATH에 있음) | 실제 바이너리 | setup·doctor healthy, 색인·서버·MCP `shelf` 없음, 고친 문서가 바로 검색, 종료 코드 0 |
+| 0.6.0으로 만든 QMD 프로젝트를 올림 | 실제 QMD | 의미 검색과 MCP 유지. 그 프로젝트의 새 clone과 색인 없는 0.6.0 프로젝트는 내장 검색 |
+| `engine`으로 켜고 끄기 | 실제 QMD | init·검색 통과, 끈 뒤 내장 검색과 `shelf stop` 통과 |
+| 이 저장소 smoke, 내장 검색 | 실제 문서 5개 | 낱말과 질문 모두 기대 문서가 5위 안, 질문은 `docs/architecture.md:95`가 1위 |
+| 속도 | 합성 문서 | 200개 0.03초, 2,000개 0.10초(최대 RSS 60 MB). 품질은 재지 않았다 |
+| 통합 스킬: 새 프로젝트 setup부터 보관까지 | 실제 OpenSpec 2.1.1 | 스킬은 `orai` 하나, `openspec-*` 0개. 스킬의 명령대로 change를 만들고 검증했고, 보관은 `archive_confirmation_required` 뒤 `--yes`로 끝났다. 순차 보관이 앞 change를 되돌리는 동작과 열린 task의 `archive_tasks_incomplete`를 재현했다 |
+| 0.6.0 프로젝트에 남아 있는 `openspec-*` 스킬 | 실제 바이너리 | setup 뒤 그대로 |
+
+미검증: Codex·Claude 세션이 OpenSpec 요청에 Orai 스킬을 고르는지.
+
+AMQ 교차 호환은 `0750b87`의 CI(macOS)가 AMQ 0.160.0을 설치하고 통과했다. 이 브랜치로는 실행하지 않았다.
+
+### 2026-11-22, 0.7.0 개발본 실검증 (macOS)
+
+macOS 27.2.1 arm64, `0750b87`. HOME·XDG·provider 설정을 격리한 임시 프로젝트에서 실제 QMD 2.8.3, CodeGraph 1.6.2, OpenSpec 2.1.1을 썼다. 역할 세션은 실제 런처에 fake provider를 붙였다. 모델은 호출하지 않았다.
+
+| 범위 | 종류 | 결과 |
+|---|---|---|
+| gofmt, go vet, `go test -race ./...` (Go 1.27.1) | fake·fixture | 통과. `amq`를 PATH에서 빼고 실행해 교차 호환 테스트는 돌지 않았다 |
+| 0.6.0으로 만든 프로젝트를 올림 | 실제 바이너리 | `orai.toml`, 블록 밖 규칙, 역할 지침, 기다리던 메시지가 그대로였다. 다시 실행하면 변경 없음. 0.6.0은 `[integrations.openspec]`이 있는 설정을 종료 코드 2로 거부했다 |
+| 예약어가 된 `search`·`read`·`code`·`openspec` 역할 | 실제 바이너리 | 0.6.0으로 만든 설정을 개발본이 거부했다 |
+| todo 답장, 깨진 메시지 | 실제 바이너리 | 답장 kind `status`, 깨진 파일은 `dlq/new`로 이동 |
+| 새 프로젝트의 `orai setup` | 실제 QMD | **실패**. 아래 알려진 문제 1 |
+| `orai search`, `--also`, 서버가 꺼졌을 때 | 실제 QMD | 통과(모든 묶음에 문서가 있을 때). 상태 줄, 낡음 note, 대체 검색의 종료 코드 1 |
+| 세션 중 자동 sync, 시작 때 따라잡기 | 실제 QMD, fake provider | 통과(모든 묶음에 문서가 있을 때). 편집 3초 뒤 sync, 꺼진 서버 시작, 새 문장 검색됨. 빈 묶음이 있으면 실패 |
+| worktree별 코드 그래프와 MCP | 실제 CodeGraph, 직접 MCP 호출 | 통과. worktree에만 있는 심볼이 그 그래프에서만 나왔다 |
+| 같은 이름의 전역 `codegraph`와 우선순위 | 실제 CLI, 격리 설정 | Codex 0.171.0은 유효 설정이 주입한 쪽이었고(`mcp get`, 서버는 띄우지 않음), Claude Code 2.1.325는 주입한 서버만 띄웠다(`-p`, 로그인 없이) |
+| OpenSpec init, 규칙 주입, change 검증과 archive | 실제 OpenSpec, CLI | 통과. 다시 setup해도 `config.yaml` 그대로 |
+| `openspec.specs` (실패한 스펙) | 실제 OpenSpec | **실패**. 아래 알려진 문제 2 |
+
+알려진 문제(이 기록 시점에 고치지 않음, 위 재검증에서 수정):
+
+1. QMD의 MCP `status`는 문서가 없는 묶음을 목록에서 뺀다. Orai는 이를 다른 index의 서버로 보므로, 기본 묶음 `specs`가 비어 있는 새 프로젝트에서 `setup`·`init`·`recover`·`sync`·자동 sync가 실패하고 `search`는 키워드 검색으로 떨어진다. 첫 스펙을 넣어도 `sync`는 거부하며 `orai shelf stop && orai shelf refresh`를 해야 풀린다.
+2. OpenSpec 2.1.1의 `validate --specs --json`은 실패한 스펙이 있으면 종료 코드 1이다(아래 Linux 기록의 "종료 코드 0"과 다르다). Orai는 JSON을 읽기 전에 멈춰 `degraded`와 스펙 이름 대신 `blocked`를 보고한다.
+
+스펙과 구현의 불일치(`fix-openspec-validation-report`에서 정정): `openspec-integration`의 "표가 없는 기존 프로젝트"는 doctor에 `openspec` 항목이 없다고 적었지만 구현과 테스트는 `not-configured`로 보고한다.
+
+미검증: 실제 Codex·Claude 역할 세션(TUI)에서의 새 명령·MCP·workflow와 모델이 받는 검색 출력, Intel Mac, Linux의 실제 provider.
 
 ### 2026-11-22, OpenSpec 연동 개발본 (Linux x64 컨테이너)
 

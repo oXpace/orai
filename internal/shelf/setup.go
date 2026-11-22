@@ -22,6 +22,9 @@ func SetupStep(p *project.Project, out io.Writer) string {
 	if p.Config.Shelf == nil {
 		return "shelf: not configured"
 	}
+	if !UsesQMD(p) {
+		return "shelf: " + BuiltIn + " (nothing to install, start or sync)"
+	}
 	if _, err := lookPath("qmd"); err != nil {
 		return "shelf: skipped (the shelf engine QMD is not installed; `orai shelf --help` shows how to add it)"
 	}
@@ -65,12 +68,12 @@ func hasMarkdown(folder string) bool {
 }
 
 // MCPServers returns the per-process MCP entries injected at role launch for provider
-// (codex or claude); empty when the shelf is not configured. Global CLI config is left
+// (codex or claude); empty unless the shelf runs on QMD. Global CLI config is left
 // alone; CodeGraph registration stays the user's own choice
 // (`codegraph install --location local`) and is never injected here.
 func MCPServers(p *project.Project, provider string) map[string]map[string]any {
 	servers := map[string]map[string]any{}
-	if p.Config.Shelf == nil {
+	if !UsesQMD(p) {
 		return servers
 	}
 	s := NewSettings(p)

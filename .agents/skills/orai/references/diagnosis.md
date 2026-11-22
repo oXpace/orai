@@ -12,7 +12,7 @@
 | 실제 검색까지 확인 | `orai doctor --deep` |
 | 기계가 읽을 출력 | `orai doctor --json` |
 | 역할별 실행 여부, 적용 중인 설정, 받지 않은 메시지 수 | `orai status` |
-| shelf 서버만 확인 | `orai shelf check` |
+| shelf 서버만 확인 (QMD를 켠 경우) | `orai shelf check` |
 | 코드 그래프만 확인 | `orai code check` |
 
 - `not-checked`는 확인하지 못했다는 뜻이다. 문제가 있다는 근거도, 없다는 근거도 아니다.
@@ -22,12 +22,12 @@
 
 | 상황 | 명령 |
 |---|---|
-| 재부팅 뒤 shelf 서버가 꺼져 있다 | `orai shelf recover` |
-| 문서를 고쳤다 (역할 세션 밖에서 바로 검색할 때) | `orai shelf sync` |
+| 재부팅 뒤 shelf 서버가 꺼져 있다 (QMD를 켠 경우) | `orai shelf recover` |
+| 문서를 고쳤다 (QMD를 켰고, 역할 세션 밖에서 바로 검색할 때) | `orai shelf sync` |
 | 코드 그래프가 없다 | `orai code init` |
 | 코드를 고쳤다 (역할 세션 밖에서 바로 검색할 때) | `orai code sync` |
-| `orai.toml`의 `collections`를 바꿨다 | `orai shelf stop && orai shelf refresh` |
-| `orai.toml`의 `context`를 바꿨다 | `orai shelf recover` |
+| `orai.toml`의 `collections`를 바꿨다 (QMD를 켠 경우) | `orai shelf stop && orai shelf refresh` |
+| `orai.toml`의 `context`를 바꿨다 (QMD를 켠 경우) | `orai shelf recover` |
 | 생성 파일이나 설정이 어긋났다 | `orai setup` (바꿀 내용을 먼저 보려면 `orai setup --dry-run`) |
 | 저장된 대화의 재개가 거부된다 | 사용자가 `orai <역할> --fresh`로 새 대화를 시작한다 |
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -213,16 +214,59 @@ func identity(status map[string]any, s *Settings) string {
 			have[name] = true
 		}
 	}
+	// QMD's status leaves out a collection that has no documents, so absence proves
+	// nothing. The index is ours when at least one collection is served from our
+	// absolute path and none from another.
+	matched, absent := false, ""
 	for _, name := range s.collectionNames() {
 		path := s.Collections[name]
 		if !have[name] {
-			return fmt.Sprintf("collection '%s' is not served", name)
+			if absent == "" {
+				absent = name
+			}
+			continue
 		}
 		if resolvePath(served[name]) != path {
 			return fmt.Sprintf("collection '%s' serves %s, expected %s", name, served[name], path)
 		}
+		matched = true
+	}
+	if !matched {
+		return fmt.Sprintf("collection '%s' is not served", absent)
 	}
 	return ""
+}
+
+// unindexedFix is the next step for unindexed: sync refuses a collection the index
+// does not have at all, which only refresh registers.
+const unindexedFix = "orai shelf sync (after adding a collection: orai shelf stop && orai shelf refresh)"
+
+// unindexed lists declared collections that have documents on disk but none in the
+// index. QMD skips blank files, so those are not documents it could have indexed.
+func unindexed(status map[string]any, s *Settings) []string {
+	list, _ := status["collections"].([]any)
+	have := map[string]bool{}
+	for _, item := range list {
+		row, _ := item.(map[string]any)
+		name, _ := row["name"].(string)
+		have[name] = true
+	}
+	var names []string
+	for _, name := range s.collectionNames() {
+		if have[name] {
+			continue
+		}
+		only := *s
+		only.Collections = map[string]string{name: s.Collections[name]}
+		for _, path := range only.Documents() {
+			// A file that cannot be read is not known to be blank, so it counts.
+			if data, err := os.ReadFile(path); err != nil || strings.TrimSpace(string(data)) != "" {
+				names = append(names, name)
+				break
+			}
+		}
+	}
+	return names
 }
 
 // undeclared lists collections the server still indexes that orai.toml no longer

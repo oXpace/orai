@@ -34,7 +34,7 @@ var autoSyncRun = func(s *Settings, out io.Writer) error { return lifecycle(s, "
 // lock, trying again later. Several roles may run it at once: the lock serializes them
 // and the sync marker lets a later one skip what an earlier one already did.
 func AutoSync(ctx context.Context, p *project.Project) {
-	if p.Config.Shelf == nil {
+	if !UsesQMD(p) {
 		return
 	}
 	if _, err := lookPath("qmd"); err != nil {

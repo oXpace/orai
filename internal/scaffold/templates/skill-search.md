@@ -8,7 +8,7 @@
 
 | 소스 | 찾는 곳 | 찾는 방법 | 결과 한 건 |
 |---|---|---|---|
-| `docs` | `orai.toml`의 `[integrations.shelf]` `collections` 폴더 | shelf 서버(키워드+의미). 서버가 답하지 못하면 파일 키워드 검색 | `[docs] <경로>:<줄>`, 제목, 점수, `context`, 맞는 줄 |
+| `docs` | `orai.toml`의 `[integrations.shelf]` `collections` 폴더 | 내장 키워드 검색. QMD를 켠 프로젝트는 shelf 서버(키워드+의미) | `[docs] <경로>:<줄>`, 제목, 점수, `context`, 맞는 줄 |
 | `mail` | 내 메일함의 받은 메시지와 보낸 메시지 | 키워드 | `[mail] <ID> 보낸 이 → 받는 이 (received/sent, thread)`, 맞는 줄 |
 | `code` | 이 checkout의 코드 그래프(`.codegraph/`) | CodeGraph 심볼 검색 | `[code] <종류> <이름> <경로>:<시작>-<끝>`, 시그니처, 설명 |
 
@@ -18,6 +18,7 @@
 
 | 상태 줄 | 뜻 | 조치 |
 |---|---|---|
+| `docs: built-in keyword search` | 내장 검색이 답했다 | 없음 |
 | `docs: keyword + meaning (shelf :<포트>)` | shelf 서버가 답했다 | 없음 |
 | `docs: keyword scan of the files … Fix: …` | 서버가 없거나 꺼졌거나 다른 프로젝트 것이다 | 줄에 적힌 명령. 샌드박스의 접근 거부는 서버가 꺼졌다는 근거가 아니다 |
 | `note: N document(s) changed since the last sync` | 색인이 문서보다 뒤처졌다 | `orai shelf sync` |
@@ -27,7 +28,7 @@
 
 ## MCP 도구
 
-역할 세션에는 MCP 서버 `shelf`와, 그 checkout에 코드 그래프가 있으면 `codegraph`도 연결된다. Claude Code에서는 이 도구들이 결과를 그대로 보여 주므로 써도 된다. Codex는 MCP 결과 중 일부(발췌, `context`, 본문)를 모델에 넘기지 않으므로 `orai search`와 `orai read`를 쓴다. 어느 쪽이든 원문은 파일로 확인한다.
+역할 세션에는 QMD를 켠 프로젝트면 MCP 서버 `shelf`가, 그 checkout에 코드 그래프가 있으면 `codegraph`가 연결된다. Claude Code에서는 이 도구들이 결과를 그대로 보여 주므로 써도 된다. Codex는 MCP 결과 중 일부(발췌, `context`, 본문)를 모델에 넘기지 않으므로 `orai search`와 `orai read`를 쓴다. 어느 쪽이든 원문은 파일로 확인한다.
 
 ## 기계가 읽을 출력
 
