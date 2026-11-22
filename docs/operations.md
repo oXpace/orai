@@ -54,6 +54,7 @@ git add -A && git commit -m "Update Orai"
 | `search`, `read`, `code`, `openspec`이라는 이름의 역할 | 올리기 전에 `orai.toml`(또는 `orai.local.toml`)에서 이름을 바꾼다. 남아 있으면 모든 명령이 설정을 거부한다 |
 | `todo` 답장의 kind를 읽는 스크립트 | 기본값이 `todo`에서 `status`로 바뀌었다. 이전처럼 보내려면 `--kind todo`를 붙인다 |
 | `orai inbox`의 JSON을 읽는 스크립트 | 읽을 수 없는 메시지는 `dlq/new`로 옮겨지고 `dead_lettered`에, receipt 쓰기 실패는 `receipt_error`에 나온다 |
+| Codex 역할 | 올린 뒤 처음 열 때 hook을 다시 신뢰한다(`/hooks`). 실행 파일 경로에 버전이 들어 있어 0.6.0에서 한 신뢰가 무효가 된다. 건너뛰면 세션 ID 수집과 알림이 되지 않는다 |
 | 전역에 등록한 `codegraph` MCP | 그대로 둔다. 그래프가 있는 역할 세션에는 Orai가 같은 이름으로 그 작업 폴더의 서버를 넘긴다 |
 | QMD 색인을 쓰던 컴퓨터 | 없다. 색인(`.orai/shelf`)이 있으면 QMD를 계속 쓴다. 팀 전체가 QMD를 쓰려면 `engine = "qmd"`를, 끄려면 `engine = "builtin"`을 `[integrations.shelf]`에 적는다(끈 뒤 `orai shelf stop`) |
 | QMD 색인이 없는 컴퓨터와 새 checkout | 내장 키워드 검색이 쓰인다. `orai shelf init`은 `engine = "qmd"`를 적어야 동작하고, MCP `shelf`와 `mcp__shelf__*` 도구는 없다 |
@@ -501,6 +502,7 @@ orai code check    # 진단과 smoke 심볼 조회
 |---|---|
 | `already running` | 기존 터미널을 사용한다. lock을 강제로 지우지 않는다 |
 | 저장된 대화 없음·경로 변경 | transcript나 worktree를 되살리거나 `--fresh`. 최근 대화를 추측하지 않는다 |
+| 업그레이드하거나 다른 프로젝트의 Codex 역할을 연 뒤 hook 신뢰를 다시 묻는다 | `/hooks`에서 명령을 확인하고 신뢰한다. Codex는 Orai가 넘긴 hook의 신뢰를 컴퓨터에 하나만 저장하고, 그 hash에 실행 파일과 프로젝트 경로가 들어간다(Codex 0.171.0에서 확인) |
 | 세션 ID 미수집 | Codex `/hooks` 신뢰, Claude SessionStart hook 오류를 확인한 뒤 `--fresh` |
 | Claude 알림 준비 안 됨 | channel 동의·MCP 연결·`channel_ready` 호출 여부를 `orai status`로 확인. 초기 연결 중 잠깐 `no MCP server configured`가 보일 수 있다 |
 | Codex queue 오류 | `orai status`의 `last_error`를 확인한다. 실패하는 동안에도 메시지는 메일함에 남는다 |
