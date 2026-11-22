@@ -2,25 +2,26 @@
 # One computer's own settings (a different model for a role, another port, a role only
 # you run) go in orai.local.toml next to it, which is not committed and is applied over
 # this file key by key: `orai setup --help`.
-# Local state (sessions, locks, shelf index) lives in .orai/ and is never shared.
+# Local state (sessions, locks, an optional QMD index) lives in .orai/ and is never shared.
 schema = 2
 session = "orai"            # mailbox name: .agent-mail/<session>/
 
 {{roles}}
-# Shelf: the Markdown folders below, searchable from role sessions (MCP server
-# `shelf`). Needs QMD (`npm install -g @tobilu/qmd`). After editing documents:
-# `orai shelf sync`. Guide: `orai shelf --help`. Remove this table to opt out.
+# Shelf: the Markdown folders below, searched by `orai search` with the built-in
+# keyword search: nothing to install, start or sync. Remove this table to opt out.
+# Meaning search is optional (QMD): add `engine = "qmd"` to this table, then
+# `orai shelf init`. Guide: `orai shelf --help`.
 [integrations.shelf]
 collections = { docs = "docs", specs = "openspec/specs" }   # name = folder. To split a folder, give part of it a pattern:
 #   { core = { path = "docs", pattern = "*.md" }, adr = "docs/adr" }
 # port = 18181              # optional; fix it when the address is written in .mcp.json or .codex/config.toml
-# embed_model = "hf:..."    # optional; read by the first `orai shelf init` only
+# embed_model = "hf:..."    # QMD only; read by the first `orai shelf init` only
 # [integrations.shelf.smoke]  # optional self-test for `orai doctor --deep`
 # lex = "unique term"                        # keyword query only one document matches
 # vec = "a question that document answers"   # meaning-based query for the same document
 # expect = "docs/architecture.md"            # the document both searches must return
 # What the documents under a folder are for, one line each; search results carry it.
-# After editing: `orai shelf recover`.
+# With QMD, after editing: `orai shelf recover`.
 [integrations.shelf.context]
 "openspec/specs" = "OpenSpec 스펙: 기능별 요구(SHALL)와 시나리오(WHEN/THEN). 구현과 테스트의 기준"
 # "docs/adr" = "..."

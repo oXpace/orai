@@ -17,7 +17,7 @@ import (
 )
 
 func TestShelfStepSkipsWithoutEngineOrDocuments(t *testing.T) {
-	p := writeProject(t, filepath.Join(t.TempDir(), "p"), "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\n")
+	p := writeProject(t, filepath.Join(t.TempDir(), "p"), "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\nengine = \"qmd\"\n")
 
 	saved := lookPath
 	t.Cleanup(func() { lookPath = saved })
@@ -43,7 +43,7 @@ func TestShelfStepInitializesOnceThenRecovers(t *testing.T) {
 		{false, "init"},
 		{true, "recover"},
 	} {
-		p := writeProject(t, filepath.Join(t.TempDir(), "p"), "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\n")
+		p := writeProject(t, filepath.Join(t.TempDir(), "p"), "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\nengine = \"qmd\"\n")
 		if err := os.MkdirAll(filepath.Join(p.Root, "docs"), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -151,7 +151,7 @@ func TestDiagnoseBlockedWhenQMDMissing(t *testing.T) {
 }
 
 func TestDiagnoseNotReadyWhenCollectionFolderMissing(t *testing.T) {
-	p := writeProject(t, filepath.Join(t.TempDir(), "proj"), "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\n")
+	p := writeProject(t, filepath.Join(t.TempDir(), "proj"), "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\nengine = \"qmd\"\n")
 	// docs/ deliberately not created.
 	saved := lookPath
 	t.Cleanup(func() { lookPath = saved })
@@ -192,7 +192,7 @@ func TestRegistrationComparesProjectMCPSettingsWithTheShelfAddress(t *testing.T)
 	claudeServer = func(string) string { t.Fatal("the Claude CLI is only asked with --deep"); return "" }
 
 	root := filepath.Join(t.TempDir(), "proj")
-	text := "schema = 2\n[roles.dev]\nprovider = \"claude\"\n[integrations.shelf]\nport = 18338\n"
+	text := "schema = 2\n[roles.dev]\nprovider = \"claude\"\n[integrations.shelf]\nengine = \"qmd\"\nport = 18338\n"
 	p := writeProject(t, root, text)
 	write := func(rel, content string) {
 		t.Helper()
@@ -278,7 +278,7 @@ func TestRegistrationSaysWhenALocalPortLeavesTheCommittedAddressBehind(t *testin
 			t.Fatal(err)
 		}
 	}
-	p := writeProject(t, root, "schema = 2\n[integrations.shelf]\nport = 18338\n")
+	p := writeProject(t, root, "schema = 2\n[integrations.shelf]\nengine = \"qmd\"\nport = 18338\n")
 	s := NewSettings(p)
 	c := registration(s, false)
 	if s.Port != 18401 || c.Status != doctor.Degraded || !strings.Contains(c.Reason, "orai.local.toml moves this computer's shelf to http://127.0.0.1:18401/mcp") ||

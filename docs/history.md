@@ -204,7 +204,33 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **텔레메트리**: 역할 세션과 Orai의 실행에 `OPENSPEC_TELEMETRY=0`. `telemetry = true`로 켠다.
 - **하지 않은 것**: 흐름을 강제하는 hook(테스트 없는 수정 차단, 테스트 통과 전 종료 금지). 업무 규칙의 강제는 프로젝트 소유이고, provider마다 hook 능력이 다르다.
 
+## 내장 검색을 표준으로, QMD는 선택형 (0.7.0)
+
+사용자 결정(2026-11-22)이다. "qmd 관리가 어려운 부분들이 많으니까 그건 앞으로 플러그인 기능으로 놓고" wikimap 방식을 표준 탐색으로 두자고 했고, 외부 wikimap 대신 이미 Go로 옮긴 `internal/lexical`을 쓰기로 했다.
+
+- **표준**: 내장 키워드 검색. `setup`은 QMD를 실행하거나 설치를 요구하지 않고, 검색은 종료 코드 0이다.
+- **선택**: `engine = "qmd"`일 때 의미 검색, 서버, MCP, 자동 sync. QMD는 별도 플러그인 형식을 만들지 않고 기존 `engine` 키로 켠다.
+- **이어 쓰기**: `engine`이 없어도 이 컴퓨터에 색인이 있으면 QMD를 계속 쓴다. 0.6.0까지 `engine`을 적을 필요가 없었기 때문이다. `engine = "builtin"`으로 끈다.
+- **한계**: 내장 검색에는 의미 검색이 없다. `engine`을 적지 않은 프로젝트는 컴퓨터마다 색인 유무에 따라 엔진이 다를 수 있다.
+
 ## 검증 기록
+
+### 2026-11-22, 0.7.0 수정 뒤 재검증 (macOS)
+
+아래 실검증 기록의 알려진 문제 1(`0ce1c00`)과 2(`5da556f`)를 고치고, 내장 검색을 표준으로 바꾼 뒤 브랜치 빌드로 확인했다. 격리 방법은 아래 기록과 같다.
+
+| 범위 | 종류 | 결과 |
+|---|---|---|
+| gofmt, go vet, `go test -race ./...` | fake·fixture | 통과. `amq`는 PATH에서 뺐다 |
+| 빈 `specs` 묶음의 QMD init, 첫 스펙 자동 sync | 실제 QMD, fake provider | 통과 |
+| 잘못된 스펙의 `doctor --deep` | 실제 OpenSpec | degraded와 스펙 이름 |
+| 새 프로젝트(QMD가 PATH에 있음) | 실제 바이너리 | setup·doctor healthy, 색인·서버·MCP `shelf` 없음, 고친 문서가 바로 검색, 종료 코드 0 |
+| 0.6.0으로 만든 QMD 프로젝트를 올림 | 실제 QMD | 의미 검색과 MCP 유지. 그 프로젝트의 새 clone과 색인 없는 0.6.0 프로젝트는 내장 검색 |
+| `engine`으로 켜고 끄기 | 실제 QMD | init·검색 통과, 끈 뒤 내장 검색과 `shelf stop` 통과 |
+| 이 저장소 smoke, 내장 검색 | 실제 문서 5개 | 낱말과 질문 모두 기대 문서가 5위 안, 질문은 `docs/architecture.md:95`가 1위 |
+| 속도 | 합성 문서 | 200개 0.03초, 2,000개 0.10초(최대 RSS 60 MB). 품질은 재지 않았다 |
+
+AMQ 교차 호환은 `0750b87`의 CI(macOS)가 AMQ 0.160.0을 설치하고 통과했다. 이 브랜치로는 실행하지 않았다.
 
 ### 2026-11-22, 0.7.0 개발본 실검증 (macOS)
 
@@ -224,12 +250,12 @@ macOS 27.2.1 arm64, `0750b87`. HOME·XDG·provider 설정을 격리한 임시 �
 | OpenSpec init, 규칙 주입, change 검증과 archive | 실제 OpenSpec, CLI | 통과. 다시 setup해도 `config.yaml` 그대로 |
 | `openspec.specs` (실패한 스펙) | 실제 OpenSpec | **실패**. 아래 알려진 문제 2 |
 
-알려진 문제(이 기록 시점에 고치지 않음):
+알려진 문제(이 기록 시점에 고치지 않음, 위 재검증에서 수정):
 
 1. QMD의 MCP `status`는 문서가 없는 묶음을 목록에서 뺀다. Orai는 이를 다른 index의 서버로 보므로, 기본 묶음 `specs`가 비어 있는 새 프로젝트에서 `setup`·`init`·`recover`·`sync`·자동 sync가 실패하고 `search`는 키워드 검색으로 떨어진다. 첫 스펙을 넣어도 `sync`는 거부하며 `orai shelf stop && orai shelf refresh`를 해야 풀린다.
 2. OpenSpec 2.1.1의 `validate --specs --json`은 실패한 스펙이 있으면 종료 코드 1이다(아래 Linux 기록의 "종료 코드 0"과 다르다). Orai는 JSON을 읽기 전에 멈춰 `degraded`와 스펙 이름 대신 `blocked`를 보고한다.
 
-스펙과 구현의 불일치: `openspec-integration`의 "표가 없는 기존 프로젝트"는 doctor에 `openspec` 항목이 없다고 적었지만 구현과 테스트는 `not-configured`로 보고한다.
+스펙과 구현의 불일치(`fix-openspec-validation-report`에서 정정): `openspec-integration`의 "표가 없는 기존 프로젝트"는 doctor에 `openspec` 항목이 없다고 적었지만 구현과 테스트는 `not-configured`로 보고한다.
 
 미검증: 실제 Codex·Claude 역할 세션(TUI)에서의 새 명령·MCP·workflow와 모델이 받는 검색 출력, Intel Mac, Linux의 실제 provider.
 

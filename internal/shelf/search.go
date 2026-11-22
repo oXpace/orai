@@ -24,9 +24,9 @@ type Hit struct {
 	URI     string  `json:"shelf_uri,omitempty"` // <collection>/<path>, as the MCP server names it
 }
 
-// SearchOutcome is what a document search did. Mode is "engine" (the shelf server
-// answered: keyword + meaning) or "keyword" (the files were scanned directly because
-// the server could not answer; Reason says why and Fix what to run).
+// SearchOutcome is what a document search did. Mode is "builtin" (the standard keyword
+// search), "engine" (the QMD server answered: keyword + meaning) or "keyword" (QMD is on
+// but could not answer, so the files were scanned; Reason says why and Fix what to run).
 type SearchOutcome struct {
 	Mode   string   `json:"mode"`
 	Reason string   `json:"reason,omitempty"`
@@ -47,12 +47,17 @@ var searchTimeout = 120 * time.Second
 
 // Search finds documents for query, at most limit. Each of also is another phrasing of
 // the same question: the server gets every phrasing in one query, and the keyword scan
-// ranks each and fuses the rankings. It asks the shelf server first and
-// scans the declared folders itself when the server is missing, refuses, serves
+// ranks each and fuses the rankings. Without QMD it is the built-in search. With QMD
+// it asks the shelf server first and scans the declared folders itself when the server is missing, refuses, serves
 // another project or fails; the outcome says which happened. It never starts, stops or
 // re-indexes anything.
 func Search(s *Settings, query string, limit int, also ...string) SearchOutcome {
 	phrasings := append([]string{query}, also...)
+	if !s.usesQMD() {
+		outcome := SearchOutcome{Mode: "builtin"}
+		outcome.Hits, outcome.Weak, outcome.Unknown = s.keywordSearch(phrasings, limit)
+		return outcome
+	}
 	outcome := SearchOutcome{Port: s.Port, Stale: s.staleDocuments()}
 	hits, reason, fix := engineSearch(s, phrasings, limit)
 	if reason == "" {

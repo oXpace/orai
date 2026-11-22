@@ -34,7 +34,7 @@
 |---|---|
 | 코드 구조·심볼·호출 관계 | 저장소 루트에 `.codegraph/`가 있으면 CodeGraph(`codegraph explore "<질문>"`, `codegraph node <심볼>`)를 먼저 쓴다. 색인이 없거나 실패하면 `rg`와 원문 읽기로 이어간다 |
 | 정확한 문자열·파일 | `rg -n '패턴' cmd internal docs`, `rg --files` |
-| 설계·운영 문서 탐색 | 역할 세션에서는 MCP `shelf`, 밖에서는 `orai doctor`로 서버 상태를 확인한 뒤 원문을 읽는다. 이 저장소의 문서는 적어서 원문을 바로 읽어도 된다 |
+| 설계·운영 문서 탐색 | `orai search --in docs`로 찾고 원문을 읽는다. 이 저장소의 문서는 적어서 원문을 바로 읽어도 된다 |
 | 외부 도구 capability | 설치된 버전의 `--help`와 소스를 기준으로 한다. upstream main 문서와 설치 버전이 같다고 가정하지 않는다 |
 
 ## 문서 책임

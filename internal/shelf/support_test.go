@@ -35,7 +35,7 @@ func writeProject(t *testing.T, root, text string) *project.Project {
 // != 0) and an empty docs/ folder.
 func makeQMDProject(t *testing.T, root string, port int) *project.Project {
 	t.Helper()
-	text := "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\n"
+	text := "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\nengine = \"qmd\"\n"
 	if port != 0 {
 		text += fmt.Sprintf("port = %d\n", port)
 	}
@@ -50,7 +50,7 @@ func makeQMDProject(t *testing.T, root string, port int) *project.Project {
 // [integrations.shelf.smoke] block when smoke is true.
 func qmdSettings(t *testing.T, smoke bool, port int) *Settings {
 	t.Helper()
-	text := fmt.Sprintf("schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\nport = %d\n", port)
+	text := fmt.Sprintf("schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\nengine = \"qmd\"\nport = %d\n", port)
 	if smoke {
 		text += "\n[integrations.shelf.smoke]\nlex = \"overview\"\nvec = \"architecture\"\nexpect = \"docs/found.md\"\n"
 	}

@@ -30,7 +30,7 @@ Go 의존성의 정본은 `go.mod`와 `go.sum`이다. mise는 Go 버전과 task�
 |---|---|---|
 | Codex CLI | `npm install -g @openai/codex` 또는 `brew install --cask codex`, 이후 `codex login` | provider가 `codex`인 역할이 있을 때 |
 | Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` 또는 `npm install -g @anthropic-ai/claude-code`, 이후 `claude auth login` | provider가 `claude`인 역할이 있을 때 |
-| QMD | `npm install -g @tobilu/qmd` (Node 22 이상) | `[integrations.shelf]`를 쓸 때 (선택) |
+| QMD | `npm install -g @tobilu/qmd` (Node 22 이상) | `engine = "qmd"`로 의미 검색을 켤 때 (선택) |
 | CodeGraph | `npm install -g @colbymchenry/codegraph` | `[integrations.codegraph]`를 쓸 때 (선택) |
 | OpenSpec | `npm install -g @fission-ai/openspec@latest` (Node 22.20 이상) 또는 단일 바이너리·Homebrew | `[integrations.openspec]`를 쓸 때 (선택, 새 프로젝트 기본). 2.0 이상 |
 
@@ -60,7 +60,7 @@ Orai는 서버와 provider 사이에 끼지 않으므로 MCP로는 이 차이를
 
 ### AMQ (선택, 필요 없음)
 
-0.2.0부터 Orai는 메일함을 직접 관리하므로 AMQ가 필요 없다. 디스크 형식은 AMQ schema 1과 같다. 그래서 AMQ를 설치했다면 `amq`로 같은 메일함을 읽고 쓸 수 있고, 역할 세션에는 이를 위한 `AM_ROOT`·`AM_ME`·`AM_SESSION`이 설정된다. 호환성은 AMQ 0.85.0(Homebrew `avivsinai/tap/amq`, 이전에는 0.80.1)과 양방향 테스트로 확인했다(Orai → `amq drain`·`amq reply`, `amq send` → Orai 수신·답장). AMQ가 이 형식을 바꾸면 이 호환성은 깨질 수 있다.
+0.2.0부터 Orai는 메일함을 직접 관리하므로 AMQ가 필요 없다. 디스크 형식은 AMQ schema 1과 같다. 그래서 AMQ를 설치했다면 `amq`로 같은 메일함을 읽고 쓸 수 있고, 역할 세션에는 이를 위한 `AM_ROOT`·`AM_ME`·`AM_SESSION`이 설정된다. 호환성은 AMQ 0.160.0(2026-11-22 CI macOS, `0750b87`)과 0.85.0(Homebrew `avivsinai/tap/amq`, 이전에는 0.80.1)의 양방향 테스트로 확인했다(Orai → `amq drain`·`amq reply`, `amq send` → Orai 수신·답장). AMQ가 이 형식을 바꾸면 이 호환성은 깨질 수 있다.
 
 ### 설치 방식 선택 근거
 

@@ -10,7 +10,7 @@ Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**
 - **프로젝트 메일함**: 역할 사이의 메시지를 프로젝트 안의 메일함으로 주고받는다. 디스크 형식이 [AMQ](https://github.com/avivsinai/agent-message-queue)와 같아 `amq`로도 읽을 수 있지만, AMQ 설치는 필요 없다.
 - **알림만 전달**: 새 메시지를 파일 변경 이벤트로 즉시 감지해 ID만 Codex queue나 Claude 로컬 MCP channel로 알린다. 메시지를 대신 소비하지 않는다.
 - **에이전트용 명령 다섯 개**: `orai search`(문서·내 메일함·코드를 한 번에 찾아 글로 출력), `orai read`(찾은 파일 줄이나 메시지 원문), `orai inbox`, `orai send`, `orai reply`. 출력이 글이라 어느 provider든 모델이 결과를 그대로 본다. `orai msg inbox|send|reply`도 같은 명령이다.
-- **문서 검색(shelf)과 코드 그래프**: 프로젝트 문서 폴더를 묶음별로 등록해 검색하는 shelf(엔진 QMD)와 코드 그래프(엔진 CodeGraph)를 프로젝트별로 격리해 설정·진단·복구한다. 역할 세션이 떠 있는 동안 문서를 고치면 shelf 색인이 자동으로 갱신되고, 코드 그래프는 역할의 작업 폴더에서 MCP 서버 `codegraph`로 연결돼 스스로 따라간다.
+- **문서 검색(shelf)과 코드 그래프**: 프로젝트 문서 폴더를 내장 키워드 검색으로 찾는다. 설치, 서버, 색인이 없고 고친 문서가 바로 검색된다. 의미 검색이 필요한 프로젝트는 QMD를 선택해 켤 수 있다. 코드 그래프(엔진 CodeGraph)는 프로젝트별로 격리해 설정·진단·복구하며, 역할의 작업 폴더에서 MCP 서버 `codegraph`로 연결돼 스스로 따라간다.
 - **스펙과 테스트 우선**: 새 프로젝트는 [OpenSpec](https://github.com/Fission-AI/OpenSpec)을 스펙 계층으로 쓴다. `setup`이 OpenSpec을 프로젝트 범위로 준비하고 테스트 우선 시작 규칙을 넣으며, Orai 스킬이 스펙 확인 → 실패 테스트 먼저 → 검증 범위를 나눈 보고와 역할 사이 인계를 안내한다.
 - **한 번에 준비**: 빈 폴더에서 `orai setup` 한 번으로 저장소, 설정, 에이전트 지침, 메일함, shelf, 코드 그래프까지 준비한다.
 - **역할은 프로젝트가 정한다**: 이름·개수·provider를 `orai setup --role lead=codex --role dev=claude`처럼 고르고, 나중에도 같은 명령으로 추가한다.
@@ -59,7 +59,7 @@ orai setup --role lead=codex --role dev=claude
 | `.gitignore` | Orai 블록: `/.orai/`, `/orai.local.toml`, `/.agent-mail/`, `/.codegraph/`, 역할 작업 폴더 | 한다 |
 | `.agents/.gitignore` | Orai 블록: `/roles/` (역할 지침을 저장소에 넣지 않는다) | 한다 |
 | `.agents/roles/<역할>.md` | 역할 지침. 이 컴퓨터에서 고쳐 쓴다 | 안 한다 |
-| `.orai/`, `.agent-mail/` | 로컬 상태(세션, shelf 색인, 백업)와 메일함 | 안 한다 |
+| `.orai/`, `.agent-mail/` | 로컬 상태(세션, QMD를 켰을 때의 색인, 백업)와 메일함 | 안 한다 |
 | `docs/README.md` | shelf에 등록한 폴더가 없을 때만 만드는 시작 페이지 | 한다 |
 
 `AGENTS.md`와 두 `.gitignore`의 원본은 바꾸기 전에 `.orai/backups/`에 보관한다.
@@ -74,9 +74,9 @@ git worktree add .worktrees/dev             # 프로젝트 폴더를 쓰지 않�
 orai doctor                                 # Status: healthy 확인
 ```
 
-Codex CLI, Claude Code, QMD, CodeGraph, OpenSpec이 없으면 설치 명령이 함께 나온다. shelf, 코드 그래프, OpenSpec은 선택 기능이라, 쓰지 않으려면 `orai.toml`에서 해당 `[integrations.*]` 표를 지운다.
+Codex CLI, Claude Code, CodeGraph, OpenSpec이 없으면 설치 명령이 함께 나온다(QMD는 켠 프로젝트에서만). shelf, 코드 그래프, OpenSpec은 선택 기능이라, 쓰지 않으려면 `orai.toml`에서 해당 `[integrations.*]` 표를 지운다.
 
-**같은 저장소를 받은 사람**은 `mise install` 뒤 `orai setup`을 한 번 실행한다. 버전은 `mise.toml`에, 역할과 설정은 `orai.toml`에 이미 있으므로 그 컴퓨터의 로컬 상태(메일함, 역할 지침의 틀, shelf 색인, 코드 그래프)만 만들어진다. 역할을 실행할 사람은 역할 작업 폴더(`git worktree add`)도 컴퓨터마다 만든다. 역할을 쓰지 않아도 문서 검색과 진단은 그대로 쓴다. 모델이나 포트처럼 컴퓨터마다 달라야 하는 값은 `orai.local.toml`에 적는다([운영 안내](docs/operations.md#공유-설정과-로컬-설정)).
+**같은 저장소를 받은 사람**은 `mise install` 뒤 `orai setup`을 한 번 실행한다. 버전은 `mise.toml`에, 역할과 설정은 `orai.toml`에 이미 있으므로 그 컴퓨터의 로컬 상태(메일함, 역할 지침의 틀, 코드 그래프)만 만들어진다. 역할을 실행할 사람은 역할 작업 폴더(`git worktree add`)도 컴퓨터마다 만든다. 역할을 쓰지 않아도 문서 검색과 진단은 그대로 쓴다. 모델이나 포트처럼 컴퓨터마다 달라야 하는 값은 `orai.local.toml`에 적는다([운영 안내](docs/operations.md#공유-설정과-로컬-설정)).
 
 ## 사용
 
@@ -92,15 +92,14 @@ orai read docs/architecture.md:94-96
 # 메시지 (역할 세션 밖에서는 --as user)
 orai send dev --as user --kind todo '요청 내용'
 
-orai shelf sync    # 세션 밖에서 문서를 고친 뒤 바로 찾을 때 (세션 중에는 자동)
 orai code sync     # 세션 밖에서 코드를 고친 뒤 바로 찾을 때
 orai status && orai doctor
 ```
 
 - 역할 이름과 개수는 자유다. `--role 이름=codex|claude`를 필요한 만큼 붙인다. 역할 없이 시작했다가 나중에 `orai setup --role reviewer=claude`로 추가해도 된다. `--preset manager-engineer`는 `--role manager=codex --role engineer=claude`의 줄임이고, `--preset manager-engineer:manager=pm,engineer=staff`처럼 역할 이름을 바꿔 쓸 수 있다.
 - `setup`은 여러 번 실행해도 안전하다.
-- `orai search`는 소스마다 상태 줄을 먼저 찍는다. shelf 서버가 꺼져 있으면 파일을 키워드로 훑은 결과와 이유, 고칠 명령을 함께 보여 주고 종료 코드 1로 끝난다. 검색은 메시지를 받거나 색인을 바꾸지 않는다.
-- shelf는 `orai.toml`의 `[integrations.shelf]`에 등록한 폴더를 검색한다. `adr = "docs/adr"`처럼 묶음을 나눠 등록할 수 있고, 폴더마다 한 줄 설명(`context`)을 달아 검색 결과에 붙일 수 있다. 역할 세션에는 `shelf`라는 MCP 서버로 연결된다. Desktop처럼 역할 세션 밖에서 쓰는 방법은 [운영 안내](docs/operations.md#역할-세션-밖에서-쓰기)에 있다.
+- `orai search`는 소스마다 상태 줄을 먼저 찍는다. 문서는 내장 키워드 검색으로 찾는다. QMD를 켠 프로젝트에서 서버가 답하지 못하면 키워드 결과와 이유, 고칠 명령을 함께 보여 주고 종료 코드 1로 끝난다. 검색은 메시지를 받거나 색인을 바꾸지 않는다.
+- shelf는 `orai.toml`의 `[integrations.shelf]`에 등록한 폴더를 검색한다. `adr = "docs/adr"`처럼 묶음을 나눠 등록할 수 있고, 폴더마다 한 줄 설명(`context`)을 달아 검색 결과에 붙일 수 있다. 의미 검색은 `engine = "qmd"`를 적고 `orai shelf init`으로 켠다. 이때만 역할 세션에 `shelf`라는 MCP 서버가 연결된다. Desktop처럼 역할 세션 밖에서 쓰는 방법은 [운영 안내](docs/operations.md#역할-세션-밖에서-쓰기)에 있다.
 - 코드 그래프는 `orai code init`이 프로젝트 폴더와 역할 worktree마다 만든다(`orai setup`도 한다). 역할 세션에는 그 역할의 작업 폴더에 그래프가 있을 때만 `codegraph` MCP 서버가 연결된다.
 - 명령마다 `--help`가 있다. 검색은 `orai search --help`, shelf 설정은 `orai shelf --help`, 진단 표시와 종료 코드는 `orai doctor --help`에 정리돼 있다.
 
@@ -125,11 +124,12 @@ pre-alpha다. 최신 버전은 위 배지와 [Releases](https://github.com/oXpac
 | 단위·통합 테스트(race 검사기), 빌드한 바이너리를 checkout 밖에서 실행하는 종단 테스트 | 통과 (`mise run check`, CI는 위 배지) |
 | 메일함의 실제 AMQ 양방향 호환 (Orai ↔ `amq` 전송·수신·답장) | 통과 |
 | 호스트 도구(Codex, Claude Code) capability·로그인 진단 | 통과 (`orai doctor`) |
-| 이 저장소 문서의 실제 shelf 색인·의미 검색, 서버 다운 감지와 `recover` | 통과 (`orai doctor --deep`) |
+| 내장 문서 검색 (이 저장소 smoke, 문서 2,000개 0.10초), 새 프로젝트와 0.6.0에서 올리기 | macOS에서 확인. 2,000개는 합성 문서라 속도만 쟀다 |
+| QMD를 켰을 때 이 저장소 문서의 실제 색인·의미 검색, 서버 다운 감지와 `recover` | 통과 (`orai doctor --deep`) |
 | 실제 CodeGraph 색인·심볼 조회 | 통과 |
 | `orai search`·`orai read` (키워드 대체 검색, 메일, 실제 CodeGraph 1.6.0 심볼 검색) | Linux에서 확인 |
-| 실제 QMD 2.8.3을 거친 `orai search`(`--also` 포함), 세션 중 자동 sync, checkout별 `codegraph` MCP(1.6.2) | macOS에서 확인, 역할 세션은 fake provider. 빈 묶음이 있으면 shelf 준비가 실패하는 [알려진 문제](docs/history.md#2026-11-22-070-개발본-실검증-macos)가 있다. 실제 provider 역할 세션은 **미검증** |
-| 실제 OpenSpec 2.1.1 프로젝트 범위 init, 시작 규칙 주입, 스펙 검증 진단 | init·규칙 주입은 통과 (Linux 컨테이너, macOS). 실패한 스펙의 진단에 [알려진 문제](docs/history.md#2026-11-22-070-개발본-실검증-macos)가 있다. 역할 세션의 propose→apply→archive는 **미검증** |
+| 실제 QMD 2.8.3을 거친 `orai search`(`--also` 포함), 세션 중 자동 sync, checkout별 `codegraph` MCP(1.6.2) | macOS에서 확인, 역할 세션은 fake provider. 실제 provider 역할 세션은 **미검증** |
+| 실제 OpenSpec 2.1.1 프로젝트 범위 init, 시작 규칙 주입, 스펙 검증 진단 | 통과 (Linux 컨테이너, macOS). 역할 세션의 propose→apply→archive는 **미검증** |
 | Codex↔Claude 실제 요청·회신, 종료 후 동일 대화 복구 | macOS에서 확인 (실제 업무에 사용 중, 여러 Mac). Linux는 **미검증** |
 
 확인한 도구 버전은 [호환성](docs/compatibility.md)에, 날짜별 검증 기록은 [이력](docs/history.md#검증-기록)에 있다.

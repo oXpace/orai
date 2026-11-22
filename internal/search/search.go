@@ -105,7 +105,10 @@ func docs(p *project.Project, o Options, asked bool, r *Result) Source {
 	out := shelf.Search(s, o.Query, o.Limit, o.Also...)
 	r.Docs = out.Hits
 	src := Source{Name: "docs", State: "ok", Detail: fmt.Sprintf("keyword + meaning (shelf :%d)", out.Port)}
-	if out.Mode != "engine" {
+	switch out.Mode {
+	case "builtin":
+		src.Detail = shelf.BuiltIn
+	case "keyword":
 		src.State, src.Detail, src.Reason, src.Fix = "fallback", "keyword scan of the files", out.Reason, out.Fix
 	}
 	if out.Mode != "engine" && out.Weak {

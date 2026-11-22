@@ -79,7 +79,12 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 	if p.Config.Shelf == nil {
 		return errors.New("Shelf is not configured: add [integrations.shelf] to orai.toml (`orai shelf --help` lists the settings)")
 	}
-	return lifecycle(NewSettings(p), action, out)
+	s := NewSettings(p)
+	// stop stays available, to take down a server left from when QMD was on.
+	if action != "stop" && !s.usesQMD() {
+		return errNotQMD
+	}
+	return lifecycle(s, action, out)
 }
 
 // lifecycle is Lifecycle on resolved settings; AutoSync calls it with settings whose Log

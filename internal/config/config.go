@@ -21,6 +21,10 @@ const (
 	// and earlier) is no longer read; Parse names the two-line edit instead.
 	Schema     = 2
 	UserHandle = "user"
+	// The shelf engines. The built-in keyword search is the standard and QMD is opt-in.
+	// An empty Shelf.Engine means orai.toml names none (see shelf.UsesQMD).
+	EngineBuiltIn = "builtin"
+	EngineQMD     = "qmd"
 	// LocalName is the optional file next to orai.toml that holds this computer's own
 	// settings. It is not committed, and is applied over orai.toml (see Overlay).
 	LocalName = "orai.local.toml"
@@ -30,7 +34,7 @@ const (
 
 var (
 	Providers    = []string{"codex", "claude"}
-	ShelfEngines = []string{"qmd"}
+	ShelfEngines = []string{EngineBuiltIn, EngineQMD}
 	// Role names double as CLI aliases (`orai <role>`) and mailbox handles. Former or
 	// likely command names stay reserved so a role never shadows one.
 	Reserved = map[string]bool{
@@ -332,7 +336,7 @@ func parseShelf(value any, where string) (*Shelf, error) {
 	if err != nil {
 		return nil, err
 	}
-	shelf := &Shelf{Engine: "qmd", Collections: map[string]string{"docs": "docs"}, Patterns: map[string]string{"docs": DefaultPattern}}
+	shelf := &Shelf{Collections: map[string]string{"docs": "docs"}, Patterns: map[string]string{"docs": DefaultPattern}}
 	if raw, ok := t["engine"]; ok {
 		engine, _ := raw.(string)
 		if !contains(ShelfEngines, engine) {

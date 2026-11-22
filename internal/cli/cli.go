@@ -60,7 +60,7 @@ setting up and operating:
   doctor [--deep] [--json]
                         Read-only diagnosis with next steps
   shelf init|recover|sync|refresh|check|stop
-                        Project shelf (docs search) lifecycle
+                        The optional QMD engine for docs search (meaning search)
   code init|sync|check  Code graph (CodeGraph) for the project and role worktrees
 
 options:
@@ -194,10 +194,15 @@ Output is JSON.
 
 const shelfHelp = `usage: orai shelf init|recover|sync|refresh|check|stop [--project PATH]
 
-The shelf makes this project's Markdown documents searchable. Role sessions reach it
-as the MCP server ` + "`shelf`" + `. It is a search index over the folders you register,
-not a copy: the documents stay where they are. The engine is QMD, run only for this
-project: its index lives in .orai/shelf and its server listens on 127.0.0.1.
+The shelf makes this project's Markdown documents searchable with ` + "`orai search`" + `.
+The standard engine is the built-in keyword search: nothing to install, start or sync,
+and the commands here are not needed.
+
+They run QMD, the optional engine for meaning search, where it is on: orai.toml says
+engine = "qmd", or names no engine and this computer has an index from Orai 0.6 or
+earlier. engine = "builtin" turns it off (then ` + "`orai shelf stop`" + `). With QMD, role
+sessions also reach the shelf as the MCP server ` + "`shelf`" + `, the index lives in
+.orai/shelf and the server listens on 127.0.0.1.
 
   init      first time: build the index and embeddings, start the server, verify
   recover   start the server again (after a reboot) without rebuilding, apply the
@@ -210,24 +215,25 @@ project: its index lives in .orai/shelf and its server listens on 127.0.0.1.
   check     verify the running server end to end; changes nothing
   stop      stop this project's server
 
-first time:
+turning QMD on:
   1. Install QMD:  npm install -g @tobilu/qmd   (needs Node 22+)
-  2. Put Markdown under docs/ (or the folders in orai.toml).
+  2. Put engine = "qmd" under [integrations.shelf] in orai.toml.
   3. orai shelf init
      The first run downloads the embedding model (about 0.6 GB) into ~/.cache/qmd;
      the first real search downloads the search models (about 2 GB). Projects share them.
-  ` + "`orai setup`" + ` does steps 2-3 for you when QMD is installed.
+  With QMD on, ` + "`orai setup`" + ` does step 3 for you.
 
 searching:
   orai search '<words or a question>' --in docs     (works for any agent, role or not)
 
-after editing documents:
+after editing documents (QMD; the built-in search reads the files each time):
   While a role session runs, Orai syncs by itself a few seconds after the documents
   change (log: .orai/shelf/autosync.log). Outside sessions:
   orai shelf sync
   (no restart: sessions connected to the shelf stay connected)
 
 settings, in orai.toml under [integrations.shelf]:
+  engine = "qmd"                            turn QMD on ("builtin" turns it off)
   collections = { docs = "docs" }           name = folder (relative): every .md under it
   [integrations.shelf.collections]          or one line per collection, to split a folder:
   core = { path = "docs", pattern = "*.md" }    only the files directly in docs/

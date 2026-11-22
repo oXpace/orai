@@ -19,7 +19,7 @@ orai setup                         # 기본 세팅
 - mise는 나온 지 얼마 안 된 Release를 버전 목록(`mise ls-remote github:oXpace/orai`)에서 숨긴다. 이때 `--pin`은 이전 버전을 고르므로 `@0.7.0`처럼 번호를 명시한다. 번호를 명시한 설치는 배포 직후에도 된다. mise 2026.10.0에서 `minimum_release_age`를 설정하지 않았는데도 숨겨졌고, `mise ls-remote`가 "newer releases hidden by minimum_release_age"라고 알린다. 숨기는 기간의 기본값은 확인하지 못했다. 제외 설정 `minimum_release_age_excludes`가 있다.
 - PATH에 다른 `orai`(예: 예전 전역 링크)가 있어도, mise가 활성화된 셸에서는 프로젝트에 고정한 버전이 먼저 선택된다.
 
-Codex, Claude Code, QMD, CodeGraph는 사용자가 설치한다. Orai는 이 도구들을 설치하거나 업그레이드하지 않는다. AMQ는 필요 없다(메일함은 Orai가 관리하며 형식만 AMQ와 호환된다). 필요한 버전은 [호환성](compatibility.md)에 있다.
+Codex, Claude Code, CodeGraph와 선택형인 QMD는 사용자가 설치한다. Orai는 이 도구들을 설치하거나 업그레이드하지 않는다. AMQ는 필요 없다(메일함은 Orai가 관리하며 형식만 AMQ와 호환된다). 필요한 버전은 [호환성](compatibility.md)에 있다.
 
 Orai 자체를 개발하는 checkout에서는 다음과 같이 준비한다.
 
@@ -55,7 +55,10 @@ git add -A && git commit -m "Update Orai"
 | `todo` 답장의 kind를 읽는 스크립트 | 기본값이 `todo`에서 `status`로 바뀌었다. 이전처럼 보내려면 `--kind todo`를 붙인다 |
 | `orai inbox`의 JSON을 읽는 스크립트 | 읽을 수 없는 메시지는 `dlq/new`로 옮겨지고 `dead_lettered`에, receipt 쓰기 실패는 `receipt_error`에 나온다 |
 | 전역에 등록한 `codegraph` MCP | 그대로 둔다. 그래프가 있는 역할 세션에는 Orai가 같은 이름으로 그 작업 폴더의 서버를 넘긴다 |
-| 0.6.0으로 되돌릴 때 | `orai.toml`에서 `[integrations.openspec]`을 먼저 지운다. 0.6.0은 이 표를 거부한다 |
+| QMD 색인을 쓰던 컴퓨터 | 없다. 색인(`.orai/shelf`)이 있으면 QMD를 계속 쓴다. 팀 전체가 QMD를 쓰려면 `engine = "qmd"`를, 끄려면 `engine = "builtin"`을 `[integrations.shelf]`에 적는다(끈 뒤 `orai shelf stop`) |
+| QMD 색인이 없는 컴퓨터와 새 checkout | 내장 키워드 검색이 쓰인다. `orai shelf init`은 `engine = "qmd"`를 적어야 동작하고, MCP `shelf`와 `mcp__shelf__*` 도구는 없다 |
+| `orai search`의 종료 코드와 `docs` 상태 줄을 읽는 스크립트 | 내장 검색은 `built-in keyword search`와 종료 코드 0이다. `keyword scan`과 1은 QMD를 켰는데 답하지 못했을 때만 나온다 |
+| 0.6.0으로 되돌릴 때 | `orai.toml`에서 `[integrations.openspec]`과 `engine = "builtin"`을 먼저 지운다. 0.6.0은 둘 다 거부한다 |
 
 #### 통합 검색과 코드 그래프
 
@@ -75,7 +78,7 @@ collections = { docs = "docs", specs = "openspec/specs" }   # 기존 묶음에 s
 [integrations.openspec]
 ```
 
-그다음 `orai setup`을 실행하면 `openspec/config.yaml`(테스트 우선 시작 규칙, 이미 있으면 건드리지 않는다)을 만들고 `openspec init`을 프로젝트 범위로 실행한다. shelf는 `orai shelf stop && orai shelf refresh`로 새 묶음을 등록한다. OpenSpec을 이미 쓰던 프로젝트는 기존 `openspec/`과 `config.yaml`이 그대로 남는다. 스킬이 전역(`~/.agents/skills/`)에만 있다면 `setup`이 프로젝트에도 설치한다.
+그다음 `orai setup`을 실행하면 `openspec/config.yaml`(테스트 우선 시작 규칙, 이미 있으면 건드리지 않는다)을 만들고 `openspec init`을 프로젝트 범위로 실행한다. QMD를 쓰면 `orai shelf stop && orai shelf refresh`로 새 묶음을 등록한다(내장 검색은 할 일이 없다). OpenSpec을 이미 쓰던 프로젝트는 기존 `openspec/`과 `config.yaml`이 그대로 남는다. 스킬이 전역(`~/.agents/skills/`)에만 있다면 `setup`이 프로젝트에도 설치한다.
 
 ### 0.5.x → 0.6.0
 
@@ -209,7 +212,7 @@ port = 18401                   # 이 컴퓨터에서 포트가 겹칠 때
    - 기존 파일을 바꿀 때는 원본을 `.orai/backups/<시각>/`에 먼저 저장한다.
 3. **메일함** (역할이 있는 프로젝트): `.agent-mail/<session>`에 역할과 `user`의 메일함을 만든다. 기존 메일함이 있으면 없는 handle만 추가하고 메시지는 건드리지 않는다. `.gitignore` 블록에 `/.agent-mail/`와 루트 안의 역할 worktree가 추가된다.
 4. **OpenSpec**: `openspec` 2.0 이상이 설치돼 있고 프로젝트에 OpenSpec 스킬(`.agents/skills/openspec-propose/`)이 없으면 `openspec init --tools claude,codex --scope project --no-animation --no-copilot-cloud`을 실행한다. 스킬을 `.agents/skills/openspec-*`에 쓰고 `.claude/skills/`에 링크하며, `openspec/specs`, `openspec/changes`를 만든다. 기존 `config.yaml`은 그대로 둔다. OpenSpec의 기본 범위는 전역이므로 프로젝트 범위를 항상 명시한다.
-5. **shelf**: 엔진(QMD)이 설치돼 있고 문서가 있으면 색인이 없을 때 `orai shelf init`을, 있으면 `orai shelf recover`를 실행한다. 두 경우 모두 서버를 시작하고 검증한다.
+5. **shelf**: 내장 검색이면 아무것도 실행하지 않는다. QMD를 켰고 설치돼 있으며 문서가 있으면 색인이 없을 때 `orai shelf init`을, 있으면 `orai shelf recover`를 실행한다. 두 경우 모두 서버를 시작하고 검증한다.
 6. **코드 그래프**: CodeGraph가 설치돼 있고 색인이 없으면 `codegraph init`을 실행한다.
 7. **진단**: `orai doctor`와 같은 형식으로 문제 항목과 남은 조치(Next steps)만 보여준다.
 
@@ -241,6 +244,7 @@ orai read <경로>[:N[-M]] | <메시지-ID> ... [--json] [--as user]
 
 | 상태 줄 | 뜻 | 조치 |
 |---|---|---|
+| `docs: built-in keyword search` | 내장 검색이 답했다 | 없음 |
 | `docs: keyword + meaning (shelf :<포트>)` | shelf 서버가 답했다 | 없음 |
 | `docs: keyword scan of the files … Fix: …` | 서버가 없거나 꺼졌거나 다른 프로젝트 것이라 파일을 직접 훑었다 | 줄에 적힌 명령 (`orai shelf init`, `recover`, `doctor`) |
 | `note: N document(s) changed since the last sync` | 마지막 `sync` 뒤에 문서가 바뀌었다 | `orai shelf sync` (역할 세션 중에는 자동) |
@@ -324,13 +328,24 @@ JSON의 `next_action`이 "Next steps"에 나오는 조치다. `doctor`는 아무
 
 ## shelf (문서 검색)
 
-shelf는 등록한 Markdown 폴더(기본 `docs/`)를 색인해 역할 세션이 찾아볼 수 있게 하는 프로젝트 문서 검색이다. 문서를 옮기거나 정리하지 않는다. 원본은 저장소의 파일이고 shelf는 그 색인이다. 엔진은 QMD이며(현재 유일), 사용자는 `orai shelf`만 쓴다. 같은 안내가 `orai shelf --help`에 있다.
+shelf는 등록한 Markdown 폴더(기본 `docs/`)를 찾아보는 프로젝트 문서 검색이다. 문서를 옮기거나 정리하지 않는다.
+
+| 엔진 | 준비 | 되는 것 | 쓰는 때 |
+|---|---|---|---|
+| 내장 키워드 검색 (표준) | 없음 | `orai search`의 절·줄 단위 키워드 결과, `--also`. 고친 문서가 바로 검색된다 | `engine`이 없고 이 컴퓨터에 QMD 색인이 없을 때, 또는 `engine = "builtin"` |
+| QMD (선택) | 설치, 모델, 서버, 색인 | 의미 검색, MCP `shelf`, 자동 sync | `engine = "qmd"`, 또는 `engine`이 없고 이 컴퓨터에 색인이 이미 있을 때 |
+
+내장 검색만 쓰면 이 절에서 `collections`, `context`, `smoke` 설정만 보면 된다. "처음 준비", "평소 사용", "명령", "역할 세션 밖에서 쓰기"는 QMD를 켠 경우의 절차다. 지금 쓰는 엔진은 `orai doctor`의 `shelf` 항목에 나온다.
+
+ 원본은 저장소의 파일이고 shelf는 그 색인이다. 엔진은 QMD이며(현재 유일), 사용자는 `orai shelf`만 쓴다. 같은 안내가 `orai shelf --help`에 있다.
 
 ### 처음 준비
 
+QMD를 켤 때만 한다. 먼저 `orai.toml`의 `[integrations.shelf]`에 `engine = "qmd"`를 적는다.
+
 1. **QMD 설치**: `npm install -g @tobilu/qmd` (Node 22 이상). 프로젝트에 버전을 고정하려면 `mise use npm:@tobilu/qmd@<버전>`을 쓴다. Orai는 QMD를 설치하지 않는다.
 2. **문서 넣기**: `docs/`(또는 `collections`에 적은 폴더)에 Markdown 파일을 둔다. `orai setup`은 폴더가 없으면 시작 페이지 `docs/README.md`를 만든다.
-3. **색인 만들기**: `orai shelf init`. QMD가 설치돼 있고 문서가 있으면 `orai setup`이 이 단계를 대신 실행한다.
+3. **색인 만들기**: `orai shelf init`. QMD를 켰고 설치돼 있으며 문서가 있으면 `orai setup`이 이 단계를 대신 실행한다.
    - 첫 실행 때 임베딩 모델(약 0.6 GB)을, 첫 실제 검색(`orai doctor --deep` 포함) 때 검색용 모델(약 2 GB)을 `~/.cache/qmd/models`에 받는다. 모델은 프로젝트끼리 공유하므로 한 번만 받는다.
    - 색인과 설정은 이 프로젝트의 `.orai/shelf/`에만 생긴다.
 4. **확인**: `orai doctor`에서 `shelf.*` 항목이 `✓`인지 본다. 실제 검색까지 확인하려면 `orai doctor --deep`을 쓴다.
@@ -339,6 +354,7 @@ shelf는 등록한 Markdown 폴더(기본 `docs/`)를 색인해 역할 세션이
 
 | 키 | 기본값 | 설명 |
 |---|---|---|
+| `engine` | 없음 | `"qmd"`는 QMD, `"builtin"`은 내장 검색. 없으면 이 컴퓨터에 QMD 색인이 있을 때만 QMD |
 | `collections` | `{ docs = "docs" }` | 검색할 묶음. `이름 = "폴더"`(프로젝트 폴더 기준)는 그 폴더 아래의 모든 `.md`를 넣는다. 폴더의 일부만 넣으려면 `이름 = { path = "폴더", pattern = "패턴" }`으로 쓴다 |
 | `port` | 프로젝트 경로에서 계산 (18200~18999) | 서버 포트를 고정한다. 주소를 설정 파일에 적어 둘 때([역할 세션 밖에서 쓰기](#역할-세션-밖에서-쓰기))와 계산된 포트를 다른 서버가 쓰고 있을 때 지정한다 |
 | `embed_model` | Qwen3-Embedding-0.6B Q8 | 첫 `orai shelf init` 때만 읽는다. 이후 변경은 아래 "모델 변경"을 따른다 |
@@ -491,7 +507,7 @@ orai code check    # 진단과 smoke 심볼 조회
 | Codex queue 오류 | `orai status`의 `last_error`를 확인한다. 실패하는 동안에도 메시지는 메일함에 남는다 |
 | 프로젝트 이동·복사 경고 | `.orai/`를 검토한 뒤 `orai setup`으로 다시 연결하고, 역할은 `--fresh`로 시작 |
 | shelf 서버가 꺼져 있음(`shelf.server` blocked) | `orai shelf recover` |
-| shelf가 아직 만들어지지 않음 | QMD 설치 후 `orai shelf init` ([처음 준비](#처음-준비)) |
+| QMD를 켰는데 shelf가 아직 만들어지지 않음 | QMD 설치 후 `orai shelf init` ([처음 준비](#처음-준비)) |
 | 문서를 고쳤는데 검색에 안 나옴(`shelf.index` degraded, `orai search`의 `note`) | `orai shelf sync`. 역할 세션 중이면 `.orai/shelf/autosync.log`를 확인한다 |
 | 코드 그래프가 없음(`codegraph` not-ready, `codegraph.worktrees` degraded) | `orai code init` |
 | 지운 묶음이 계속 검색되거나 같은 문서가 두 번 나옴(`shelf.collections` degraded) | `orai.toml`의 `collections`를 확인하고 `orai shelf stop && orai shelf refresh` |
@@ -522,6 +538,6 @@ macOS에서는 실사용으로 확인했다([이력](history.md#2026-11-22-060-�
 3. 요청과 회신을 주고받는다(`send` → 알림 → `inbox <ID>` → `reply`). 작업 중 알림, 유휴 알림, 수신자가 꺼져 있을 때의 적재, 재접속 후 알림을 각각 확인한다.
 4. 역할을 종료한 뒤 다시 실행해 같은 UUID로 재개되고 메시지를 받는지 확인한다. 중복 실행이 거부되는지 확인한다.
    - 이 흐름이 기대는 전제가 있다. Claude `--resume <UUID>`의 SessionStart hook이 같은 `session_id`를 보내야 한다(다르면 재개할 때마다 캡처가 거부된다). Codex SessionStart payload에는 `cwd`와 `transcript_path`가 있어야 하고, `codex resume` 때도 hook이 실행돼야 한다(실행되지 않으면 Codex 알림이 준비 상태가 되지 않는다). 시작과 재개 때 한 번씩 hook 입력을 기록해 확인한다.
-5. `orai shelf init` 후 `orai doctor --deep`으로 실제 검색을, `codegraph init` 후 smoke 심볼 조회를 확인한다.
+5. QMD를 쓸 프로젝트라면 `engine = "qmd"`를 적고 `orai shelf init` 후 `orai doctor --deep`으로 실제 검색을, `codegraph init` 후 smoke 심볼 조회를 확인한다.
 
 결과는 [이력](history.md)의 검증 기록에 날짜, 버전, 통과·미검증 범위와 함께 남긴다.
