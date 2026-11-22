@@ -195,6 +195,7 @@ func amq(t *testing.T, root Root, me string, args ...string) []byte {
 }
 
 // The disk format is shared with AMQ: each side reads and answers what the other wrote.
+// A reply to a todo is a status on both sides (AMQ 0.124.0).
 func TestInteroperatesWithRealAMQ(t *testing.T) {
 	if _, err := exec.LookPath("amq"); err != nil {
 		t.Skip("amq not installed")
@@ -232,7 +233,7 @@ func TestInteroperatesWithRealAMQ(t *testing.T) {
 	if err := json.Unmarshal(amq(t, root, "user", "list", "--new", "--json"), &listed); err != nil {
 		t.Fatal(err)
 	}
-	if len(listed) != 1 || listed[0].From != "dev" || listed[0].Kind != "todo" {
+	if len(listed) != 1 || listed[0].From != "dev" || listed[0].Kind != "status" {
 		t.Fatalf("amq listed %+v", listed)
 	}
 }
