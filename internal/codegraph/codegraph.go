@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -140,7 +139,7 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 		"nodeCount":   status["nodeCount"],
 	}
 	if !truthy(status["initialized"]) {
-		c := doctor.New(Component, doctor.NotReady, "the code graph has not been built for this project yet", "`codegraph init "+root+"`")
+		c := doctor.New(Component, doctor.NotReady, "the code graph has not been built for this project yet", "`orai code init`")
 		return []doctor.Check{c.WithDetail(detail)}
 	}
 	index, _ := status["index"].(map[string]any)
@@ -154,10 +153,15 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	}
 
 	var checks []doctor.Check
+	if missing := unbuiltWorktrees(p); len(missing) > 0 {
+		checks = append(checks, doctor.New(Component+".worktrees", doctor.Degraded,
+			fmt.Sprintf("role worktree(s) without a code graph: %s (sessions there get no codegraph server, and searches from there read the project folder's graph)", strings.Join(missing, ", ")),
+			"`orai code init`"))
+	}
 	if anyTruthy(pending) {
 		c := doctor.New(Component+".index", doctor.Degraded,
 			fmt.Sprintf("unsynced changes: added %v, modified %v, removed %v",
-				orZero(pending["added"]), orZero(pending["modified"]), orZero(pending["removed"])), "codegraph sync "+root)
+				orZero(pending["added"]), orZero(pending["modified"]), orZero(pending["removed"])), "`orai code sync`")
 		checks = append(checks, c.WithDetail(detail))
 	} else {
 		c := doctor.New(Component+".index", doctor.Healthy, "index complete and in sync", "")
@@ -187,14 +191,15 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 				fmt.Sprintf("%s found in %s", cfg.SmokeSymbol, found), ""))
 		} else {
 			checks = append(checks, doctor.New(Component+".query", doctor.Degraded,
-				fmt.Sprintf("%s not returned; the index may be stale", cfg.SmokeSymbol), "codegraph sync "+root))
+				fmt.Sprintf("%s not returned; the index may be stale", cfg.SmokeSymbol), "`orai code sync`"))
 		}
 	}
 	return checks
 }
 
-// SetupStep is `orai setup`'s codegraph step: index the project once, skipping (never
-// failing the whole setup) when the tool is not installed.
+// SetupStep is `orai setup`'s codegraph step: build the graph once for the project
+// folder and each role worktree that lacks one, skipping (never failing the whole
+// setup) when the tool is not installed.
 func SetupStep(p *project.Project) string {
 	if p.Config.Codegraph == nil {
 		return "codegraph: not configured"
@@ -203,17 +208,39 @@ func SetupStep(p *project.Project) string {
 	if err != nil {
 		return "codegraph: skipped (CodeGraph is not installed: `npm install -g @colbymchenry/codegraph`, then `orai setup`)"
 	}
-	if info, statErr := os.Stat(filepath.Join(p.Root, ".codegraph")); statErr == nil && info.IsDir() {
-		return "codegraph: already indexed"
+	var built, failed []string
+	for _, dir := range Folders(p) {
+		if Indexed(dir) {
+			continue
+		}
+		if msg := initFolder(binary, dir); msg != "" {
+			failed = append(failed, msg)
+			continue
+		}
+		built = append(built, dir)
 	}
+	switch {
+	case len(failed) > 0:
+		return "codegraph: init failed: " + strings.Join(failed, "; ")
+	case len(built) == 0:
+		return "codegraph: already indexed"
+	case len(built) == 1:
+		return "codegraph: indexed"
+	default:
+		return fmt.Sprintf("codegraph: indexed %d folders (the project folder and role worktrees)", len(built))
+	}
+}
+
+// initFolder builds one folder's graph, returning "" or the tail of the error output.
+var initFolder = func(binary, dir string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, binary, "init", p.Root)
+	cmd := exec.CommandContext(ctx, binary, "init", dir)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err = cmd.Run()
+	err := cmd.Run()
 	if err == nil {
-		return "codegraph: indexed"
+		return ""
 	}
 	msg := strings.TrimSpace(stderr.String())
 	if msg == "" {
@@ -225,7 +252,7 @@ func SetupStep(p *project.Project) string {
 	if len(msg) > 300 {
 		msg = msg[len(msg)-300:]
 	}
-	return "codegraph: init failed: " + msg
+	return msg
 }
 
 func orZero(value any) any {
@@ -233,4 +260,20 @@ func orZero(value any) any {
 		return 0
 	}
 	return value
+}
+
+// unbuiltWorktrees lists the role worktrees (beyond the project folder) that exist but
+// have no code graph.
+func unbuiltWorktrees(p *project.Project) []string {
+	var missing []string
+	for _, dir := range Folders(p)[1:] {
+		if !Indexed(dir) {
+			rel, err := filepath.Rel(p.Root, dir)
+			if err != nil {
+				rel = dir
+			}
+			missing = append(missing, filepath.ToSlash(rel))
+		}
+	}
+	return missing
 }

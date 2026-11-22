@@ -45,6 +45,10 @@ git add -A && git commit -m "Update Orai"
 - 같은 저장소를 쓰는 다른 사람은 변경을 받은 뒤 `mise install`과 `orai setup`을 실행한다.
 - 되돌리려면 `mise.toml`의 버전을 이전 번호로 바꾸고 `orai setup`을 다시 실행한다.
 
+### 통합 검색이 들어간 버전으로 올릴 때
+
+`orai setup`이 `AGENTS.md`의 Orai 블록과 스킬을 바꾼다. 에이전트가 쓰는 명령이 `orai search`, `orai read`, `orai inbox`, `orai send`, `orai reply`로 바뀌고, `orai msg …`는 같은 명령으로 계속 동작한다. 역할 이름으로 `search`, `read`, `code`를 쓸 수 없게 됐으므로, 그런 이름의 역할이 있으면 `orai.toml`에서 이름을 바꾼다. 코드 그래프를 쓰는 프로젝트는 `orai code init`으로 역할 worktree의 그래프를 만든다. 실행 중인 역할 세션은 끝낸 뒤 다시 열어야 문서 자동 sync와 `codegraph` 서버가 붙는다.
+
 ### 0.5.x → 0.6.0
 
 `orai setup`이 `AGENTS.md`의 Orai 블록과 스킬을 새 구성으로 바꾼다. 블록은 진입점만 남고, 실행법은 스킬(`SKILL.md`)과 참조 문서(`references/search.md`, `references/diagnosis.md`)로 옮겨졌다. 새 파일은 커밋한다.
@@ -196,15 +200,37 @@ orai status                # 실행 여부, 세션 ID, 알림 준비, 미처리 
 
 **역할 추가.** `orai setup --role <이름>=<provider>`를 실행한다. `orai.toml`을 직접 고친 경우에는 `orai setup` 또는 `orai run <새 역할>`을 실행하면 새 handle의 메일함이 추가된다. 기존 메시지는 건드리지 않으며, 이미 등록된 handle(은퇴한 역할 포함)은 `meta/config.json`에서 빠지지 않는다.
 
+## 찾기와 읽기
+
+```sh
+orai search <낱말이나 질문> [--in docs,mail,code] [--limit N] [--json] [--as user]
+orai read <경로>[:N[-M]] | <메시지-ID> ... [--json] [--as user]
+```
+
+`orai search`는 문서(shelf), 자기 메일함, 코드 그래프를 한 번에 찾아 글로 출력한다. 출력은 소스마다 상태 줄 하나와 `note:`(색인이 뒤처짐, 받지 않은 메시지가 더 맞음), 소스별 결과, 결과를 여는 `orai read` 명령 순서다. 설정하지 않은 소스는 `not searched`로 나오고 문제로 세지 않는다. 역할 세션 밖에서는 `--as user`를 붙여야 메일도 찾는다.
+
+| 상태 줄 | 뜻 | 조치 |
+|---|---|---|
+| `docs: keyword + meaning (shelf :<포트>)` | shelf 서버가 답했다 | 없음 |
+| `docs: keyword scan of the files … Fix: …` | 서버가 없거나 꺼졌거나 다른 프로젝트 것이라 파일을 직접 훑었다 | 줄에 적힌 명령 (`orai shelf init`, `recover`, `doctor`) |
+| `note: N document(s) changed since the last sync` | 마지막 `sync` 뒤에 문서가 바뀌었다 | `orai shelf sync` (역할 세션 중에는 자동) |
+| `note: N message(s) not received yet also match` | 받지 않은 메시지도 맞는다. 본문은 보이지 않는다 | `orai inbox` |
+| `code: FAILED — no code graph is built …` | 이 checkout에 그래프가 없다 | `orai code init` |
+| `note: N file(s) changed since the graph was synced` | 코드 그래프가 뒤처졌다 | `orai code sync` (역할 세션의 `codegraph` 서버는 스스로 따라간다) |
+
+검색은 아무것도 바꾸지 않는다. 메시지를 받지 않고, 서버를 켜거나 색인을 갱신하지 않는다. 모든 소스가 답하면 0, 소스 하나라도 실패하거나 대체 검색을 썼으면 1(결과는 그대로 출력), 사용법 오류는 2로 끝난다. 빈 결과는 대상이 없다는 근거가 아니다.
+
+`orai read`는 프로젝트 안의 파일을 줄 번호와 함께 보여 준다. 범위가 없으면 처음 400줄, `:N`이면 N부터 80줄, `:N-M`이면 그 범위다. 경로는 현재 폴더, 프로젝트 폴더 순으로 찾고, shelf 결과의 `<묶음>/<경로>` 형식도 받는다. 프로젝트 밖은 읽지 않는다. 메시지 ID를 주면 이미 받았거나 보낸 메시지의 머리말과 본문을 보여 준다. 받지 않은 메시지는 보여 주지 않고 `orai inbox <ID>`를 안내한다.
+
 ## 메시지
 
 ```sh
-orai msg inbox [<ID>] [--again] [--peek] [--limit N]
-orai msg send <role|user> [--kind K] [--thread T] (--body 텍스트 | --file 경로 | 표준 입력)
-orai msg reply <받은-ID> (--body | --file | 표준 입력)
+orai inbox [<ID>] [--again] [--peek] [--limit N]
+orai send <role|user> [본문] [--kind K] [--thread T]      # 본문: 인자, --body, --file, 표준 입력 중 하나
+orai reply <받은-ID> [본문] [--kind K]
 ```
 
-이미 받은 메시지를 ID로 다시 읽으면 본문 없이 머리말과 `"already_received": true`, 받은 시각만 나온다. 알림은 보낸 뒤 회수할 수 없어서, 에이전트가 전체 수신으로 먼저 받은 메시지의 알림이 뒤늦게 도착할 수 있다. 이때 같은 일을 두 번 하지 않게 하기 위해서다. 일부러 다시 읽으려면 `--again`을 붙인다.
+`orai msg inbox|send|reply`도 같은 명령이고 출력도 같다. 이미 받은 메시지를 ID로 다시 받으면 본문 없이 머리말과 `"already_received": true`, 받은 시각만 나온다. 알림은 보낸 뒤 회수할 수 없어서, 에이전트가 전체 수신으로 먼저 받은 메시지의 알림이 뒤늦게 도착할 수 있다. 이때 같은 일을 두 번 하지 않게 하기 위해서다. 일부러 다시 읽으려면 `orai read <ID>`나 `--again`을 쓴다.
 
 역할 세션 밖(Desktop)에서는 사용자 권한으로 `--as user`를 붙인다. 역할 세션 안에서는 `--as`를 쓸 수 없다. 본문 없이 대화형 터미널에서 실행하면 기다리지 않고 바로 오류를 낸다. 결과는 JSON으로 출력한다(형태는 AMQ의 `send`/`list`/`drain`/`read`/`reply` 출력과 같다). 성공 0, 실패 1, 사용법 오류 2로 끝난다.
 
@@ -329,12 +355,14 @@ product = "docs/product"
 
 | 상황 | 명령 |
 |---|---|
-| 문서를 추가하거나 고치거나 지웠다 | `orai shelf sync` (서버는 계속 돈다) |
+| 문서를 추가하거나 고치거나 지웠다 | 역할 세션이 떠 있으면 자동으로 갱신된다(아래). 세션 밖에서 바로 찾으려면 `orai shelf sync` (서버는 계속 돈다) |
 | `collections`를 바꿨다 | `orai shelf stop && orai shelf refresh` |
 | 폴더 설명(`context`)을 고쳤다 | `orai shelf recover` |
 | 재부팅 뒤 서버가 꺼졌다 (`shelf.server`가 `✗`) | `orai shelf recover` |
 | 지금 검색이 되는지 확인 | `orai shelf check` |
 | 서버 끄기 | `orai shelf stop` |
+
+역할 세션이 떠 있는 동안 Orai는 묶음 폴더를 감시하다가 문서가 바뀌고 3초간 조용하면 `orai shelf sync`와 같은 동작을 실행한다. 꺼진 서버도 켠다. 결과는 `.orai/shelf/autosync.log`에 남고 터미널에는 찍지 않는다. 아직 `orai shelf init`을 하지 않은 프로젝트에서는 아무것도 하지 않는다.
 
 ### 명령
 
@@ -391,16 +419,19 @@ Claude Code에 프로젝트 범위로 등록하면 Claude 역할 세션에서는
 
 ## CodeGraph
 
-설치, MCP 등록, 색인은 서로 다른 단계이며 사용자가 명시적으로 수행한다.
+엔진(CodeGraph) 설치는 사용자가 한다. 그 뒤의 색인, 갱신, 역할 세션 연결은 Orai가 맡는다.
 
 ```sh
-codegraph install --print-config claude      # 파일을 쓰지 않고 등록 설정만 확인
-codegraph install --target claude --location local   # 프로젝트 로컬 등록 (전역 변경 회피)
-codegraph init <프로젝트 루트>                  # 초기 코드가 생긴 뒤 색인
-codegraph status --json <프로젝트 루트>
+npm install -g @colbymchenry/codegraph   # 한 번 (Orai는 설치하지 않는다)
+orai code init     # 프로젝트 폴더와 역할 worktree마다 그래프 만들기 (orai setup도 한다)
+orai code sync     # 만든 그래프를 파일에 맞게 갱신 (역할 세션 밖에서 바로 찾을 때)
+orai code check    # 진단과 smoke 심볼 조회
 ```
 
-`orai doctor`는 색인 상태와 미동기화 변경을, `--deep`은 `integrations.codegraph.smoke_symbol` 조회를 확인한다. 자동 sync가 있더라도 실제 조회 결과로 확인한다. 빈 검색이나 부정확한 호출 관계를 코드가 없다는 근거로 삼지 않는다.
+- 그래프는 checkout마다 따로 둔다(`.codegraph/`). 역할이 자기 worktree에서 고친 코드는 그 checkout의 그래프에만 반영되기 때문이다. `git worktree add`로 역할 작업 폴더를 새로 만들었으면 `orai code init`을 다시 실행한다. `orai doctor`의 `codegraph.worktrees`가 빠진 곳을 알려 준다.
+- 역할 세션에는 그 역할의 작업 폴더에 그래프가 있을 때만 MCP 서버 `codegraph`가 연결된다(`codegraph serve --mcp --path <작업 폴더>`). 이 서버가 파일 변경을 감시해 그래프를 스스로 갱신한다.
+- Orai는 `codegraph install`을 실행하지 않고 전역 에이전트 설정을 바꾸지 않는다. 전역에 직접 등록한 `codegraph`가 따로 있으면 provider의 우선순위에 따라 둘 중 하나가 쓰일 수 있다(미검증).
+- `orai search --in code`는 검색하는 위치에서 가장 가까운 그래프를 쓴다. 빈 검색이나 부정확한 호출 관계를 코드가 없다는 근거로 삼지 않는다.
 
 ## 복구 표
 
@@ -414,7 +445,8 @@ codegraph status --json <프로젝트 루트>
 | 프로젝트 이동·복사 경고 | `.orai/`를 검토한 뒤 `orai setup`으로 다시 연결하고, 역할은 `--fresh`로 시작 |
 | shelf 서버가 꺼져 있음(`shelf.server` blocked) | `orai shelf recover` |
 | shelf가 아직 만들어지지 않음 | QMD 설치 후 `orai shelf init` ([처음 준비](#처음-준비)) |
-| 문서를 고쳤는데 검색에 안 나옴(`shelf.index` degraded) | `orai shelf sync` |
+| 문서를 고쳤는데 검색에 안 나옴(`shelf.index` degraded, `orai search`의 `note`) | `orai shelf sync`. 역할 세션 중이면 `.orai/shelf/autosync.log`를 확인한다 |
+| 코드 그래프가 없음(`codegraph` not-ready, `codegraph.worktrees` degraded) | `orai code init` |
 | 지운 묶음이 계속 검색되거나 같은 문서가 두 번 나옴(`shelf.collections` degraded) | `orai.toml`의 `collections`를 확인하고 `orai shelf stop && orai shelf refresh` |
 | 폴더 설명이 선언과 다름(`shelf.context` degraded) | `orai shelf recover` |
 | 역할 밖 설정의 주소가 다름(`shelf.registration` degraded) | Next steps에 나온 파일의 주소·이름을 고치고, `orai.toml`에 `port`를 고정한다 |

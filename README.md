@@ -9,8 +9,8 @@ Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**
 - **정확한 재개**: 역할마다 캡처한 대화 UUID로만 재개한다. "가장 최근 대화"를 추측하지 않는다.
 - **프로젝트 메일함**: 역할 사이의 메시지를 프로젝트 안의 메일함으로 주고받는다. 디스크 형식이 [AMQ](https://github.com/avivsinai/agent-message-queue)와 같아 `amq`로도 읽을 수 있지만, AMQ 설치는 필요 없다.
 - **알림만 전달**: 새 메시지를 파일 변경 이벤트로 즉시 감지해 ID만 Codex queue나 Claude 로컬 MCP channel로 알린다. 메시지를 대신 소비하지 않는다.
-- **공통 메시지 액션**: `orai msg inbox`, `orai msg send`, `orai msg reply`
-- **문서 검색(shelf)과 코드 그래프**: 프로젝트 문서 폴더를 묶음별로 등록해 역할 세션에서 검색하는 shelf(엔진 QMD)와 CodeGraph를 프로젝트별로 격리해 설정·진단·복구한다.
+- **에이전트용 명령 다섯 개**: `orai search`(문서·내 메일함·코드를 한 번에 찾아 글로 출력), `orai read`(찾은 파일 줄이나 메시지 원문), `orai inbox`, `orai send`, `orai reply`. 출력이 글이라 어느 provider든 모델이 결과를 그대로 본다. `orai msg inbox|send|reply`도 같은 명령이다.
+- **문서 검색(shelf)과 코드 그래프**: 프로젝트 문서 폴더를 묶음별로 등록해 검색하는 shelf(엔진 QMD)와 코드 그래프(엔진 CodeGraph)를 프로젝트별로 격리해 설정·진단·복구한다. 역할 세션이 떠 있는 동안 문서를 고치면 shelf 색인이 자동으로 갱신되고, 코드 그래프는 역할의 작업 폴더에서 MCP 서버 `codegraph`로 연결돼 스스로 따라간다.
 - **한 번에 준비**: 빈 폴더에서 `orai setup` 한 번으로 저장소, 설정, 에이전트 지침, 메일함, shelf, 코드 그래프까지 준비한다.
 - **역할은 프로젝트가 정한다**: 이름·개수·provider를 `orai setup --role lead=codex --role dev=claude`처럼 고르고, 나중에도 같은 명령으로 추가한다.
 - **진단**: `orai doctor`가 구성요소별 상태와, 남은 조치를 실행할 명령으로 순서대로 보여준다(`--json`은 기계용).
@@ -52,7 +52,7 @@ orai setup --role lead=codex --role dev=claude
 | `orai.local.toml` | 이 컴퓨터만의 설정(역할의 모델, 포트, 나만 쓰는 역할). 직접 만들 때만 있고 `orai.toml` 위에 키 단위로 겹친다 | 안 한다 |
 | `AGENTS.md` | Orai 블록: 목적, 할 일별 도구와 스킬 진입점, 설정 위치. `orai:begin`~`orai:end` 사이만 관리하고 나머지는 그대로 둔다 | 한다 |
 | `CLAUDE.md` | 없을 때만 `@AGENTS.md` 한 줄로 만든다 | 한다 |
-| `.agents/skills/orai/`, `.claude/skills/orai` | Orai 명령의 실행법을 담은 스킬(`SKILL.md`: 메시지, `references/`: 문서·코드 찾기, 상태 확인·복구)과 Claude Code용 링크 | 한다 |
+| `.agents/skills/orai/`, `.claude/skills/orai` | Orai 명령의 실행법을 담은 스킬(`SKILL.md`: 찾기·읽기와 메시지, `references/`: 검색 결과 자세히 읽기, 상태 확인·복구)과 Claude Code용 링크 | 한다 |
 | `.gitignore` | Orai 블록: `/.orai/`, `/orai.local.toml`, `/.agent-mail/`, `/.codegraph/`, 역할 작업 폴더 | 한다 |
 | `.agents/.gitignore` | Orai 블록: `/roles/` (역할 지침을 저장소에 넣지 않는다) | 한다 |
 | `.agents/roles/<역할>.md` | 역할 지침. 이 컴퓨터에서 고쳐 쓴다 | 안 한다 |
@@ -82,16 +82,24 @@ Codex CLI, Claude Code, QMD, CodeGraph가 없으면 설치 명령이 함께 나�
 orai lead          # = orai run lead, 기본은 정확한 재개
 orai dev --fresh   # 새 대화
 
-# 메시지와 shelf
-orai msg send dev --as user --kind todo --body '요청 내용'
-orai shelf sync                         # docs를 고친 뒤 색인 갱신 (서버는 계속 돈다)
+# 찾기와 읽기 (역할 없이도 쓴다)
+orai search '낡은 hook이 세션 신원을 덮는 문제'   # 문서·메일·코드 결과를 소스별로
+orai read docs/architecture.md:94-96
+
+# 메시지 (역할 세션 밖에서는 --as user)
+orai send dev --as user --kind todo '요청 내용'
+
+orai shelf sync    # 세션 밖에서 문서를 고친 뒤 바로 찾을 때 (세션 중에는 자동)
+orai code sync     # 세션 밖에서 코드를 고친 뒤 바로 찾을 때
 orai status && orai doctor
 ```
 
 - 역할 이름과 개수는 자유다. `--role 이름=codex|claude`를 필요한 만큼 붙인다. 역할 없이 시작했다가 나중에 `orai setup --role reviewer=claude`로 추가해도 된다. `--preset manager-engineer`는 `--role manager=codex --role engineer=claude`의 줄임이고, `--preset manager-engineer:manager=pm,engineer=staff`처럼 역할 이름을 바꿔 쓸 수 있다.
 - `setup`은 여러 번 실행해도 안전하다.
+- `orai search`는 소스마다 상태 줄을 먼저 찍는다. shelf 서버가 꺼져 있으면 파일을 키워드로 훑은 결과와 이유, 고칠 명령을 함께 보여 주고 종료 코드 1로 끝난다. 검색은 메시지를 받거나 색인을 바꾸지 않는다.
 - shelf는 `orai.toml`의 `[integrations.shelf]`에 등록한 폴더를 검색한다. `adr = "docs/adr"`처럼 묶음을 나눠 등록할 수 있고, 폴더마다 한 줄 설명(`context`)을 달아 검색 결과에 붙일 수 있다. 역할 세션에는 `shelf`라는 MCP 서버로 연결된다. Desktop처럼 역할 세션 밖에서 쓰는 방법은 [운영 안내](docs/operations.md#역할-세션-밖에서-쓰기)에 있다.
-- 명령마다 `--help`가 있다. shelf 설정은 `orai shelf --help`, 진단 표시와 종료 코드는 `orai doctor --help`에 정리돼 있다.
+- 코드 그래프는 `orai code init`이 프로젝트 폴더와 역할 worktree마다 만든다(`orai setup`도 한다). 역할 세션에는 그 역할의 작업 폴더에 그래프가 있을 때만 `codegraph` MCP 서버가 연결된다.
+- 명령마다 `--help`가 있다. 검색은 `orai search --help`, shelf 설정은 `orai shelf --help`, 진단 표시와 종료 코드는 `orai doctor --help`에 정리돼 있다.
 
 자세한 절차는 [운영 안내](docs/operations.md)에, 필요한 외부 도구와 확인된 버전은 [호환성](docs/compatibility.md)에 정리돼 있다.
 
@@ -116,6 +124,7 @@ pre-alpha다. 최신 버전은 위 배지와 [Releases](https://github.com/oXpac
 | 호스트 도구(Codex, Claude Code) capability·로그인 진단 | 통과 (`orai doctor`) |
 | 이 저장소 문서의 실제 shelf 색인·의미 검색, 서버 다운 감지와 `recover` | 통과 (`orai doctor --deep`) |
 | 실제 CodeGraph 색인·심볼 조회 | 통과 |
+| `orai search`·`orai read` (키워드 대체 검색, 메일, 실제 CodeGraph 1.6.0 심볼 검색) | Linux에서 확인. 실제 QMD 서버를 거친 검색과 역할 세션 중 자동 sync, 역할 세션의 `codegraph` MCP는 **미검증** |
 | Codex↔Claude 실제 요청·회신, 종료 후 동일 대화 복구 | macOS에서 확인 (실제 업무에 사용 중, 여러 Mac). Linux는 **미검증** |
 
 확인한 도구 버전은 [호환성](docs/compatibility.md)에, 날짜별 검증 기록은 [이력](docs/history.md#검증-기록)에 있다.

@@ -160,7 +160,31 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **남긴 것**: 0.6.0에서 생긴 `--preset pm-staff` 별칭, 이전 문구의 관리 블록 표식을 접두어로 찾아 교체하는 동작, 같은 포트를 다른 이름으로 등록한 MCP 설정 진단은 0.3 이전용이 아니라서 그대로 둔다.
 - **문서**: 운영 안내의 0.1~0.4 마이그레이션 절을 "0.3 이하에서 올릴 때" 한 절로 줄이고 0.6.0 태그의 안내를 가리키게 했다.
 
+## 통합 검색과 코드 그래프 운영
+
+사용자 요청(2026-11-22)이다. 실사용에서 shelf를 잘 쓰지 않게 된다는 보고가 출발점이었다. 원인은 세 가지로 봤다. 검색이 MCP로만 돼서 Codex는 경로·제목만 받았다(0.5.0 확인, 아래 호환성 절). 역할 세션 밖에서는 MCP를 따로 등록해야 했다. 문서를 고칠 때마다 `sync`·`recover`·`refresh` 중에 골라야 했다. 0.5.0 기록이 "Codex에 본문과 설명을 전달하려면 검색 결과를 글로 내주는 명령이 필요하다"며 미뤄 둔 일이다. 사용자는 문서·메일 통합 검색, 자동 sync, 코드 검색까지 넣는 안을 골랐고, CodeGraph는 엔진을 다시 만들지 않고 운영만 맡기로 했다.
+
+- **에이전트 명령**: `orai search`, `orai read`, `orai inbox`, `orai send`, `orai reply`. 출력이 글이라 provider와 무관하게 결과가 모델에 간다. `orai inbox|send|reply`는 0.3에서 `orai msg …`로 옮기며 막았던 이름인데, 같은 함수를 부르는 짧은 입구로 되살렸다. `orai msg …`는 그대로 동작하고 출력이 같은지 테스트한다(`TestShortMessageCommandsMatchMsg`). `search`, `read`, `code`를 예약어에 더했다. 본문을 수신자나 ID 뒤의 인자로도 받는다.
+- **검색 계약**: 검색과 읽기는 상태를 바꾸지 않는다. 받지 않은 메시지는 개수만 보이고, `orai read`도 거부하고 `orai inbox <ID>`를 안내한다. 소스가 실패하거나 대체 검색을 쓰면 상태 줄에 이유와 고칠 명령을 적고 종료 코드 1이다.
+- **메일 검색**: 역할별 메일함을 공유 색인에 넣지 않으려고 색인 없이 키워드로 찾는다. 한국어 조사 때문에 세 음절 이상 한글 낱말은 마지막 음절을 뗀 형태도 맞춘다. 낱말 두 개 이하의 질문은 모든 낱말, 그보다 긴 질문은 절반 이상이 맞아야 결과로 낸다.
+- **문서 대체 검색**: shelf 서버가 답하지 못하면 선언한 묶음의 파일을 같은 키워드 매칭으로 훑는다. 검색 결과의 `file`·`line`·`snippet`·`context` 필드는 QMD 2.8.3 소스(`dist/mcp/server.js`의 `query` 도구)에서 확인했다.
+- **색인 낡음 표시**: `init`·`refresh`·`sync`가 `qmd embed` 뒤에 `.orai/shelf/synced-at`을 쓴다. 검색은 이보다 새 문서를 알린다. DB 파일의 수정 시각은 검색도 바꿀 수 있어(캐시) 기준으로 쓰지 않았다. 표식이 없는 예전 색인만 DB 시각으로 대신한다.
+- **세션 중 문서 자동 sync**: 런처가 묶음 폴더를 fsnotify로 보고 3초 debounce 뒤 `sync`를 실행한다. 출력은 `.orai/shelf/autosync.log`로 보낸다. 이를 위해 `qmd` 실행의 표준 출력을 호출자가 준 writer로 보내게 바꿨다(이전에는 항상 터미널). 잠금이 잡혀 있으면 다시 시도하고, 표식이 변경 시각보다 새로우면 건너뛴다.
+- **CodeGraph 운영**: checkout마다 그래프를 둔다. 역할 worktree의 코드가 프로젝트 폴더와 다를 수 있어서다. `orai code init|sync|check`, setup 단계, 역할별 MCP 주입(`codegraph serve --mcp --path <작업 폴더>`, 그래프가 있을 때만)을 더했다. CodeGraph 1.6.0의 README에 따르면 MCP 서버가 파일 감시로 스스로 갱신하므로 코드 쪽 자동 sync는 따로 만들지 않았다. 0.4 때 "전역 등록과 겹칠 수 있어 주입하지 않는다"던 결정을 바꿨다. 같은 이름의 전역 등록과의 우선순위는 확인하지 않았다.
+- **지침**: `AGENTS.md` 블록과 스킬을 다섯 명령 중심으로 바꿨다. `references/search.md`는 검색 결과를 자세히 읽는 참조로 남겼다. Kickoff 프롬프트의 메시지 확인 단계도 `orai inbox`로 바꿨다.
+- **하지 않은 것**: 엔진 재구현(다중 언어 파서가 의존성을 늘린다), 메일의 의미 검색, 검색 중 자동 sync.
+
 ## 검증 기록
+
+### 2026-11-22, 통합 검색 (Linux, 클라우드 컨테이너)
+
+| 범위 | 결과 |
+|---|---|
+| `gofmt`, `go vet`, `go test -race ./...` (Go 1.27.1) | 통과 |
+| fake·fixture: 키워드 매칭, 메일 검색·보기(받지 않은 메시지 숨김), shelf 엔진 결과 변환(fake MCP 클라이언트), 서버 다운·미구축 대체 검색, 색인 낡음, 자동 sync(실제 fsnotify, fake sync), CodeGraph 결과 변환·역할별 MCP 항목, `orai inbox`↔`orai msg inbox` 동등성 | 통과 |
+| 실제 CodeGraph 1.6.0 (linux-x64, 이 저장소 사본) | `codegraph init`, `query --json`, `status --json`, `explore` 출력 형식 확인. `orai search ValidateSaved --in code`가 `internal/runtime/runtime.go:277-295`를 반환 |
+| 이 저장소 사본에서 `orai search`(shelf 미구축) | 키워드 대체 검색이 smoke 질문으로 `docs/architecture.md:94`를 첫 결과로 반환, 상태 줄에 `orai shelf init` 안내, 종료 코드 1 |
+| 미검증 | 실제 QMD 서버를 거친 `orai search`(필드 이름은 소스로만 확인), 역할 세션 중 자동 sync의 실제 `qmd update`·`embed`, 역할 세션에서 `codegraph` MCP 연결과 같은 이름 전역 등록과의 우선순위, Codex·Claude가 `orai search` 출력을 그대로 받는지, macOS |
 
 ### 2026-11-22, 0.6.0 실사용 확인 (macOS)
 

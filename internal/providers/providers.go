@@ -16,7 +16,7 @@ import (
 
 const NoticePrefix = "오라이: 새 메시지\nIDs: "
 
-// Notice carries only new message IDs; the role receives them with `orai msg inbox <ID>`.
+// Notice carries only new message IDs; the role receives them with `orai inbox <ID>`.
 func Notice(ids []string) string {
 	sorted := append([]string(nil), ids...)
 	sort.Strings(sorted)

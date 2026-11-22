@@ -20,7 +20,7 @@ Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 �
 | 메일함, 배달, receipt, thread | Orai (`internal/mail`) | AMQ schema 1과 같은 디스크 형식이라 `amq`도 같은 메일함을 읽고 쓴다. AMQ 설치는 필요 없다 |
 | 대화 내용, transcript, 모델 실행 | Codex / Claude | 정확한 세션 ID로 시작·재개 |
 | 역할 조직, 업무 규칙, 승인, 이슈 트래커 정책 | 소비 프로젝트 | `orai.toml`과 역할 지침 경로를 읽어 전달만 함 |
-| 문서 색인·검색, 코드 그래프 | QMD(shelf 엔진) / CodeGraph | 프로젝트별 격리 설정, 상태 진단, 명시적 복구 |
+| 문서 색인·검색, 코드 그래프 | QMD(shelf 엔진) / CodeGraph | 프로젝트별 격리 설정, 상태 진단, 명시적 복구, 통합 검색(`orai search`), 세션 중 갱신 |
 
 범위 밖: 자체 범용 MCP 서버, GUI, 클라우드 스케줄러, 플러그인 프레임워크. CLI와 진단이 완성되기 전에는 추가하지 않는다.
 
@@ -125,7 +125,11 @@ orai run <role>
 
 **shelf (문서 검색, 엔진 QMD).** shelf는 등록한 문서 폴더를 찾아볼 수 있게 하는 색인이다. 지식을 정리하거나 소유하지 않으며, 원본은 저장소의 파일이다. 사용자와 에이전트는 `shelf`라는 이름만 본다(`orai shelf …`, `[integrations.shelf]`, MCP 서버 `shelf`, 진단 항목 `shelf.*`). MCP 서버 이름은 모든 프로젝트에서 같다. 세션은 자기 프로젝트의 서버 하나에만 연결되므로 이름으로 프로젝트를 구분할 필요가 없고, 같은 이름이어야 지침과 도구 허용(`mcp__shelf__*`)을 프로젝트마다 다시 쓰지 않는다. 묶음(collection)은 폴더이거나 폴더의 일부(`{ path, pattern }`)이며, `orai.toml`이 선언이고 색인은 그 결과다. `init`과 `refresh`는 색인을 선언에 맞추고(추가, 다시 등록, 삭제), `recover`는 서버만 켜므로 차이를 알려 주기만 한다. 문서 내용이 바뀐 것은 묶음 선언과 무관하므로 `sync`가 서버를 멈추지 않고 색인과 임베딩만 갱신한다. 서버와 CLI가 같은 SQLite 파일을 쓰고, 서버는 다음 검색에서 갱신된 색인을 읽는다. 폴더별 설명(context, `[integrations.shelf.context]`)도 선언이 원천이다. 엔진은 설명을 묶음별로 `.orai/shelf/`의 자기 설정에 두는데 이것은 로컬 상태라 새 checkout에는 없다. 그래서 설명은 폴더 경로로 선언하고, Orai가 그 폴더를 포함하는 묶음과 그 폴더 안에 있는 묶음에 나눠 적용한다. 설명은 다시 색인할 필요가 없고 실행 중인 서버가 다음 검색부터 읽으므로 `init`, `refresh`, `recover`가 모두 적용한다. 표를 선언하지 않은 프로젝트의 설명은 건드리지 않는다. 검색 결과는 MCP 응답의 구조화된 부분에 실리는데 이를 모델에 넘기는지는 provider가 정한다. Orai는 그 사이에 끼지 않으므로, 지침은 어느 provider에서나 성립하는 "shelf로 찾고 원문은 파일로 읽는다"를 기준으로 한다. 엔진은 `integrations.shelf.engine`으로 지정하며 현재는 `qmd`만 지원한다. 프로젝트마다 index 이름 `orai-<project id>`를 쓴다. QMD 2.8.3 소스를 확인한 결과, `--index <name>`을 주면 daemon PID/로그 파일이 `~/.cache/qmd/mcp-<name>.pid|log`로 분리되고 설정 파일도 `<name>.yml`이 된다. 여기에 `QMD_CONFIG_DIR`과 `INDEX_PATH`로 설정과 DB를 `.orai/shelf/` 안에 둔다. 모델 캐시는 공유하므로 프로젝트마다 모델을 다시 받지 않는다. 서버는 `127.0.0.1`에만 열고, 포트는 설정값이 없으면 ID에서 유도한다(18200–18999). 이미 열린 포트는 MCP `status`의 컬렉션 절대경로가 이 프로젝트와 같을 때만 재사용한다. 중지는 index 범위의 `qmd --index <ours> mcp stop`만 쓴다. 역할 실행 시에는 MCP 서버 `shelf`를 프로세스 인자로 주입하므로 전역·worktree 설정 파일을 바꾸지 않는다. 역할 세션 밖에서 쓰려고 사용자가 프로젝트 MCP 설정(`.mcp.json`, `.codex/config.toml`)에 주소를 적어 둔 경우, Orai는 그 파일을 읽기만 하고 주소가 이 프로젝트 서버와 맞는지 진단한다(`shelf.registration`).
 
-**CodeGraph.** 설치, provider MCP 등록, 프로젝트 색인은 사용자가 따로 진행하는 단계다. Orai는 `codegraph status --json`과 (deep 모드에서) 알려진 심볼 조회로 상태만 진단한다. 전역 등록과 중복될 수 있어 MCP를 자동으로 주입하지 않는다.
+**CodeGraph (코드 그래프).** 엔진은 사용자가 설치한 CodeGraph이고, Orai는 운영을 맡는다. 그래프는 checkout마다 따로 둔다(`.codegraph/`). 역할이 자기 worktree에서 고친 파일은 그 checkout에만 있으므로, 프로젝트 폴더의 그래프를 보여 주면 다른 브랜치의 코드를 현재 코드처럼 읽게 된다. 그래서 `orai code init`과 `orai setup`은 프로젝트 폴더와 존재하는 역할 worktree마다 그래프를 만들고, `orai code sync`는 만들어진 것을 모두 갱신한다. 역할 실행 시에는 그 역할의 작업 폴더에 그래프가 있을 때만 MCP 서버 `codegraph`(`codegraph serve --mcp --path <작업 폴더>`)를 프로세스 인자로 주입한다. 그래프가 없으면 주입하지 않는다(서버가 엉뚱한 트리를 만들거나 읽지 않게). 이 서버는 파일 감시로 그래프를 스스로 갱신하므로 세션 중 코드 sync는 Orai가 따로 하지 않는다. Orai는 `codegraph install`을 실행하지 않고 전역 에이전트 설정도 바꾸지 않는다. 사용자가 전역에 같은 이름을 등록해 둔 경우의 우선순위는 provider가 정하며 확인하지 않았다. 진단은 `codegraph status --json`, 역할 worktree의 그래프 유무(`codegraph.worktrees`), (deep 모드에서) 알려진 심볼 조회다.
+
+**검색과 읽기 (`orai search`, `orai read`).** 에이전트가 쓰는 찾기 입구는 MCP가 아니라 CLI다. 셸 출력은 어느 provider든 모델에 그대로 넘어가지만, MCP 결과는 provider가 일부만 넘길 수 있기 때문이다([호환성](compatibility.md#shelf-결과가-모델에-전달되는-범위)). `orai search`는 문서(shelf), 자기 메일함, 코드 그래프를 소스별로 검색해 상태 줄과 결과를 글로 찍는다. 소스마다 점수 체계가 달라 한 순위로 섞지 않는다. 문서는 shelf 서버에 lex+vec 질의를 보내고 결과의 `file`·`line`·`snippet`·`context`를 프로젝트 기준 경로로 바꿔 보여 준다. 서버가 없거나, 꺼졌거나, 다른 프로젝트 것이거나, 실패하면 선언한 묶음의 파일을 직접 키워드로 훑고(`internal/lexical`), 상태 줄에 이유와 고칠 명령을 적고 종료 코드 1로 끝난다. 마지막 `init`·`refresh`·`sync`가 남긴 표식(`.orai/shelf/synced-at`)보다 새 문서가 있으면 색인이 뒤처졌다고 알린다. 메일은 색인하지 않는다. 역할별 메일함을 공유 색인에 넣으면 신원 경계가 흐려지기 때문이다. 역할 세션에서는 그 역할의, 밖에서는 `--as user`일 때 사용자의 받은 메시지(`inbox/cur`)와 보낸 메시지(`outbox/sent`)만 키워드로 찾는다. 받지 않은 메시지(`inbox/new`)는 개수만 알리고 본문은 보이지 않는다. 코드는 검색하는 위치에서 가장 가까운 그래프에 `codegraph query --json`을 묻는다. 검색과 읽기는 상태를 바꾸지 않는다. 메시지를 받지 않고(수신은 `orai inbox`만 한다), 서버를 켜거나 색인을 갱신하지 않는다. `orai read`는 프로젝트 안의 파일 줄 범위나, 이미 받았거나 보낸 메시지를 보여 준다. 받지 않은 메시지 ID는 `orai inbox <ID>`를 안내하고 거부한다. 그래서 "알림은 ID만, 한 번만 수신" 계약이 어느 명령이 먼저 닿든 유지된다. `orai inbox|send|reply`는 `orai msg inbox|send|reply`와 같은 함수이고, 같은 출력을 내는지 계약 테스트가 확인한다.
+
+**역할 세션 중 문서 자동 sync.** 역할 세션이 떠 있는 동안 런처가 shelf 묶음 폴더를 fsnotify로 감시하다가, 문서가 바뀌고 3초간 조용하면 `orai shelf sync`와 같은 동작을 실행한다(꺼진 서버도 켠다). 세션 시작 때 표식보다 새 문서가 있으면 한 번 따라잡는다. 출력은 터미널이 아니라 `.orai/shelf/autosync.log`로 간다. 만들어지지 않은 shelf는 만들지 않는다. 여러 역할이 동시에 감시해도 shelf 명령의 잠금이 순서를 정하고, 다른 역할의 sync가 이미 반영한 변경은 표식으로 알아보고 건너뛴다. 잠금이 잡혀 있으면 잠시 뒤 다시 시도한다.
 
 ## 진단 모델
 
@@ -154,12 +158,14 @@ shelf 진단은 원인별로 나눈다. 연결 거부, 샌드박스 접근 거�
 | `internal/project` | 프로젝트 루트·worktree 해석, ID, 이동·복사 감지, setup 대상 |
 | `internal/config` | `orai.toml` schema 검증 |
 | `internal/state` | 원자적 저장, 역할 lock, 이전 상태 이력 |
-| `internal/mail` | AMQ 호환 메일함: 전송·답장·목록·수신·읽기, 변경 감시 |
+| `internal/mail` | AMQ 호환 메일함: 전송·답장·목록·수신·읽기, 변경 감시, 받은·보낸 메시지 검색과 보기 |
 | `internal/runtime` | 실행·캡처·재개 검증, status, 프로젝트 진단 |
 | `internal/providers` | Codex·Claude 인자, Codex queue notifier |
 | `internal/channel` | Claude MCP 채널 (`orai _channel`) |
-| `internal/shelf` | shelf 엔진(QMD) 수명주기·진단, 역할별 MCP 주입 |
-| `internal/codegraph` | CodeGraph 진단과 setup 단계 |
+| `internal/shelf` | shelf 엔진(QMD) 수명주기·진단, 역할별 MCP 주입, 문서 검색(엔진·키워드 대체), 세션 중 자동 sync |
+| `internal/codegraph` | CodeGraph 운영: checkout별 그래프 init·sync, 역할별 MCP 주입, 심볼 검색, 진단 |
+| `internal/search` | `orai search`: 소스별 검색 실행과 글 출력 |
+| `internal/lexical` | 색인 없이 찾을 때의 키워드 매칭(메일, 문서 대체 검색) |
 | `internal/doctor` | 진단 상태 모델, 사람용·JSON 출력, 설치 안내 문구, 도구 capability·로그인 검사 |
 | `internal/scaffold` | `orai setup`의 파일 계획·적용, 내장 템플릿(`go:embed`) |
 | `internal/setup` | `orai setup` 전체 흐름: 파일 → shelf → 코드 그래프 → 진단 |

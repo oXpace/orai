@@ -28,11 +28,14 @@ var runCommand = func(out io.Writer, argv []string, s *Settings, capture bool) (
 	cmd.Dir = s.Project.Root
 	cmd.Env = s.Env()
 	cmd.Stderr = os.Stderr
+	if s.Log != nil {
+		cmd.Stderr = s.Log
+	}
 	var buf bytes.Buffer
 	if capture {
 		cmd.Stdout = &buf
 	} else {
-		cmd.Stdout = os.Stdout
+		cmd.Stdout = out
 	}
 	if err := cmd.Run(); err != nil {
 		return buf.String(), fmt.Errorf("%s: %w", strings.Join(argv, " "), err)
@@ -76,7 +79,12 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 	if p.Config.Shelf == nil {
 		return errors.New("Shelf is not configured: add [integrations.shelf] to orai.toml (`orai shelf --help` lists the settings)")
 	}
-	s := NewSettings(p)
+	return lifecycle(NewSettings(p), action, out)
+}
+
+// lifecycle is Lifecycle on resolved settings; AutoSync calls it with settings whose Log
+// keeps the engine's output out of the role's terminal.
+func lifecycle(s *Settings, action string, out io.Writer) error {
 	for _, name := range s.collectionNames() {
 		path := s.Collections[name]
 		info, err := os.Stat(path)
@@ -201,6 +209,10 @@ func Lifecycle(p *project.Project, action string, out io.Writer) error {
 			return err
 		}
 		if _, err := runCommand(out, s.Argv(qmd, "embed"), s, false); err != nil {
+			return err
+		}
+		// What `orai search` compares documents against to say its results may be behind.
+		if err := state.AtomicWrite(s.SyncedFile(), []byte(time.Now().UTC().Format(time.RFC3339Nano)+"\n"), 0o600); err != nil {
 			return err
 		}
 	}

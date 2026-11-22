@@ -27,8 +27,13 @@ import (
 	"github.com/oXpace/orai/internal/state"
 )
 
-// MCPServers returns per-process MCP entries for a provider (wired to the shelf by the CLI).
-var MCPServers = func(*project.Project, string) map[string]map[string]any { return map[string]map[string]any{} }
+// MCPServers returns the per-process MCP entries for a role (wired to the shelf and the
+// code graph by the CLI).
+var MCPServers = func(*project.Project, config.Role) map[string]map[string]any { return map[string]map[string]any{} }
+
+// Background runs beside a role session until ctx ends (wired by the CLI to keep the
+// shelf index in step with the documents). It must not write to the terminal.
+var Background = func(context.Context, *project.Project, config.Role) {}
 
 // Executable is the running orai binary, used for hooks and the Claude channel.
 var Executable = func() string {
@@ -118,7 +123,7 @@ func Kickoff(p *project.Project, role config.Role, resumed bool) string {
 			docs += ", " + guide
 		}
 		steps := append(own,
-			"`orai msg inbox`로 받은 메시지를 확인한다.",
+			"`orai inbox`로 받은 메시지를 확인한다.",
 			"메시지가 없으면 하던 작업을 이어간다. 할 일이 없으면 턴을 끝낸다.")
 		return numbered([]string{fmt.Sprintf("Orai `%s` 역할 세션을 다시 열었다.", role.Name), ""}, steps) +
 			"\n지침은 바뀌었거나 기억나지 않을 때만 다시 본다 (프로젝트 폴더 " + p.Root + " 기준): " + docs + "\n"
@@ -145,7 +150,7 @@ func Kickoff(p *project.Project, role config.Role, resumed bool) string {
 	}
 	steps := append([]string{"위 문서를 읽는다."}, own...)
 	steps = append(steps,
-		"`orai msg inbox`로 받은 메시지를 확인한다.",
+		"`orai inbox`로 받은 메시지를 확인한다.",
 		"처리할 것이 없으면 다른 일을 찾지 말고 턴을 끝낸다. 새 메시지는 오라이가 알린다.")
 	return numbered(lines, steps)
 }
@@ -188,7 +193,7 @@ func HookCommand(p *project.Project) string {
 // ProviderArgs returns the provider argv and the session id bound before launch (Claude fresh).
 func ProviderArgs(p *project.Project, role config.Role, savedID string) ([]string, string) {
 	prompt := Kickoff(p, role, savedID != "")
-	servers := MCPServers(p, role.Provider)
+	servers := MCPServers(p, role)
 	if role.Provider == "codex" {
 		return providers.CodexArgs(role, savedID, prompt, HookCommand(p), p.Root, servers), ""
 	}
@@ -488,6 +493,11 @@ func Launch(p *project.Project, roleName string, fresh, dry bool, out io.Writer)
 		return 1, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	background := make(chan struct{})
+	go func() {
+		defer close(background)
+		Background(ctx, p, role)
+	}()
 	notified := make(chan struct{})
 	go func() {
 		defer close(notified)
@@ -521,6 +531,10 @@ func Launch(p *project.Project, roleName string, fresh, dry bool, out io.Writer)
 	select {
 	case <-notified:
 	case <-time.After(22 * time.Second):
+	}
+	select {
+	case <-background:
+	case <-time.After(5 * time.Second):
 	}
 	current, _ := state.ReadJSON(files.State())
 	if current == nil {
