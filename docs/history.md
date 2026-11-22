@@ -213,6 +213,15 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **이어 쓰기**: `engine`이 없어도 이 컴퓨터에 색인이 있으면 QMD를 계속 쓴다. 0.6.0까지 `engine`을 적을 필요가 없었기 때문이다. `engine = "builtin"`으로 끈다.
 - **한계**: 내장 검색에는 의미 검색이 없다. `engine`을 적지 않은 프로젝트는 컴퓨터마다 색인 유무에 따라 엔진이 다를 수 있다.
 
+## 스킬 하나로 통합 (0.7.0)
+
+사용자 요청(2026-11-22)이다. OpenSpec 스킬을 흡수해 스킬을 `orai` 하나로 두고, 오사용을 막는 절차를 넣었다.
+
+- **원천**: OpenSpec 2.1.1(MIT, Copyright (c) 2025 FISSION AI INC)의 스킬과 spec-driven 스키마를 줄여 `references/workflow.md`에 옮겼다. 고지는 `references/openspec-license.txt`다.
+- **init**: `--tools none`. 스킬을 만들지 않고, 준비 여부는 `openspec/changes`로 본다.
+- **재현한 함정**: 같은 요구를 고친 change 둘을 차례로 보관하면 나중 것이 앞 것을 되돌리고 `validate --strict`는 통과한다(보관 전 diff로만 보인다). `--yes`는 열린 task도 통과시키므로 첫 실행에는 붙이지 않는다.
+- **남는 것**: 이미 설치된 프로젝트·전역 `openspec-*` 스킬은 지우지 않으므로 세션에 함께 보일 수 있다.
+
 ## 검증 기록
 
 ### 2026-11-22, 0.7.0 수정 뒤 재검증 (macOS)
@@ -229,6 +238,11 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 | `engine`으로 켜고 끄기 | 실제 QMD | init·검색 통과, 끈 뒤 내장 검색과 `shelf stop` 통과 |
 | 이 저장소 smoke, 내장 검색 | 실제 문서 5개 | 낱말과 질문 모두 기대 문서가 5위 안, 질문은 `docs/architecture.md:95`가 1위 |
 | 속도 | 합성 문서 | 200개 0.03초, 2,000개 0.10초(최대 RSS 60 MB). 품질은 재지 않았다 |
+
+| 통합 스킬: 새 프로젝트 setup부터 보관까지 | 실제 OpenSpec 2.1.1 | 스킬은 `orai` 하나, `openspec-*` 0개. 스킬의 명령대로 change를 만들고 검증했고, 보관은 `archive_confirmation_required` 뒤 `--yes`로 끝났다. 순차 보관이 앞 change를 되돌리는 동작과 열린 task의 `archive_tasks_incomplete`를 재현했다 |
+| 0.6.0 프로젝트에 남아 있는 `openspec-*` 스킬 | 실제 바이너리 | setup 뒤 그대로 |
+
+미검증: Codex·Claude 세션이 OpenSpec 요청에 Orai 스킬을 고르는지.
 
 AMQ 교차 호환은 `0750b87`의 CI(macOS)가 AMQ 0.160.0을 설치하고 통과했다. 이 브랜치로는 실행하지 않았다.
 

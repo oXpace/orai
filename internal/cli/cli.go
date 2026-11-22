@@ -127,7 +127,7 @@ specs:
   A new orai.toml declares [integrations.openspec]. When OpenSpec 2 or later is
   installed (` + "`npm install -g @fission-ai/openspec@latest`" + `), setup writes a starter
   openspec/config.yaml with test-first rules (only when there is none) and runs
-  ` + "`openspec init --tools claude,codex --scope project`" + ` once. Role sessions get
+  ` + "`openspec init --tools none`" + ` once (the Orai skill covers its workflow). Role sessions get
   OPENSPEC_TELEMETRY=0 unless the table says telemetry = true. Remove the table to opt out.
 `
 

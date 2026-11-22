@@ -30,8 +30,8 @@ func writeProject(t *testing.T, text string) *project.Project {
 }
 
 // fakeOpenSpec puts a stand-in `openspec` first on PATH. It prints version for
-// --version, records its arguments and OPENSPEC_TELEMETRY to calls.log, writes the
-// propose skill on init, and prints report on validate.
+// --version, records its arguments and OPENSPEC_TELEMETRY to calls.log, creates
+// openspec/changes on init, and prints report on validate.
 func fakeOpenSpec(t *testing.T, version, report string) string {
 	t.Helper()
 	bin := t.TempDir()
@@ -39,7 +39,7 @@ func fakeOpenSpec(t *testing.T, version, report string) string {
 echo "$* telemetry=${OPENSPEC_TELEMETRY:-unset}" >> "` + bin + `/calls.log"
 case "$1" in
 --version) echo "` + version + `" ;;
-init) mkdir -p .agents/skills/openspec-propose openspec/specs && echo skill > .agents/skills/openspec-propose/SKILL.md ;;
+init) mkdir -p openspec/changes/archive openspec/specs ;;
 validate) cat <<'JSON'
 ` + report + `
 JSON
@@ -82,9 +82,10 @@ func TestMissingBinaryBlocksDoctorAndSetupOnlySkips(t *testing.T) {
 	}
 }
 
-// Setup runs init once, at project scope, with telemetry off; the next setup and the
+// 시나리오: 처음 setup / 스킬 없이 준비된 프로젝트의 진단
+// Setup runs init once, without skills, with telemetry off; the next setup and the
 // diagnosis see it as set up.
-func TestSetupInitializesAtProjectScopeOnce(t *testing.T) {
+func TestSetupInitializesWithoutSkillsOnce(t *testing.T) {
 	p := writeProject(t, declared)
 	log := fakeOpenSpec(t, "2.1.1", `{"items": []}`)
 
@@ -92,8 +93,8 @@ func TestSetupInitializesAtProjectScopeOnce(t *testing.T) {
 		t.Fatal(line)
 	}
 	got := calls(t, log)
-	if !strings.Contains(got, "init --tools claude,codex --scope project") || !strings.Contains(got, "telemetry=0") {
-		t.Fatalf("init was not run at project scope with telemetry off:\n%s", got)
+	if !strings.Contains(got, "init --tools none") || !strings.Contains(got, "telemetry=0") {
+		t.Fatalf("init was not run without skills and with telemetry off:\n%s", got)
 	}
 	if line := openspec.SetupStep(p); line != "openspec: already set up" {
 		t.Fatal(line)
@@ -166,5 +167,25 @@ func TestUnreadableValidationOutputIsNotHealthy(t *testing.T) {
 	openspec.SetupStep(p)
 	if checks := openspec.Diagnose(p, true); checks[1].Status != doctor.Blocked {
 		t.Fatalf("%+v", checks)
+	}
+}
+
+// 시나리오: 이미 설치된 OpenSpec 스킬
+func TestSetupLeavesInstalledOpenSpecSkillsAlone(t *testing.T) {
+	p := writeProject(t, declared)
+	log := fakeOpenSpec(t, "2.1.1", `{"items": []}`)
+	skill := filepath.Join(p.Root, ".agents/skills/openspec-propose/SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(skill), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(skill, []byte("the user's"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	openspec.SetupStep(p)
+	if !strings.Contains(calls(t, log), "init --tools none") {
+		t.Fatalf("an installed skill was taken for a set up project:\n%s", calls(t, log))
+	}
+	if data, _ := os.ReadFile(skill); string(data) != "the user's" {
+		t.Fatalf("the skill changed: %q", data)
 	}
 }

@@ -1,12 +1,12 @@
 ---
 name: orai
-description: Orai 명령의 실행법. 프로젝트 문서·지난 메시지·코드에서 결정이나 근거를 찾을 때, 찾은 파일이나 메시지 원문을 읽을 때, 오라이 새 메시지 알림을 받았을 때, 다른 역할이나 사용자에게 메시지를 보내거나 회신할 때, 기능 작업을 스펙과 테스트로 시작하거나 보고할 때, 도구 상태를 확인하거나 복구할 때 읽는다.
+description: Orai 명령의 실행법. 프로젝트 문서·지난 메시지·코드에서 결정이나 근거를 찾을 때, 찾은 파일이나 메시지 원문을 읽을 때, 오라이 새 메시지 알림을 받았을 때, 다른 역할이나 사용자에게 메시지를 보내거나 회신할 때, 기능 작업을 스펙과 테스트로 시작·인계·보고할 때, OpenSpec 변경을 탐색·제안(propose)·수정·구현(apply)·검증(verify)·동기화(sync)·보관(archive)할 때, 도구 상태를 확인하거나 복구할 때 읽는다.
 ---
 <!-- orai:generated — `orai setup`이 관리한다. 프로젝트 규칙은 AGENTS.md나 역할 지침에 둔다. -->
 
 # 오라이
 
-이 스킬은 Orai 명령의 실행법만 다룬다. 역할 권한, 완료 기준, 보고·승인 절차는 프로젝트 규칙과 역할 지침을 따른다.
+이 스킬은 Orai 명령과 OpenSpec 작업 흐름의 실행법을 다룬다. 역할 권한, 완료 기준, 보고·승인 절차는 프로젝트 규칙과 역할 지침을 따른다.
 
 | 할 일 | 명령 |
 |---|---|
@@ -19,7 +19,7 @@ description: Orai 명령의 실행법. 프로젝트 문서·지난 메시지·�
 | 받지 않고 목록만 보기 | `orai inbox --peek` |
 | 받은 메시지에 회신 | `orai reply <받은-ID> '결과와 원천 링크'` |
 | 새 메시지 보내기 | `orai send <역할> --kind question '질문과 원천'` |
-| 스펙과 테스트로 일하기, 작업 인계와 보고 형식 | [references/workflow.md](references/workflow.md)를 읽는다 |
+| 스펙과 테스트로 일하기(OpenSpec 전 단계), 작업 인계와 보고 형식 | [references/workflow.md](references/workflow.md)를 읽는다 |
 
 `orai msg inbox|send|reply`도 같은 명령이다. 진단과 복구는 [references/diagnosis.md](references/diagnosis.md), 검색 결과를 자세히 읽는 법은 [references/search.md](references/search.md)에 있다. 필요한 절만 읽는다. 같은 세션에서 이미 읽은 절은 다시 읽지 않는다.
 

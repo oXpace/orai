@@ -1,8 +1,8 @@
 // Package openspec connects OpenSpec (Fission-AI/OpenSpec), the project's spec layer.
-// OpenSpec owns the spec format, its CLI and its agent skills; Orai declares it in
-// orai.toml, runs `openspec init` once at project scope during setup, keeps OpenSpec's
+// OpenSpec owns the spec format and its CLI; the Orai skill carries the workflow. Orai
+// declares it in orai.toml, runs `openspec init` without skills once during setup, keeps OpenSpec's
 // telemetry off in role sessions unless the project turns it on, and diagnoses its state.
-// Orai never edits OpenSpec's skills or its global files.
+// Orai never edits installed OpenSpec skills or OpenSpec's global files.
 package openspec
 
 import (
@@ -27,20 +27,17 @@ import (
 const Component = "openspec"
 
 const (
-	// Skill is the one OpenSpec skill whose presence says `openspec init` ran here at
-	// project scope (it writes the skills to .agents/skills and links them for Claude).
-	Skill = ".agents/skills/openspec-propose/SKILL.md"
-	// Tools are the OpenSpec tool ids for the providers Orai runs. Both are always set
-	// up so every computer gets the same committed files whichever roles it runs.
-	Tools = "claude,codex"
-	// MinMajor is the first OpenSpec release that delivers skills (1.x wrote commands
-	// and an AGENTS.md block instead).
+	// Changes is the folder whose presence says `openspec init` ran here: setup itself
+	// creates openspec/config.yaml and openspec/specs before init, but not this one.
+	Changes = config.OpenSpecDir + "/changes"
+	// MinMajor is the first OpenSpec release whose CLI the skill's workflow was written
+	// for (1.x wrote commands and an AGENTS.md block on init).
 	MinMajor = 2
 )
 
-// InitArgs is `openspec init` at project scope: OpenSpec's default scope is global
-// (~/.agents/skills), which Orai never writes.
-var InitArgs = []string{"init", "--tools", Tools, "--scope", "project", "--no-animation", "--no-copilot-cloud"}
+// InitArgs is `openspec init` without skills: the Orai skill covers every step, and no
+// tool means nothing is written to project or global skill folders.
+var InitArgs = []string{"init", "--tools", "none", "--no-animation", "--no-copilot-cloud"}
 
 // lookPath resolves a binary on PATH; tests swap it.
 var lookPath = exec.LookPath
@@ -102,12 +99,12 @@ func version(binary, root string, env []string) (string, int, error) {
 }
 
 func initialized(root string) bool {
-	_, err := os.Stat(filepath.Join(root, filepath.FromSlash(Skill)))
-	return err == nil
+	info, err := os.Stat(filepath.Join(root, filepath.FromSlash(Changes)))
+	return err == nil && info.IsDir()
 }
 
 // Diagnose is the read-only OpenSpec diagnosis: not-configured → binary on PATH →
-// version → initialized at project scope → (deep) the main specs validate.
+// version → initialized → (deep) the main specs validate.
 func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	cfg := p.Config.OpenSpec
 	if cfg == nil {
@@ -126,16 +123,16 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	detail := map[string]any{"version": ver, "telemetry": cfg.Telemetry}
 	if major < MinMajor {
 		c := doctor.New(Component, doctor.Unsupported,
-			fmt.Sprintf("OpenSpec %s predates skills (needs %d.0 or later)", ver, MinMajor), doctor.InstallOpenSpec)
+			fmt.Sprintf("OpenSpec %s is too old (needs %d.0 or later)", ver, MinMajor), doctor.InstallOpenSpec)
 		return []doctor.Check{c.WithDetail(detail)}
 	}
 	if !initialized(p.Root) {
 		c := doctor.New(Component, doctor.NotReady,
-			"OpenSpec is not set up in this project yet (no "+Skill+")", "`orai setup`")
+			"OpenSpec is not set up in this project yet (no "+Changes+")", "`orai setup`")
 		return []doctor.Check{c.WithDetail(detail)}
 	}
 	checks := []doctor.Check{doctor.New(Component, doctor.Healthy,
-		fmt.Sprintf("OpenSpec %s, skills in .agents/skills", ver), "").WithDetail(detail)}
+		fmt.Sprintf("OpenSpec %s, workflow in the Orai skill", ver), "").WithDetail(detail)}
 
 	if !deep {
 		return append(checks, doctor.New(Component+".specs", doctor.NotChecked, "spec validation runs with --deep", ""))
@@ -178,7 +175,7 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	return append(checks, doctor.New(Component+".specs", doctor.Healthy, fmt.Sprintf("%d spec(s) valid", len(report.Items)), ""))
 }
 
-// SetupStep is `orai setup`'s OpenSpec step: `openspec init` at project scope once,
+// SetupStep is `orai setup`'s OpenSpec step: `openspec init` without skills once,
 // skipping (never failing the whole setup) when the tool is missing or too old.
 // OpenSpec keeps an existing openspec/config.yaml, so the starter rules setup wrote
 // before this step stay.
@@ -200,10 +197,10 @@ func SetupStep(p *project.Project) string {
 		return "openspec: init failed: openspec --version: " + err.Error()
 	}
 	if major < MinMajor {
-		return fmt.Sprintf("openspec: skipped (OpenSpec %s predates skills; upgrade with `npm install -g @fission-ai/openspec@latest`, then `orai setup`)", ver)
+		return fmt.Sprintf("openspec: skipped (OpenSpec %s is too old; upgrade with `npm install -g @fission-ai/openspec@latest`, then `orai setup`)", ver)
 	}
 	if _, err := run(append([]string{binary}, InitArgs...), p.Root, env, 120*time.Second); err != nil {
 		return "openspec: init failed: " + err.Error()
 	}
-	return "openspec: set up (skills in .agents/skills, specs in " + config.OpenSpecSpecs + ")"
+	return "openspec: set up (specs in " + config.OpenSpecSpecs + ", workflow in the Orai skill)"
 }

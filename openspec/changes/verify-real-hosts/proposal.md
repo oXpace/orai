@@ -10,6 +10,7 @@ Codex↔Claude 실제 흐름은 macOS에서 실사용으로 확인됐지만, 202
 - 격리된 파일럿 저장소에서 운영 안내의 "실제 파일럿" 절차를 Linux에서 수행한다: 요청·회신과 알림, 종료 후 같은 대화로 재개, 중복 실행 거부, SessionStart hook 전제.
 - shelf(QMD CPU fallback), CodeGraph, OpenSpec의 Linux 동작과 재부팅 뒤 복구를 확인한다.
 - 결과를 `docs/history.md` 검증 기록과 `docs/compatibility.md`, README 상태 표에 반영한다. 확인하지 못한 항목은 미검증으로 남긴다.
+- Linux 실검증은 0.7.0 범위 밖이다(사용자, 2026-11-22 "리눅스 실 검증 같은 건 안해도 되고"). 0.7.0에는 미검증으로 적는다.
 - 코드 동작은 바꾸지 않는다. 확인 중 버그가 나오면 별도 변경으로 만든다.
 
 ## Capabilities

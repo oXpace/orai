@@ -33,7 +33,7 @@ collections = { docs = "docs", specs = "openspec/specs" }   # name = folder. To 
 
 # Specs: OpenSpec (`npm install -g @fission-ai/openspec@latest`, 2.0 or later) keeps the
 # specs in openspec/specs and proposed changes in openspec/changes. `orai setup` runs
-# `openspec init` at project scope once and writes a starter openspec/config.yaml with
+# `openspec init --tools none` once and writes a starter openspec/config.yaml with
 # test-first rules. Remove this table to opt out.
 [integrations.openspec]
 # telemetry = true          # OpenSpec's usage reporting; off in role sessions unless set
