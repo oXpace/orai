@@ -71,7 +71,26 @@ func WriteReplace(path string, data []byte, mode os.FileMode) error {
 	if err := os.Chmod(tmp.Name(), mode); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	return SyncDir(filepath.Dir(path))
+}
+
+// SyncDir flushes a directory so that a rename or link into it survives a crash; the
+// file's own fsync does not cover its directory entry.
+func SyncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	// Some filesystems (network and FUSE mounts) cannot fsync a directory. The write
+	// itself succeeded, so that is not a reason to fail it.
+	if err := d.Sync(); err != nil && !errors.Is(err, syscall.EINVAL) && !errors.Is(err, syscall.ENOTSUP) {
+		return err
+	}
+	return nil
 }
 
 func JSONBytes(value any) []byte {

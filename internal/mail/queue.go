@@ -59,7 +59,11 @@ func (r Root) deliver(handle, name string, data []byte) error {
 		return err
 	}
 	// link(2) fails if the target exists, so delivery is atomic and no-replace.
-	return os.Link(tmp, filepath.Join(r.box(handle, "inbox/new"), name))
+	if err := os.Link(tmp, filepath.Join(r.box(handle, "inbox/new"), name)); err != nil {
+		return err
+	}
+	// The file's fsync does not cover its new directory entry.
+	return state.SyncDir(r.box(handle, "inbox/new"))
 }
 
 type OutboxResult struct {
@@ -141,12 +145,50 @@ func (r Root) find(handle, id string) (string, string, error) {
 	return "", "", fmt.Errorf("%w: %s", ErrNotFound, id)
 }
 
+// MalformedError is a message file that exists but cannot be parsed. It is a property
+// of that one file, so it must never stop the messages behind it.
+type MalformedError struct {
+	Path string
+	Err  error
+}
+
+func (e *MalformedError) Error() string { return fmt.Sprintf("%s: %v", e.Path, e.Err) }
+func (e *MalformedError) Unwrap() error { return e.Err }
+
 func readMessage(path string) (Message, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Message{}, err
 	}
-	return Parse(data)
+	msg, err := Parse(data)
+	if err != nil {
+		return Message{}, &MalformedError{Path: path, Err: err}
+	}
+	return msg, nil
+}
+
+// deadLetter moves an unreadable message from inbox/new to dlq/new, byte for byte, as
+// AMQ does. The copy is linked and flushed before the source is removed, so a crash
+// leaves the message in at least one place.
+func (r Root) deadLetter(me, path string) (string, error) {
+	dir := r.box(me, "dlq/new")
+	target := filepath.Join(dir, filepath.Base(path))
+	if err := os.Link(path, target); err != nil {
+		// A move that was interrupted after the link leaves the same file in both
+		// places; finish it. Any other file under that name is kept, not replaced.
+		source, statErr := os.Stat(path)
+		existing, existErr := os.Stat(target)
+		if statErr != nil || existErr != nil || !os.SameFile(source, existing) {
+			return "", err
+		}
+	}
+	if err := state.SyncDir(dir); err != nil {
+		return "", err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	return target, state.SyncDir(filepath.Dir(path))
 }
 
 func (r Root) Reply(me, id, body, kind string) (SendResult, error) {
@@ -171,6 +213,8 @@ func (r Root) Reply(me, id, body, kind string) (SendResult, error) {
 			kind = "review_response"
 		case "question":
 			kind = "answer"
+		case "todo":
+			kind = "status" // AMQ 0.124.0: a reply to a todo reports on it
 		default:
 			kind = original.Header.Kind
 		}
@@ -197,28 +241,40 @@ type ListItem struct {
 	sortKey  time.Time `json:"-"`
 }
 
-// ListNew lists unread messages oldest first without consuming them.
+// ListNew lists unread messages oldest first without consuming them. A file that
+// cannot be parsed is left out here and dead-lettered by the next drain.
 func (r Root) ListNew(me string) ([]ListItem, error) {
+	items, _, err := r.scanNew(me)
+	return items, err
+}
+
+func (r Root) scanNew(me string) ([]ListItem, []*MalformedError, error) {
 	dir := r.box(me, "inbox/new")
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
-		return []ListItem{}, nil
+		return []ListItem{}, nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	items := []ListItem{}
+	var malformed []*MalformedError
 	for _, entry := range entries {
 		if !entry.Type().IsRegular() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
 		msg, err := readMessage(path)
+		var bad *MalformedError
+		if errors.As(err, &bad) {
+			malformed = append(malformed, bad)
+			continue
+		}
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				continue // consumed concurrently
 			}
-			return nil, fmt.Errorf("%s: %w", path, err)
+			return nil, nil, fmt.Errorf("%s: %w", path, err)
 		}
 		h := msg.Header
 		key, _ := time.Parse(time.RFC3339Nano, h.Created)
@@ -231,33 +287,57 @@ func (r Root) ListNew(me string) ([]ListItem, error) {
 		}
 		return items[i].ID < items[j].ID
 	})
-	return items, nil
+	return items, malformed, nil
 }
 
-// Pending returns unread message IDs, sorted.
+// Pending returns unread message IDs, sorted. Notifiers call it on every change and
+// every fallback tick, and need only the IDs, so it reads file names (AMQ names each
+// file <id>.md) and never parses: one bad file cannot silence the others.
 func (r Root) Pending(me string) ([]string, error) {
-	items, err := r.ListNew(me)
+	entries, err := os.ReadDir(r.box(me, "inbox/new"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return []string{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]string, len(items))
-	for i, item := range items {
-		ids[i] = item.ID
+	ids := []string{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.Type().IsRegular() || !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		if id, err := validID(name); err == nil {
+			ids = append(ids, id)
+		}
 	}
 	sort.Strings(ids)
 	return ids, nil
 }
 
+func (r Root) receiptPath(me, id string) string {
+	return filepath.Join(r.box(me, "receipts"), id+"__"+me+"__drained.json")
+}
+
+func (r Root) writeReceipt(me string, h Header) error {
+	receipt := map[string]any{"schema": schema, "msg_id": h.ID, "thread": h.Thread,
+		"sender": h.From, "consumer": me, "stage": "drained", "emitted_at": time.Now().UTC().Format(time.RFC3339Nano)}
+	return state.AtomicWrite(r.receiptPath(me, h.ID), state.JSONBytes(receipt), 0o600)
+}
+
 // consume moves a new message to cur/ and records a drained receipt (AMQ semantics).
-func (r Root) consume(me string, msg Message, path string) error {
-	target := filepath.Join(r.box(me, "inbox/cur"), filepath.Base(path))
-	if err := os.Rename(path, target); err != nil {
-		return err
+// The move is what receives the message. A receipt that cannot be written comes back
+// as receiptErr: the caller still gets the message, and the next read writes it
+// (AMQ 0.133.0), instead of the message sitting in cur/ unseen.
+func (r Root) consume(me string, msg Message, path string) (receiptErr, err error) {
+	dir := r.box(me, "inbox/cur")
+	if err := os.Rename(path, filepath.Join(dir, filepath.Base(path))); err != nil {
+		return nil, err
 	}
-	receipt := map[string]any{"schema": schema, "msg_id": msg.Header.ID, "thread": msg.Header.Thread,
-		"sender": msg.Header.From, "consumer": me, "stage": "drained", "emitted_at": time.Now().UTC().Format(time.RFC3339Nano)}
-	return state.AtomicWrite(filepath.Join(r.box(me, "receipts"), msg.Header.ID+"__"+me+"__drained.json"),
-		state.JSONBytes(receipt), 0o600)
+	if err := state.SyncDir(dir); err != nil {
+		return err, nil
+	}
+	return r.writeReceipt(me, msg.Header), nil
 }
 
 type DrainedItem struct {
@@ -271,11 +351,36 @@ type DrainedItem struct {
 	Priority   string   `json:"priority,omitempty"`
 	Kind       string   `json:"kind,omitempty"`
 	MovedToCur bool     `json:"moved_to_cur"`
+	// ReceiptError is set when the message was received but its receipt could not be
+	// written yet.
+	ReceiptError string `json:"receipt_error,omitempty"`
+}
+
+// DeadLetter is an unreadable message that a drain moved out of the inbox.
+type DeadLetter struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+	Path   string `json:"path,omitempty"`
+	// Error is set when the move itself failed; the file then stays in inbox/new but
+	// is still skipped.
+	Error string `json:"error,omitempty"`
 }
 
 type DrainResult struct {
-	Drained []DrainedItem `json:"drained"`
-	Count   int           `json:"count"`
+	Drained      []DrainedItem `json:"drained"`
+	Count        int           `json:"count"`
+	DeadLettered []DeadLetter  `json:"dead_lettered,omitempty"`
+}
+
+func (r Root) quarantine(me string, bad *MalformedError) DeadLetter {
+	id, _ := validID(filepath.Base(bad.Path))
+	letter := DeadLetter{ID: id, Reason: bad.Err.Error()}
+	if moved, err := r.deadLetter(me, bad.Path); err != nil {
+		letter.Error = err.Error()
+	} else {
+		letter.Path = moved
+	}
+	return letter
 }
 
 // Drain receives up to limit messages (0 = all), oldest first.
@@ -283,11 +388,14 @@ func (r Root) Drain(me string, limit int, includeBody bool) (DrainResult, error)
 	if err := r.requireHandles(me); err != nil {
 		return DrainResult{}, err
 	}
-	items, err := r.ListNew(me)
+	items, malformed, err := r.scanNew(me)
 	if err != nil {
 		return DrainResult{}, err
 	}
 	result := DrainResult{Drained: []DrainedItem{}}
+	for _, bad := range malformed {
+		result.DeadLettered = append(result.DeadLettered, r.quarantine(me, bad))
+	}
 	for _, item := range items {
 		if limit > 0 && result.Count >= limit {
 			break
@@ -296,10 +404,16 @@ func (r Root) Drain(me string, limit int, includeBody bool) (DrainResult, error)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
+		var bad *MalformedError
+		if errors.As(err, &bad) {
+			result.DeadLettered = append(result.DeadLettered, r.quarantine(me, bad))
+			continue
+		}
 		if err != nil {
 			return result, err
 		}
-		if err := r.consume(me, msg, item.Path); err != nil {
+		receiptErr, err := r.consume(me, msg, item.Path)
+		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				continue // another reader took it
 			}
@@ -308,6 +422,9 @@ func (r Root) Drain(me string, limit int, includeBody bool) (DrainResult, error)
 		h := msg.Header
 		drained := DrainedItem{ID: h.ID, From: h.From, To: h.To, Thread: h.Thread, Subject: h.Subject, Created: h.Created,
 			Priority: h.Priority, Kind: h.Kind, MovedToCur: true}
+		if receiptErr != nil {
+			drained.ReceiptError = receiptErr.Error()
+		}
 		if includeBody {
 			body := msg.Body
 			drained.Body = &body
@@ -332,7 +449,7 @@ type ReadResult struct {
 // receivedAt returns when the handle received the message, from its drained receipt;
 // empty when no receipt is readable.
 func (r Root) receivedAt(me, id string) string {
-	receipt, _ := state.ReadJSON(filepath.Join(r.box(me, "receipts"), id+"__"+me+"__drained.json"))
+	receipt, _ := state.ReadJSON(r.receiptPath(me, id))
 	at, _ := receipt["emitted_at"].(string)
 	return at
 }
@@ -345,17 +462,30 @@ func (r Root) Read(me, id string) (ReadResult, error) {
 		return ReadResult{}, err
 	}
 	msg, err := readMessage(path)
+	var bad *MalformedError
+	if box == "new" && errors.As(err, &bad) {
+		letter := r.quarantine(me, bad)
+		if letter.Error != "" {
+			return ReadResult{}, fmt.Errorf("message %s is unreadable (%s) and could not be moved to dlq: %s", letter.ID, letter.Reason, letter.Error)
+		}
+		return ReadResult{}, fmt.Errorf("message %s is unreadable (%s); moved to %s", letter.ID, letter.Reason, letter.Path)
+	}
 	if err != nil {
 		return ReadResult{}, err
 	}
 	if box == "new" {
-		if err := r.consume(me, msg, path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		// A receipt failure leaves no receipt; the next read of this message writes it.
+		if _, err := r.consume(me, msg, path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return ReadResult{}, err
 		}
 	}
 	result := ReadResult{Body: msg.Body, Header: msg.Header}
 	if box == "cur" {
 		result.AlreadyReceived, result.ReceivedAt = true, r.receivedAt(me, msg.Header.ID)
+		if result.ReceivedAt == "" {
+			// Received earlier without a receipt (its write failed): write it now.
+			_ = r.writeReceipt(me, msg.Header)
+		}
 	}
 	return result, nil
 }
