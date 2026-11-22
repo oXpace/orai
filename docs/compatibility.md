@@ -39,8 +39,8 @@ Go 의존성의 정본은 `go.mod`와 `go.sum`이다. mise는 Go 버전과 task�
 |---|---|---|---|---|
 | Codex CLI | 0.160.0 | Homebrew cask `codex` | `resume <UUID>`, `queue --thread --message`, `-c hooks.SessionStart`, `-c mcp_servers.*`, `--add-dir` | 도움말 + `codex login status` |
 | Claude Code | 2.1.289 | 네이티브 설치 (`~/.local/share/claude/versions`) | `--session-id`, `--resume`, `--settings`, `--mcp-config`, `--dangerously-load-development-channels server:orai`, `--name`, `--effort` | 도움말 + `claude auth status` (channel 플래그는 도움말에 없어 실행 시 확인). `--deep`은 `claude mcp get shelf`의 출력(`URL:` 줄)으로 같은 이름의 다른 서버를 찾는다 |
-| QMD | 2.8.3 | npm `@tobilu/qmd` (mise Node 24.21.0 전역) | `--index`, `QMD_CONFIG_DIR`/`INDEX_PATH`, `collection show`, `update`, `embed`, `mcp --http --daemon --host --port`, `mcp stop`, MCP `status`/`query`/`get`, `context list`/`add`/`rm` | 포트·MCP·식별·색인·폴더 설명, `--deep`에서 검색 |
-| CodeGraph | 1.6.0 | 번들 설치 `~/.codegraph/versions/v1.6.0` (npm 설치 아님) | `status --json`, `query --json --path`, `init`, `sync`, `install --print-config`, `--location local` | `status --json`, `--deep`에서 심볼 조회 |
+| QMD | 2.8.3 | npm `@tobilu/qmd` (mise Node 24.21.0 전역) | `--index`, `QMD_CONFIG_DIR`/`INDEX_PATH`, `collection show`, `update`, `embed`, `mcp --http --daemon --host --port`, `mcp stop`, MCP `status`/`query`(`searches` lex+vec, 결과의 `file`·`line`·`snippet`·`context`)/`get`, `context list`/`add`/`rm` | 포트·MCP·식별·색인·폴더 설명, `--deep`에서 검색. `orai search`도 같은 `query`를 쓴다 |
+| CodeGraph | 1.6.0 | 번들 설치 `~/.codegraph/versions/v1.6.0` (npm 설치 아님) | `status --json`(`pendingChanges`), `query --json --limit --path`(`node.name`·`kind`·`filePath`·`startLine`·`endLine`·`signature`·`docstring`), `init <경로>`, `sync <경로>`, `serve --mcp --path`(역할 세션 주입). `install`은 쓰지 않는다 | `status --json`, 역할 worktree 그래프 유무, `--deep`에서 심볼 조회. 2026-11-22 Linux에서 1.6.0 출력 형식 확인 |
 | Git | 2.56.0 | Homebrew | `worktree list --porcelain`, `rev-parse --show-toplevel` | 없음 |
 
 ### shelf 결과가 모델에 전달되는 범위
@@ -52,7 +52,7 @@ QMD의 MCP 응답은 검색 결과를 둘로 나눠 싣는다. 글(`content[].te
 | Claude Code 2.1.289 | 구조화된 결과 전체를 본다: 경로, 제목, 점수, `context`, 줄 번호, 발췌 | 본문을 본다 |
 | Codex CLI 0.160.0 | 글만 본다: 문서 ID, 점수, 경로, 제목. `context`와 발췌는 보지 못한다 | 아무것도 보지 못한다(세 번 실행해 같았다). `codex exec --json`의 이벤트에는 서버가 보낸 본문과 구조화된 결과가 모두 들어 있으므로, 서버가 아니라 Codex가 모델에 넘기는 단계에서 빠진다 |
 
-Orai는 서버와 provider 사이에 끼지 않으므로 이 차이를 메우지 못한다. Codex 역할에서 shelf는 "어느 파일인지 찾는" 도구로 동작하고, 본문과 폴더 설명은 파일과 `orai.toml`에서 읽는다. 프로젝트 지침(`AGENTS.md`의 Orai 블록)이 이 순서를 안내한다. 역할 세션(TUI)에서 같은지는 확인하지 않았다.
+Orai는 서버와 provider 사이에 끼지 않으므로 MCP로는 이 차이를 메우지 못한다. 그래서 에이전트 지침은 `orai search`와 `orai read`를 쓰게 한다. 셸 출력은 provider가 모델에 그대로 넘기므로 발췌, 폴더 설명, 본문이 Codex에도 간다(이것을 실제 provider로 확인하지는 않았다). MCP `shelf`는 계속 연결되며 Claude Code에서는 그대로 써도 된다. 역할 세션(TUI)에서 같은지는 확인하지 않았다.
 
 과거 기록(Pockets 문서): AMQ 0.77.3, Codex 0.154.0, Claude Code 2.1.268. 현재 지원 버전과 같다고 가정하지 않는다.
 

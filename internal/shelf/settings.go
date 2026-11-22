@@ -12,6 +12,7 @@ package shelf
 import (
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -63,7 +64,13 @@ type Settings struct {
 	Patterns    map[string]string // name -> file pattern inside that folder
 	Model       string
 	Smoke       *config.Smoke
+	// Log, when set, receives the engine's stderr (and AutoSync's whole output) instead
+	// of the terminal: a role session's screen belongs to the provider.
+	Log io.Writer
 }
+
+// SyncedFile records when the documents were last indexed (init, refresh, sync).
+func (s *Settings) SyncedFile() string { return filepath.Join(s.Directory, "synced-at") }
 
 // NewSettings resolves a project's shelf settings. The caller must have already
 // confirmed project.Config.Shelf is not nil.

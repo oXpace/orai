@@ -1,32 +1,34 @@
 <!-- orai:generated — `orai setup`이 관리한다. 프로젝트 규칙은 AGENTS.md나 역할 지침에 둔다. -->
 
-# 프로젝트 문서와 코드 구조 찾기
+# 검색 결과 자세히 읽기
 
-역할이 없어도 쓴다.
+평소에는 [SKILL.md](../SKILL.md)의 "찾기와 읽기"로 충분하다. 결과가 이상하거나 소스 하나를 깊이 볼 때 읽는다.
 
-## 문서 (shelf)
+## 소스
 
-도구는 MCP 서버 `shelf`다. 역할 세션에는 Orai가 연결한다. 그 밖의 클라이언트에 등록하는 방법은 `orai shelf --help`에 있다.
+| 소스 | 찾는 곳 | 찾는 방법 | 결과 한 건 |
+|---|---|---|---|
+| `docs` | `orai.toml`의 `[integrations.shelf]` `collections` 폴더 | shelf 서버(키워드+의미). 서버가 답하지 못하면 파일 키워드 검색 | `[docs] <경로>:<줄>`, 제목, 점수, `context`, 맞는 줄 |
+| `mail` | 내 메일함의 받은 메시지와 보낸 메시지 | 키워드 | `[mail] <ID> 보낸 이 → 받는 이 (received/sent, thread)`, 맞는 줄 |
+| `code` | 이 checkout의 코드 그래프(`.codegraph/`) | CodeGraph 심볼 검색 | `[code] <종류> <이름> <경로>:<시작>-<끝>`, 시그니처, 설명 |
 
-1. 결과를 적게 받아 검색한다.
-2. 부족하면 범위를 넓힌다.
-3. 필요한 문서의 원문을 읽고 판단한다. 검색 결과는 후보다.
+설정하지 않은 소스는 `not searched`로 나오고 문제로 세지 않는다. `--in`으로 직접 고른 소스가 준비되지 않았으면 `FAILED`다.
 
-| 항목 | 내용 |
-|---|---|
-| 결과 경로 | `<묶음>/<묶음 안의 경로>`. 묶음의 폴더는 `orai.toml`의 `[integrations.shelf]` `collections`에 있다 |
-| `context` | 그 폴더 문서의 용도와 적용 범위. `orai.toml`의 `[integrations.shelf.context]`에 선언한다. 규칙이나 검증 근거로 쓰지 않는다 |
-| 도구가 본문이나 `context`를 돌려주지 않을 때 | 파일과 `orai.toml`을 직접 읽는다 |
-| 문서를 고친 뒤 | `orai shelf sync` |
-| 검색이 실패하거나 결과가 빌 때 | 대상이 없다는 근거가 아니다. `rg`와 원문 읽기로 이어가고, 서버 상태는 [diagnosis.md](diagnosis.md)로 확인한다 |
+## 상태 줄과 조치
 
-## 코드 구조 (CodeGraph)
+| 상태 줄 | 뜻 | 조치 |
+|---|---|---|
+| `docs: keyword + meaning (shelf :<포트>)` | shelf 서버가 답했다 | 없음 |
+| `docs: keyword scan of the files … Fix: …` | 서버가 없거나 꺼졌거나 다른 프로젝트 것이다 | 줄에 적힌 명령. 샌드박스의 접근 거부는 서버가 꺼졌다는 근거가 아니다 |
+| `note: N document(s) changed since the last sync` | 색인이 문서보다 뒤처졌다 | `orai shelf sync` |
+| `note: N message(s) not received yet also match` | 받지 않은 메시지 중에도 맞는 것이 있다 | `orai inbox` |
+| `note: N file(s) changed since the graph was synced` | 코드 그래프가 파일보다 뒤처졌다 | `orai code sync` |
+| `code: FAILED — no code graph is built …` | 이 checkout에 그래프가 없다 | `orai code init` (만들지는 사용자가 정한다) |
 
-`.codegraph/`가 프로젝트 폴더에 있을 때만 쓴다.
+## MCP 도구
 
-| 할 일 | 명령 |
-|---|---|
-| 심볼의 원문과 호출 관계 찾기 | `codegraph explore "<심볼 이름이나 질문>"` (MCP 도구가 연결돼 있으면 `codegraph_explore`) |
-| 색인이 없거나 실패할 때 | `rg`와 원문 읽기 |
+역할 세션에는 MCP 서버 `shelf`와, 그 checkout에 코드 그래프가 있으면 `codegraph`도 연결된다. Claude Code에서는 이 도구들이 결과를 그대로 보여 주므로 써도 된다. Codex는 MCP 결과 중 일부(발췌, `context`, 본문)를 모델에 넘기지 않으므로 `orai search`와 `orai read`를 쓴다. 어느 쪽이든 원문은 파일로 확인한다.
 
-색인을 새로 만들지는 사용자가 정한다.
+## 기계가 읽을 출력
+
+`orai search … --json`, `orai read … --json`. 필드 이름은 출력에 있다.

@@ -1,13 +1,14 @@
 # 문서
 
-이 폴더에는 설계, 운영, 결정 기록처럼 오래 유지할 Markdown 문서를 둔다. 이 폴더는 shelf(프로젝트 문서 검색)에 등록돼 있어, 역할 세션이 `shelf` MCP 서버로 이 문서를 찾는다. 이 파일은 `orai setup`이 만든 시작 페이지이므로 자유롭게 고쳐 쓴다.
+이 폴더에는 설계, 운영, 결정 기록처럼 오래 유지할 Markdown 문서를 둔다. 이 폴더는 shelf(프로젝트 문서 검색)에 등록돼 있어, `orai search`와 역할 세션의 `shelf` MCP 서버로 이 문서를 찾는다. 이 파일은 `orai setup`이 만든 시작 페이지이므로 자유롭게 고쳐 쓴다.
 
 ## shelf(문서 검색) 쓰는 법
 
 | 할 일 | 명령 |
 |---|---|
 | 처음 한 번 색인 만들기 | `orai shelf init` (`orai setup`이 대신 실행한다) |
-| 문서를 고친 뒤 색인 갱신 | `orai shelf sync` |
+| 문서 찾기 | `orai search '<질문>' --in docs` |
+| 문서를 고친 뒤 색인 갱신 | 역할 세션이 떠 있으면 자동. 세션 밖에서는 `orai shelf sync` |
 | 재부팅 뒤 서버 다시 켜기 | `orai shelf recover` |
 | 상태 확인 | `orai doctor`, 실제 검색까지 확인하려면 `orai doctor --deep` |
 

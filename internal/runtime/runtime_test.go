@@ -200,7 +200,8 @@ func TestInjectedMCPServersReachBothProviders(t *testing.T) {
 	f := newFixture(t)
 	saved := MCPServers
 	defer func() { MCPServers = saved }()
-	MCPServers = func(_ *project.Project, provider string) map[string]map[string]any {
+	MCPServers = func(_ *project.Project, role config.Role) map[string]map[string]any {
+		provider := role.Provider
 		if provider == "codex" {
 			return map[string]map[string]any{"shelf-x": {"url": "http://127.0.0.1:18555/mcp"}}
 		}
@@ -222,7 +223,7 @@ func TestFreshPromptBootstrapsOnceAndChannelFollowsProvider(t *testing.T) {
 		role := f.p.Config.Roles[name]
 		args, _ := ProviderArgs(f.p, role, "")
 		prompt := args[len(args)-1]
-		if strings.Count(strings.Join(args, "\n"), "위 문서를 읽는다") != 1 || !strings.Contains(prompt, "orai msg inbox") {
+		if strings.Count(strings.Join(args, "\n"), "위 문서를 읽는다") != 1 || !strings.Contains(prompt, "orai inbox") {
 			t.Fatalf("%s prompt %q", name, prompt)
 		}
 		// The basics, each on its own line: identity, the project root, then the three
@@ -250,7 +251,7 @@ func TestFreshPromptBootstrapsOnceAndChannelFollowsProvider(t *testing.T) {
 		resumed := Kickoff(f.p, role, true)
 		if !strings.HasPrefix(resumed, "Orai `"+name+"` 역할 세션을 다시 열었다.\n") ||
 			strings.Contains(resumed, "## ") || strings.Contains(resumed, "문서를 읽는다") ||
-			!strings.Contains(resumed, "orai msg inbox") || !strings.Contains(resumed, "AGENTS.md, "+role.Guide) ||
+			!strings.Contains(resumed, "orai inbox") || !strings.Contains(resumed, "AGENTS.md, "+role.Guide) ||
 			strings.Count(resumed, f.p.Root) != 1 || strings.Count(resumed, "\n") > 7 || len(resumed) >= len(prompt) {
 			t.Fatalf("%s resumed prompt:\n%s", name, resumed)
 		}
@@ -273,12 +274,12 @@ func TestFreshPromptBootstrapsOnceAndChannelFollowsProvider(t *testing.T) {
 	for _, resumed := range []bool{false, true} {
 		prompt := Kickoff(f.p, dev, resumed)
 		if !strings.Contains(prompt, follow) || strings.Contains(prompt, "channel_ready") ||
-			!strings.Contains(prompt, "orai msg inbox") || strings.Index(prompt, follow) > strings.Index(prompt, "orai msg inbox") {
+			!strings.Contains(prompt, "orai inbox") || strings.Index(prompt, follow) > strings.Index(prompt, "orai inbox") {
 			t.Fatalf("resumed=%v Claude prompt with a guide section:\n%s", resumed, prompt)
 		}
 		// A Codex role has nothing of its own: no pointer, only the shared steps.
 		prompt = Kickoff(f.p, lead, resumed)
-		if strings.Contains(prompt, follow) || strings.Contains(prompt, "channel_ready") || !strings.Contains(prompt, "orai msg inbox") {
+		if strings.Contains(prompt, follow) || strings.Contains(prompt, "channel_ready") || !strings.Contains(prompt, "orai inbox") {
 			t.Fatalf("resumed=%v Codex prompt:\n%s", resumed, prompt)
 		}
 	}
