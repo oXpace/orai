@@ -78,12 +78,16 @@ Orai는 안내를 내는 스트림(실행 안내는 stderr, 항목표는 stdout)
 - **WHEN** 실행 안내를 낸다
 - **THEN** ANSI 이스케이프가 없다
 
+#### Scenario: quiet와 도움말을 같이 준다
+- **WHEN** `orai <역할> --fresh -q --help`를 실행한다
+- **THEN** 도움말만 나오고 provider를 실행하거나 상태를 바꾸지 않는다
+
 #### Scenario: quiet로 실행한다
 - **WHEN** `orai <역할> --quiet`로 실행한다
 - **THEN** 시작·종료 안내는 없고, 문제가 있으면 경고 한 줄은 나온다
 
 ### Requirement: 역할 상태는 항목표로 보여 준다
-`orai status <역할>`은 상태·실행·대화·폴더·알림·메일을 항목표로 내야 한다(SHALL). 값과 판정은 `orai status`의 JSON과 같아야 하고, 인자 없는 `orai status`의 JSON 출력은 바꾸지 않아야 한다(MUST). 검색 엔진은 표시하지 않는다.
+`orai status <역할>`은 상태·실행·대화·폴더·알림·메일을 항목표로 내야 한다(SHALL). 값과 판정은 `orai status`의 JSON과 같되 전달 오류는 이번 실행의 것만 보여야 하고, 인자 없는 `orai status`의 JSON 출력은 바꾸지 않아야 한다(MUST). 검색 엔진은 표시하지 않는다.
 
 #### Scenario: 실행 중인 역할
 - **GIVEN** 알림이 준비된 실행 중인 역할과 새 메시지 2개
@@ -109,6 +113,11 @@ Orai는 안내를 내는 스트림(실행 안내는 stderr, 항목표는 stdout)
 - **GIVEN** 실행 중이지만 알림이 준비되지 않았거나 마지막 전달 오류가 있다
 - **WHEN** `orai status <역할>`을 실행한다
 - **THEN** 알림 항목에 확인된 상태나 오류가 나오고 `준비됨`으로 표시하지 않는다
+
+#### Scenario: 이전 실행이 남긴 전달 오류
+- **GIVEN** 실행 중인 역할과 이전 실행의 nonce로 기록된 전달 오류
+- **WHEN** `orai status <역할>`을 실행한다
+- **THEN** 그 오류를 보이지 않고 알림은 `준비 안 됨`으로 나온다
 
 #### Scenario: 없는 역할
 - **WHEN** 설정에 없는 이름으로 `orai status <이름>`을 실행한다

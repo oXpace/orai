@@ -3,6 +3,7 @@ package runtime
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -172,7 +173,7 @@ func TestColorFollowsTheStream(t *testing.T) {
 	}
 }
 
-func TestRoleTableSaysWhatStatusJSONSays(t *testing.T) {
+func TestRoleTable(t *testing.T) {
 	f := newFixture(t)
 	root := mail.Root(f.p.MailRoot())
 	if err := mail.Init(root, f.p.Config.Handles()); err != nil {
@@ -186,6 +187,7 @@ func TestRoleTableSaysWhatStatusJSONSays(t *testing.T) {
 		}
 		return out.String()
 	}
+	unreadCount := 0
 	expect := func(run, talk, notify string) {
 		t.Helper()
 		want := f.p.Name() + " › lead\n" +
@@ -194,9 +196,24 @@ func TestRoleTableSaysWhatStatusJSONSays(t *testing.T) {
 			"  대화    " + talk + "\n" +
 			"  폴더    프로젝트 폴더\n" +
 			"  알림    " + notify + "\n" +
-			"  메일    새 메시지 0\n"
+			fmt.Sprintf("  메일    새 메시지 %d\n", unreadCount)
 		if got := table(); got != want {
 			t.Fatalf("got\n%s\nwant\n%s", got, want)
+		}
+		// The status JSON says the same.
+		var out bytes.Buffer
+		if err := Status(f.p, &out); err != nil {
+			t.Fatal(err)
+		}
+		var all []RoleStatus
+		if err := json.Unmarshal(out.Bytes(), &all); err != nil || len(all) != 2 {
+			t.Fatalf("status JSON %v: %s", err, out.String())
+		}
+		item := all[1] // dev, lead
+		id, _ := item.SessionID.(string)
+		if item.Running != (run == "실행 중") || item.DeliveryReady != (notify == "준비됨") ||
+			item.Pending == nil || *item.Pending != unreadCount || (talk != "-" && shortID(id) != talk) {
+			t.Fatalf("table and JSON differ: %s", out.String())
 		}
 	}
 
@@ -211,6 +228,21 @@ func TestRoleTableSaysWhatStatusJSONSays(t *testing.T) {
 	}
 	f.state(t, map[string]any{"status": "stopped", "transcript": transcript})
 	expect("멈춤 · 이어가기: orai lead", "ed936671", "-")
+
+	for range 2 {
+		if _, err := root.Send("dev", []string{"lead"}, "hello", mail.SendOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		unreadCount++
+	}
+	expect("멈춤 · 이어가기: orai lead", "ed936671", "-")
+
+	role := f.p.Config.Roles["lead"]
+	blocked := role
+	blocked.Branch = "release"
+	f.p.Config.Roles["lead"] = blocked
+	expect("멈춤 · 다시 실행할 수 없음 → orai doctor", "ed936671", "-")
+	f.p.Config.Roles["lead"] = role
 
 	lock, err := state.RoleLock(f.files)
 	if err != nil {
@@ -234,14 +266,9 @@ func TestRoleTableSaysWhatStatusJSONSays(t *testing.T) {
 	deliver(false, "codex queue: exit status 1: no thread\nsecond line")
 	expect("실행 중", "ed936671", "오류: codex queue: exit status 1: no thread")
 
-	var out bytes.Buffer
-	if err := Status(f.p, &out); err != nil {
-		t.Fatal(err)
-	}
-	var all []RoleStatus
-	if err := json.Unmarshal(out.Bytes(), &all); err != nil || len(all) != 2 {
-		t.Fatalf("status JSON %v: %s", err, out.String())
-	}
+	// An error an earlier run left is not this run's.
+	f.state(t, map[string]any{"status": "starting", "nonce": "run-two", "captured_at": nil, "transcript": transcript})
+	expect("실행 중", "ed936671", "준비 안 됨")
 }
 
 func TestRoleTableRefusesUnknownRole(t *testing.T) {

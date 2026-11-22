@@ -37,7 +37,7 @@
 
 ### D6. 항목표와 JSON은 계산이 하나다
 
-- 결정: 역할 하나의 `RoleStatus` 계산을 JSON과 항목표가 같이 쓴다. `delivery_ready`의 판정은 바꾸지 않는다.
+- 결정: 역할 하나의 `RoleStatus` 계산을 JSON과 항목표가 같이 쓴다. `delivery_ready`의 판정은 바꾸지 않는다. 항목표는 이번 실행의 nonce로 기록된 `last_error`만 오류로 보인다.
 - 이유: 두 출력이 다른 상태를 말하지 않는다.
 
 ## Risks

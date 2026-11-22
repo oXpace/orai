@@ -602,6 +602,9 @@ type RoleStatus struct {
 	LastError     any      `json:"last_error"`
 	Pending       *int     `json:"pending,omitempty"`
 	MailError     string   `json:"mail_error,omitempty"`
+
+	// Whether the delivery record, and so LastError, is of the current run. Not in the JSON.
+	deliveryOfThisRun bool
 }
 
 func Status(p *project.Project, out io.Writer) error {
@@ -626,6 +629,7 @@ func roleStatus(p *project.Project, role config.Role) RoleStatus {
 		delivery["ready"] == true
 	if active {
 		item.LastError = delivery["last_error"]
+		item.deliveryOfThisRun = delivery["nonce"] == current["nonce"]
 	}
 	pending, err := pendingCount(mail.Root(p.MailRoot()), name)
 	if err != nil {

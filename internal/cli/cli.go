@@ -149,7 +149,7 @@ const statusHelp = `usage: orai status [role] [--project PATH]
 
 With a role: that role's state as a table to read.
 
-Without one, for scripts and agents: print each role as JSON: the settings in effect (provider, worktree, model, effort)
+Without one (for scripts and agents), print each role as JSON: the settings in effect (provider, worktree, model, effort)
 and which of them orai.local.toml set ("local"; "." means the whole role), whether it
 is running, its saved session, whether notifications can be delivered, the last
 delivery error, pending mail.
@@ -402,7 +402,7 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 func wantsHelp(argv []string) bool {
 	o, _ := parse(argv, map[string]bool{"project": true, "preset": true, "branch": true, "role": true, "as": true,
 		"limit": true, "body": true, "file": true, "kind": true, "thread": true, "in": true, "also": true,
-		"dry-run": false, "no-tools": false, "local": false, "fresh": false, "deep": false, "json": false, "peek": false, "again": false})
+		"dry-run": false, "no-tools": false, "local": false, "fresh": false, "quiet": false, "q": false, "deep": false, "json": false, "peek": false, "again": false})
 	return o.flag("help")
 }
 

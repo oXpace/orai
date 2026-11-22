@@ -154,7 +154,7 @@ func (v view) stopped(p *project.Project, role config.Role, next nextRun, captur
 		if hookSkipped {
 			warning += " 후 hook 승인"
 		}
-	default: // blocked, or the state this run wrote is gone
+	default: // blocked, or the state this run wrote could not be saved
 		warning = blockedAdvice
 	}
 	if !v.quiet {
@@ -176,7 +176,7 @@ func StatusRole(p *project.Project, name string, out io.Writer) error {
 	run, notify := "실행 중", "-"
 	if item.Running {
 		switch {
-		case item.LastError != nil:
+		case item.LastError != nil && item.deliveryOfThisRun:
 			reason, _, _ := strings.Cut(fmt.Sprint(item.LastError), "\n")
 			notify = "오류: " + reason
 		case item.DeliveryReady:
