@@ -75,54 +75,16 @@ git add -A && git commit -m "Update Orai"
 | `qmd context add`로 직접 넣어 둔 설명이 있을 때 | 표를 적지 않는 동안에는 그대로 남는다. 표를 적으면 색인의 설명은 표와 같아지므로, 남길 설명을 먼저 `orai.toml`에 옮겨 적는다. 표에 없는 설명은 다음 `recover`·`refresh`가 본문을 출력한 뒤 지운다 |
 | `orai doctor --json`을 읽는 스크립트 | 설명을 선언한 프로젝트에 `shelf.context` 항목이 추가된다. 로컬 파일이 있으면 `project.detail.local`(`file`, `keys`)이 추가된다. 시작한 적 없는 역할의 `role.<이름>`은 `degraded`가 아니라 `not-configured`다 |
 
-### 0.3.x → 0.4.0
+### 0.3 이하에서 올릴 때
 
-문서 검색의 이름이 `wiki`에서 `shelf`로 바뀌었다. 색인과 서버, 포트는 그대로다.
+0.7.0부터 0.3 이하의 형식을 읽거나 옮기는 경로가 없다. 0.3 이하의 프로젝트는 먼저 0.6.0으로 올려 [0.6.0의 마이그레이션 안내](https://github.com/oXpace/orai/blob/0.6.0/docs/operations.md#버전-올리기와-마이그레이션)를 따른 뒤 0.7.0 이상으로 올린다. 바로 올리면 다음처럼 멈춘다.
 
-| 대상 | 해야 할 일 |
+| 남아 있는 것 | 0.7.0의 동작 |
 |---|---|
-| `orai.toml` | `schema = 1`을 `schema = 2`로, `[integrations.wiki]`(와 `[integrations.wiki.smoke]`)를 `[integrations.shelf]`로 고친다. 고치기 전에도 예전 표를 그대로 읽으므로 동작은 멈추지 않고, `orai doctor`가 이 수정을 Next step으로 알려 준다. Orai는 `orai.toml` 본문을 대신 고치지 않는다 |
-| 명령 | `orai wiki …` → `orai shelf …`. 예전 이름을 치면 새 이름을 알려 주고 끝난다 |
-| 색인 폴더 `.orai/wiki/` | 손댈 것이 없다. 올린 뒤 첫 `orai setup`(또는 `orai shelf recover`)이 서버를 멈추고 `.orai/shelf/`로 옮긴 뒤 다시 시작한다. 색인을 다시 만들지 않는다 |
-| MCP 서버 이름 | `wiki-<프로젝트>` → `shelf`(모든 프로젝트에서 같다). 역할 세션은 다시 열면 새 이름으로 연결된다. 에이전트 도구 이름이 `mcp__wiki-<프로젝트>__*`에서 `mcp__shelf__*`로 바뀌므로, 저장해 둔 도구 허용 목록과 프로젝트 지침의 이름을 고친다 |
-| 역할 밖에서 직접 등록한 MCP 설정(`.codex/config.toml`, `.mcp.json`) | 항목 이름을 `shelf`로 바꾼다. 주소는 같다. `orai doctor`의 `shelf.registration`이 예전 이름과 다른 포트를 찾아 알려 준다([역할 세션 밖에서 쓰기](#역할-세션-밖에서-쓰기)) |
-| `orai doctor --json`을 읽는 스크립트 | 구성요소 이름 `wiki`, `wiki.*`가 `shelf`, `shelf.*`가 됐고 `shelf.collections`, `shelf.registration`이 추가됐다 |
-| 폴더를 나눠 등록하고 싶을 때 | 새 기능이다. [설정](#설정-oraitoml의-integrationsshelf)의 `pattern`을 쓴다 |
-
-### 0.2.x → 0.3.0
-
-| 대상 | 해야 할 일 |
-|---|---|
-| `orai doctor` 출력을 JSON으로 읽는 스크립트 | `orai doctor --json`으로 바꾼다. 필드와 종료 코드는 같다 |
-| 저장소에 커밋돼 있는 `.agents/roles/` | `git rm -r --cached .agents/roles` 뒤 커밋한다. 파일은 남고 추적만 해제된다. 팀이 같은 지침을 공유하려면 대신 `orai.toml`의 `guide`를 `docs/roles/dev.md`처럼 저장소에 넣는 경로로 옮긴다 |
-| 이전 버전이 만든 역할 지침 | 그대로 써도 된다. "세션 시작" 절이 없으면 프롬프트가 시작 절차를 직접 알려 준다. 새 형식에 맞추려면 Claude 역할의 지침에 아래 절을 넣는다 |
-| `pm-staff`로 만든 역할 구성 | 바꾸지 않아도 된다. 다른 구성으로 바꾸려면 `orai.toml`의 `[roles.*]`를 고치거나 지우고 `orai setup`을 실행한다([역할 정하기](#프로젝트-준비-orai-setup)) |
-| 받은 메시지를 `orai msg inbox <ID>`로 다시 읽는 스크립트 | 이미 받은 메시지는 본문 없이 `already_received`만 나온다. 본문이 필요하면 `--again`을 붙인다 |
-| `orai.toml` | 바꿀 것이 없다(`schema = 1` 그대로) |
-
-Claude 역할의 지침에 넣는 절:
-
-```markdown
-## 세션 시작
-
-세션을 새로 시작하거나 다시 열 때마다 한다.
-
-1. orai MCP의 `channel_ready` 도구를 호출해 수신 준비를 알린다. 호출하기 전에는 새 메시지 알림이 오지 않는다.
-```
-
-### 0.1.0 → 0.2.0 이상
-
-0.1.0은 Python 패키지였고 AMQ가 필요했다. 0.2.0부터는 실행 파일 하나이며 AMQ가 필요 없다.
-
-| 대상 | 해야 할 일 |
-|---|---|
-| 설치 원천 | `mise.toml`의 `"pypi:oXpace/orai"` 줄을 지우고 `mise use --pin github:oXpace/orai`를 실행한다 |
-| `.amqrc` | 더 쓰지 않는다. 지워도 된다 |
-| AMQ | 지워도 된다. 계속 설치해 두면 `amq`로 같은 메일함을 읽고 보낼 수 있다 |
-| 메일함(`.agent-mail/<session>`) | 위치와 형식이 같아 기존 메시지가 그대로 읽힌다. `orai setup`이 빠진 폴더만 채운다 |
-| 명령과 `orai.toml` | 바꿀 것이 없다 |
-
-Orai가 독립 프로젝트가 되기 전의 방식(Pockets의 `scripts/orai`와 `.agents/orai.json`)에서 옮기는 일은 [배포 계획](release.md#단계)의 "소비 프로젝트 이전" 단계가 다룬다.
+| `orai.toml`의 `schema = 1`, `[integrations.wiki]` | 모든 명령이 읽기를 거부하고 고칠 두 줄을 알려 준다(`orai doctor`는 `project` blocked). Orai는 본문을 대신 고치지 않는다 |
+| 색인 폴더 `.orai/wiki/` | 옮기지 않는다. shelf는 처음 준비하는 것처럼 보이고 `orai shelf init`이 색인을 새로 만든다. 예전 서버가 같은 포트를 쓰고 있으면 0.6.0의 `orai shelf recover`로 먼저 옮긴다 |
+| 예전 명령 이름(`orai inbox`, `orai wiki`, `orai qmd`, `orai init`) | 새 이름을 안내하지 않고 역할 이름으로 해석돼 종료 코드 2로 끝난다. 이 이름들은 계속 예약어라 역할 이름으로 쓸 수 없다 |
+| `mise.toml`의 `pypi:oXpace/orai`(0.1.0) | Orai 고정으로 보지 않는다. `mise use --pin github:oXpace/orai`로 바꾼다 |
 
 ## 프로젝트 준비 (`orai setup`)
 
@@ -471,13 +433,13 @@ mise run test            # race 검사기, 빌드한 바이너리를 checkout �
 
 ### 실제 파일럿 (계정·호스트 준비 후)
 
-격리된 작은 파일럿 저장소에서 수행한다. Orai 저장소와 Pockets에서는 하지 않는다.
+macOS에서는 실사용으로 확인했다([이력](history.md#2026-11-22-060-실사용-확인-macos)). provider나 Orai 버전을 바꿀 때, 그리고 아직 확인하지 않은 Linux에서 이 절차를 쓴다. 격리된 작은 파일럿 저장소에서 수행한다. Orai 저장소와 Pockets에서는 하지 않는다.
 
 1. 빈 폴더에서 `mise use --pin github:oXpace/orai`, `orai setup --role pm=codex --role staff=claude`, 첫 커밋, `git worktree add .worktrees/staff`, `orai doctor`.
 2. 두 터미널에서 `orai pm`, `orai staff`를 실행한다. Codex `/hooks` 신뢰와 Claude channel에 동의한다.
 3. 요청과 회신을 주고받는다(`send` → 알림 → `inbox <ID>` → `reply`). 작업 중 알림, 유휴 알림, 수신자가 꺼져 있을 때의 적재, 재접속 후 알림을 각각 확인한다.
 4. 역할을 종료한 뒤 다시 실행해 같은 UUID로 재개되고 메시지를 받는지 확인한다. 중복 실행이 거부되는지 확인한다.
-   - 설치 버전에서 아직 확인하지 않은 전제가 있다. Claude `--resume <UUID>`의 SessionStart hook이 같은 `session_id`를 보내야 한다(다르면 재개할 때마다 캡처가 거부된다). Codex SessionStart payload에는 `cwd`와 `transcript_path`가 있어야 하고, `codex resume` 때도 hook이 실행돼야 한다(실행되지 않으면 Codex 알림이 준비 상태가 되지 않는다). 시작과 재개 때 한 번씩 hook 입력을 기록해 확인한다.
+   - 이 흐름이 기대는 전제가 있다. Claude `--resume <UUID>`의 SessionStart hook이 같은 `session_id`를 보내야 한다(다르면 재개할 때마다 캡처가 거부된다). Codex SessionStart payload에는 `cwd`와 `transcript_path`가 있어야 하고, `codex resume` 때도 hook이 실행돼야 한다(실행되지 않으면 Codex 알림이 준비 상태가 되지 않는다). 시작과 재개 때 한 번씩 hook 입력을 기록해 확인한다.
 5. `orai shelf init` 후 `orai doctor --deep`으로 실제 검색을, `codegraph init` 후 smoke 심볼 조회를 확인한다.
 
 결과는 [이력](history.md)의 검증 기록에 날짜, 버전, 통과·미검증 범위와 함께 남긴다.

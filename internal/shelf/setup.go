@@ -38,7 +38,7 @@ func SetupStep(p *project.Project, out io.Writer) string {
 		return "shelf: skipped (no Markdown documents in " + strings.Join(s.collectionNames(), ", ") + " yet; add some, then `orai shelf init`)"
 	}
 	action := "init"
-	if (exists(s.ConfigFile) && exists(s.DB)) || s.legacyOnly() {
+	if exists(s.ConfigFile) && exists(s.DB) {
 		action = "recover"
 	}
 	if err := lifecycleCall(p, action, out); err != nil {
