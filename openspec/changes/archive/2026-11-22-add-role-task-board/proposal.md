@@ -1,6 +1,6 @@
 # Proposal
 
-> 초안. 설계 문서 합의 전이라 스펙 델타와 tasks가 없고, `openspec validate`는 아직 통과하지 않는다.
+> 규칙으로 대체(2026-11-22 사용자 결정). 구현하지 않았다. 배정과 의존성은 `assign-work-with-changes`의 규칙이, 읽기 전용 현황은 `add-work-status-view`(0.8)가 맡고, 임대는 범위에서 뺐다.
 
 ## Why
 

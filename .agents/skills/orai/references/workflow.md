@@ -138,11 +138,15 @@
 
 ## 역할 사이에서
 
-메시지 명령은 [../SKILL.md](../SKILL.md)에 있다.
+메시지 명령은 [../SKILL.md](../SKILL.md)에 있다. 누가 맡길 수 있는지는 역할 지침이 정한다.
+
+- **thread**: change에 관한 메시지는 `change/<이름>` thread로 주고받는다. `reply`는 원본의 thread를 따라간다.
+- **첫 줄**: 맡길 때와 답할 때 본문 첫 줄에 `change: <이름> task: 1.2`처럼 적는다. 번호는 `tasks.md`에 적힌 것이다. `openspec instructions apply`가 주는 순서 id(1, 2, 3)를 쓰지 않는다.
+- **순서**: change 안에서는 task 순서를 따른다. change 사이의 선후는 `.openspec.yaml`의 `x-after`에 목록(`[<선행 change>]`)으로 적고, 선행 change가 보관된 뒤에 맡긴다. OpenSpec은 이 값을 강제하지 않으므로 맡기기 전에 `openspec list`로 확인한다.
 
 | 때 | 보내는 것 |
 |---|---|
-| 작업을 맡길 때 | `orai send <역할> --kind todo`. 본문에 변경 이름(또는 스펙 경로)과 만족시킬 시나리오만 적는다. 상대 worktree에서 읽을 수 있게 계획이 커밋돼 있는지 먼저 확인한다 |
-| 넘겨받았을 때 | `orai inbox <ID>`로 받고 변경의 원문을 읽는다. 지난 맥락은 `orai search '<변경 이름>' --in mail` |
-| 기준이 모호할 때 | 구현 전에 `orai send <역할> --kind question` |
-| 끝났을 때 | `orai reply <받은-ID>`로 위 보고 형식. 길면 `--file <경로>` |
+| 작업을 맡길 때 | `orai send <역할> --kind todo --thread change/<이름>`. 본문에는 첫 줄과 만족시킬 시나리오만 적는다(change가 없으면 스펙 경로). 상대 worktree에서 읽을 수 있게 계획이 커밋돼 있는지 먼저 확인한다 |
+| 넘겨받았을 때 | `orai inbox <ID>`로 받고 변경의 원문을 읽는다. 지난 맥락은 `orai search '<이름>' --in mail`로 찾되, thread가 `change/<이름>`인 메시지만 그 작업으로 본다(검색은 이름을 낱말로 나눠 다른 change도 낸다) |
+| 기준이 모호할 때 | 구현 전에 `orai send <역할> --kind question --thread change/<이름>` |
+| 끝났을 때 | `orai reply <받은-ID>`로 첫 줄과 위 보고 형식. 길면 `--file <경로>` |

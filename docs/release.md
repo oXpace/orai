@@ -29,7 +29,7 @@ Orai는 Go 단일 실행 파일(`orai`)이다. 외부 도구(Codex, Claude Code,
 | 1. 공개 배포 | `github.com/oXpace/orai` 공개, Release | 완료 (0.1.0, 0.2.0, 0.3.0, 0.4.0, 0.5.0, 0.5.1, 0.6.0) |
 | 2. 파일럿 | Codex↔Claude 실제 검증 ([운영 안내](operations.md#실제-파일럿-계정호스트-준비-후)) | macOS 완료 (2026-11-22 기록, 0.6.0 실사용). Linux는 미검증. 내용은 [이력](history.md#2026-11-22-060-실사용-확인-macos) |
 | 3. 소비 프로젝트 이전 | Pockets: `scripts/orai`와 `~/.local/bin/orai` 전역 링크 → 프로젝트 고정 `orai`, `.agents/orai.json` → `orai.toml`. 메일함 경로(`.agent-mail/orai`)는 같아서 기존 메일이 그대로 읽힌다 | 완료 (2026-10-03, 0.3.0). 파일럿 전에 사용자 요청으로 진행했다. 내용은 [이력](history.md#pockets-이전-2026-10-03) |
-| 4. 작업 목록 | 메일함 위에 역할 간 작업 배정·임대·의존성 | 설계 문서 합의 후 |
+| 4. 작업 목록 | OpenSpec change와 메일 규칙으로 배정·의존성을 표현한다(임대 없음). 읽기 전용 현황 명령은 0.8 | 규칙은 0.7.0(2026-11-22 사용자 결정). 현황 명령은 `add-work-status-view` |
 
 ## 버전 정책
 
