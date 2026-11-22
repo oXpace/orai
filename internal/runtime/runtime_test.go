@@ -462,7 +462,7 @@ func TestDryRunChangesNothingAndLaunchesNothing(t *testing.T) {
 	t.Setenv("PATH", bin)
 	before := listTree(f.p.Root)
 	var out bytes.Buffer
-	code, err := Launch(f.p, "lead", false, true, &out)
+	code, err := Launch(f.p, "lead", false, true, false, &out, &bytes.Buffer{})
 	if err != nil || code != 0 {
 		t.Fatal(code, err)
 	}
@@ -490,14 +490,14 @@ func listTree(root string) []string {
 
 func TestUnknownRoleAndNestedLaunchAreRefused(t *testing.T) {
 	f := newFixture(t)
-	if code, err := Launch(f.p, "senior", false, true, &bytes.Buffer{}); code != 2 || err == nil ||
+	if code, err := Launch(f.p, "senior", false, true, false, &bytes.Buffer{}, &bytes.Buffer{}); code != 2 || err == nil ||
 		!strings.Contains(err.Error(), `unknown role "senior"`) {
 		t.Fatal(code, err)
 	}
 	t.Setenv("ORAI_ROLE", "dev")
 	t.Setenv("ORAI_PROJECT", f.p.Root)
 	t.Setenv("ORAI_SESSION", "orai")
-	if _, err := Launch(f.p, "lead", false, true, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "already inside") {
+	if _, err := Launch(f.p, "lead", false, true, false, &bytes.Buffer{}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "already inside") {
 		t.Fatal(err)
 	}
 }

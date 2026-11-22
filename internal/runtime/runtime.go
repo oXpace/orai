@@ -415,18 +415,26 @@ func interactive() bool {
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
-// Launch starts or exactly resumes a role and blocks until its CLI exits.
-func Launch(p *project.Project, roleName string, fresh, dry bool, out io.Writer) (int, error) {
+func findRole(p *project.Project, name string) (config.Role, error) {
+	if role, ok := p.Config.Roles[name]; ok {
+		return role, nil
+	}
+	known := strings.Join(p.Config.RoleNames(), ", ")
+	if known == "" {
+		known = "none"
+	}
+	return config.Role{}, &UsageError{fmt.Sprintf("unknown role %q (configured: %s)", name, known)}
+}
+
+// Launch starts or exactly resumes a role and blocks until its CLI exits. out gets only
+// the dry run's JSON; what a person reads goes to notices, and quiet leaves the warnings.
+func Launch(p *project.Project, roleName string, fresh, dry, quiet bool, out, notices io.Writer) (int, error) {
 	if role, _ := RoleIdentity(); role != "" {
 		return 1, errors.New("already inside an Orai role session; start roles from a normal terminal")
 	}
-	role, ok := p.Config.Roles[roleName]
-	if !ok {
-		known := strings.Join(p.Config.RoleNames(), ", ")
-		if known == "" {
-			known = "none"
-		}
-		return 2, &UsageError{fmt.Sprintf("unknown role %q (configured: %s)", roleName, known)}
+	role, err := findRole(p, roleName)
+	if err != nil {
+		return 2, err
 	}
 	cwd, err := RoleWorktree(p, role)
 	if err != nil {
@@ -470,8 +478,9 @@ func Launch(p *project.Project, roleName string, fresh, dry bool, out io.Writer)
 	}
 	defer lock.Close()
 	root := mail.Root(p.MailRoot())
-	if missing := root.Missing(p.Config.Handles()); len(missing) > 0 && root.Initialized() {
-		fmt.Fprintf(out, "orai: adding mailbox(es) %s to %s\n", strings.Join(missing, ", "), root)
+	var added []string
+	if root.Initialized() {
+		added = root.Missing(p.Config.Handles())
 	}
 	if err := mail.Init(root, p.Config.Handles()); err != nil {
 		return 1, err
@@ -499,16 +508,9 @@ func Launch(p *project.Project, roleName string, fresh, dry bool, out io.Writer)
 		return 1, err
 	}
 	env := childEnv(p, role, nonce)
-	model := role.Model
-	if model == "" {
-		model = "provider default"
-	}
-	mode := "fresh"
-	if savedID != "" {
-		mode = "resume"
-	}
-	fmt.Fprintf(out, "orai: %s/%s / %s / %s\n세션 ID 수집에는 CLI SessionStart hook 신뢰가 필요합니다. Codex에서 건너뛰면 /hooks로 확인하세요.\n",
-		p.Name(), role.Name, model, mode)
+	screen := newView(notices, quiet)
+	pending, _ := pendingCount(root, role.Name)
+	screen.started(p, role, savedID, pending, added)
 	cmd := exec.Command(binary, args[1:]...)
 	cmd.Dir, cmd.Env = cwd, env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -575,13 +577,15 @@ func Launch(p *project.Project, roleName string, fresh, dry bool, out io.Writer)
 	}
 	current["status"], current["stopped_at"] = "stopped", float64(time.Now().UnixNano())/1e9
 	_ = state.WriteJSON(files.State(), current)
+	code, runErr := 0, waitErr
 	if exit, ok := waitErr.(*exec.ExitError); ok {
-		return exit.ExitCode(), nil
+		code, runErr = exit.ExitCode(), nil
+	} else if waitErr != nil {
+		code = 1
 	}
-	if waitErr != nil {
-		return 1, waitErr
-	}
-	return 0, nil
+	captured := str(current, "nonce") == nonce && current["captured_at"] != nil
+	screen.stopped(p, role, judgeNextRun(p, role), captured, code)
+	return code, runErr
 }
 
 type RoleStatus struct {
@@ -601,35 +605,45 @@ type RoleStatus struct {
 }
 
 func Status(p *project.Project, out io.Writer) error {
-	root := mail.Root(p.MailRoot())
 	result := []RoleStatus{}
 	for _, name := range p.Config.RoleNames() {
-		role := p.Config.Roles[name]
-		files := p.RoleFiles(name)
-		current, _ := state.ReadJSON(files.State())
-		delivery, _ := state.ReadJSON(files.Delivery(role.Provider))
-		active := state.Locked(files)
-		item := RoleStatus{Role: name, Provider: role.Provider, Running: active, SessionID: current["session_id"],
-			Worktree: role.Worktree, Model: role.Model, Effort: role.Effort, Local: p.Config.LocalUnder("roles." + name)}
-		item.DeliveryReady = active && current["captured_at"] != nil && delivery["nonce"] == current["nonce"] &&
-			delivery["ready"] == true
-		if active {
-			item.LastError = delivery["last_error"]
-		}
-		if root.Initialized() {
-			if ids, err := root.Pending(name); err != nil {
-				item.MailError = err.Error()
-			} else {
-				count := len(ids)
-				item.Pending = &count
-			}
-		} else {
-			zero := 0
-			item.Pending = &zero
-		}
-		result = append(result, item)
+		result = append(result, roleStatus(p, p.Config.Roles[name]))
 	}
 	data, _ := json.MarshalIndent(result, "", "  ")
 	_, err := fmt.Fprintln(out, string(data))
 	return err
+}
+
+func roleStatus(p *project.Project, role config.Role) RoleStatus {
+	name := role.Name
+	files := p.RoleFiles(name)
+	current, _ := state.ReadJSON(files.State())
+	delivery, _ := state.ReadJSON(files.Delivery(role.Provider))
+	active := state.Locked(files)
+	item := RoleStatus{Role: name, Provider: role.Provider, Running: active, SessionID: current["session_id"],
+		Worktree: role.Worktree, Model: role.Model, Effort: role.Effort, Local: p.Config.LocalUnder("roles." + name)}
+	item.DeliveryReady = active && current["captured_at"] != nil && delivery["nonce"] == current["nonce"] &&
+		delivery["ready"] == true
+	if active {
+		item.LastError = delivery["last_error"]
+	}
+	pending, err := pendingCount(mail.Root(p.MailRoot()), name)
+	if err != nil {
+		item.MailError = err.Error()
+	}
+	item.Pending = pending
+	return item
+}
+
+// pendingCount is nil when the mailbox cannot be read; one not created yet has none.
+func pendingCount(root mail.Root, name string) (*int, error) {
+	count := 0
+	if root.Initialized() {
+		ids, err := root.Pending(name)
+		if err != nil {
+			return nil, err
+		}
+		count = len(ids)
+	}
+	return &count, nil
 }

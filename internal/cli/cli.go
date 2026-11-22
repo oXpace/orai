@@ -54,9 +54,10 @@ what agents use (inside role sessions or not):
 setting up and operating:
   setup [--role NAME=PROVIDER ...] [--preset NAME[:SLOT=ROLE,...]] [--dry-run] [--no-tools]
                         Set up this project, or add roles to it (safe to re-run)
-  run <role> [--fresh] [--dry-run]
+  run <role> [--fresh] [--dry-run] [--quiet]
                         Start or exactly resume a role
-  status                Role processes, delivery readiness, pending mail
+  status [role]         Role processes, delivery readiness, pending mail
+                        (JSON; with a role, a table to read)
   doctor [--deep] [--json]
                         Read-only diagnosis with next steps
   shelf init|recover|sync|refresh|check|stop
@@ -131,18 +132,24 @@ specs:
   OPENSPEC_TELEMETRY=0 unless the table says telemetry = true. Remove the table to opt out.
 `
 
-const runHelp = `usage: orai run <role> [--fresh] [--dry-run] [--project PATH]
+const runHelp = `usage: orai run <role> [--fresh] [--dry-run] [--quiet] [--project PATH]
        orai <role> ...
 
 Start a role in this terminal, resuming exactly the conversation Orai captured for it.
 
   --fresh               start a new conversation (the old one stays with the provider)
   --dry-run             print the command, paths and mailbox; start nothing
+  -q, --quiet           no summary at start and end; warnings and errors still show
+
+Orai prints to stderr: three lines at start, and at exit how to continue, with a
+warning only if something went wrong. Color follows the terminal and NO_COLOR.
 `
 
-const statusHelp = `usage: orai status [--project PATH]
+const statusHelp = `usage: orai status [role] [--project PATH]
 
-Print each role as JSON: the settings in effect (provider, worktree, model, effort)
+With a role: that role's state as a table to read.
+
+Without one, for scripts and agents: print each role as JSON: the settings in effect (provider, worktree, model, effort)
 and which of them orai.local.toml set ("local"; "." means the whole role), whether it
 is running, its saved session, whether notifications can be delivered, the last
 delivery error, pending mail.
@@ -341,10 +348,16 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 	case "setup":
 		return runSetup(rest, stdout)
 	case "run":
-		return runRole(rest, stdout)
+		return runRole(rest, stdout, stderr)
 	case "status":
-		return withProject(rest, nil, func(p *project.Project, _ options) (int, error) {
-			return 0, runtime.Status(p, stdout)
+		return withProject(rest, nil, func(p *project.Project, o options) (int, error) {
+			switch len(o.args) {
+			case 0:
+				return 0, runtime.Status(p, stdout)
+			case 1:
+				return 0, runtime.StatusRole(p, o.args[0], stdout)
+			}
+			return exitUsage, usagef("usage: orai status [role]")
 		})
 	case "doctor":
 		return runDoctor(rest, stdout)
@@ -467,12 +480,14 @@ func runSetup(argv []string, stdout io.Writer) (int, error) {
 		func(p *project.Project) []doctor.Check { return Diagnose(p, false) })
 }
 
-func runRole(argv []string, stdout io.Writer) (int, error) {
-	return withProject(argv, map[string]bool{"fresh": false, "dry-run": false}, func(p *project.Project, o options) (int, error) {
+func runRole(argv []string, stdout, stderr io.Writer) (int, error) {
+	flags := map[string]bool{"fresh": false, "dry-run": false, "quiet": false, "q": false}
+	return withProject(argv, flags, func(p *project.Project, o options) (int, error) {
 		if len(o.args) != 1 {
-			return exitUsage, usagef("usage: orai run <role> [--fresh] [--dry-run]")
+			return exitUsage, usagef("usage: orai run <role> [--fresh] [--dry-run] [--quiet]")
 		}
-		return runtime.Launch(p, o.args[0], o.flag("fresh"), o.flag("dry-run"), stdout)
+		return runtime.Launch(p, o.args[0], o.flag("fresh"), o.flag("dry-run"), o.flag("quiet") || o.flag("q"),
+			stdout, stderr)
 	})
 }
 
