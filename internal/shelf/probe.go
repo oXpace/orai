@@ -99,6 +99,10 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
 			fmt.Sprintf("the index still has collection(s) orai.toml no longer declares: %s (their documents still show up in searches)", strings.Join(extra, ", ")),
 			"`orai shelf stop && orai shelf refresh`"))
+	} else if absent := unindexed(status, s); len(absent) > 0 {
+		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
+			fmt.Sprintf("collection(s) %s have documents that are not in the index yet", strings.Join(absent, ", ")),
+			"`orai shelf sync`"))
 	} else if pairs := s.overlapping(); len(pairs) > 0 {
 		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
 			fmt.Sprintf("collections %s cover the same documents, so searches return them twice", strings.Join(pairs, "; ")),

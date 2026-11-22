@@ -213,16 +213,50 @@ func identity(status map[string]any, s *Settings) string {
 			have[name] = true
 		}
 	}
+	// QMD's status leaves out a collection that has no documents, so absence proves
+	// nothing. The index is ours when at least one collection is served from our
+	// absolute path and none from another.
+	matched, absent := false, ""
 	for _, name := range s.collectionNames() {
 		path := s.Collections[name]
 		if !have[name] {
-			return fmt.Sprintf("collection '%s' is not served", name)
+			if absent == "" {
+				absent = name
+			}
+			continue
 		}
 		if resolvePath(served[name]) != path {
 			return fmt.Sprintf("collection '%s' serves %s, expected %s", name, served[name], path)
 		}
+		matched = true
+	}
+	if !matched {
+		return fmt.Sprintf("collection '%s' is not served", absent)
 	}
 	return ""
+}
+
+// unindexed lists declared collections that have documents on disk but none in the index.
+func unindexed(status map[string]any, s *Settings) []string {
+	list, _ := status["collections"].([]any)
+	have := map[string]bool{}
+	for _, item := range list {
+		row, _ := item.(map[string]any)
+		name, _ := row["name"].(string)
+		have[name] = true
+	}
+	var names []string
+	for _, name := range s.collectionNames() {
+		if have[name] {
+			continue
+		}
+		only := *s
+		only.Collections = map[string]string{name: s.Collections[name]}
+		if len(only.Documents()) > 0 {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // undeclared lists collections the server still indexes that orai.toml no longer
