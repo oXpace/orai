@@ -73,7 +73,7 @@ Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 �
   agents/<handle>/outbox/sent/<id>.md, dlq/{tmp,new,cur}/, receipts/<id>__<handle>__drained.json
 ```
 
-모든 상태 파일은 임시 파일에 쓰고 fsync한 뒤 rename으로 원자적으로 교체하며, 권한은 0600으로 만든다. 메시지 배달은 `inbox/tmp`에 쓴 뒤 `link(2)`로 `inbox/new`에 게시하므로 기존 메시지를 덮어쓰지 않는다. 메시지 파일은 `---json` 머리말(schema, id, from, to, thread, subject, created, refs, priority, kind)과 본문으로 되어 있다. 1:1 thread 이름은 `p2p/<작은 handle>__<큰 handle>`이다. 답장은 원본의 thread를 잇고 refs에 원본 ID를 넣으며, question에는 answer, review_request에는 review_response kind를 붙인다. `inbox`(drain)와 `inbox <ID>`(read)는 메시지를 `cur/`로 옮기고 drained receipt를 남긴다. `inbox --peek`와 알림은 목록만 읽는다.
+모든 상태 파일은 임시 파일에 쓰고 fsync한 뒤 rename으로 원자적으로 교체하며, 권한은 0600으로 만든다. 메시지 배달은 `inbox/tmp`에 쓴 뒤 `link(2)`로 `inbox/new`에 게시하므로 기존 메시지를 덮어쓰지 않는다. 메시지 파일은 `---json` 머리말(schema, id, from, to, thread, subject, created, refs, priority, kind)과 본문으로 되어 있다. 1:1 thread 이름은 `p2p/<작은 handle>__<큰 handle>`이다. 답장은 원본의 thread를 잇고 refs에 원본 ID를 넣으며, question에는 answer, review_request에는 review_response, todo에는 status kind를 붙인다(AMQ 0.124.0과 같다). `inbox`(drain)와 `inbox <ID>`(read)는 메시지를 `cur/`로 옮기고 drained receipt를 남긴다. 옮긴 뒤 receipt 쓰기가 실패해도 메시지는 돌려주고(`receipt_error`), 그 메시지를 다음에 ID로 읽을 때 receipt를 쓴다. `inbox --peek`와 알림은 목록만 읽으며, 알림은 파일 이름(`<id>.md`)에서 ID만 얻고 파일을 파싱하지 않는다. 파싱할 수 없는 파일은 목록에서 빠지고, drain이나 그 ID의 read가 원본 그대로 `dlq/new/`로 옮긴다(`dead_lettered`). 그래서 깨진 파일 하나가 뒤의 메시지나 알림을 막지 않는다. 배달·이동·dlq 이동은 파일과 함께 디렉터리도 fsync하고, dlq는 복사본을 만든 뒤 원본을 지운다.
 
 ## 세션 수명주기
 
