@@ -236,3 +236,105 @@ func TestInteroperatesWithRealAMQ(t *testing.T) {
 		t.Fatalf("amq listed %+v", listed)
 	}
 }
+
+func TestUnreadableMessageIsDeadLetteredWithoutBlockingTheInbox(t *testing.T) {
+	root := newRoot(t, "dev", "lead", "user")
+	good, _ := root.Send("lead", []string{"dev"}, "good", SendOptions{})
+	badPath := filepath.Join(root.box("dev", "inbox/new"), "bad.md")
+	if err := os.WriteFile(badPath, []byte("not a message"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Notifiers see every ID; listing and draining are not stopped by the bad file.
+	if pending, err := root.Pending("dev"); err != nil || strings.Join(pending, ",") != good.ID+",bad" {
+		t.Fatalf("pending %v %v", pending, err)
+	}
+	if listed, err := root.ListNew("dev"); err != nil || len(listed) != 1 || listed[0].ID != good.ID {
+		t.Fatalf("list %+v %v", listed, err)
+	}
+	drained, err := root.Drain("dev", 0, true)
+	if err != nil || drained.Count != 1 || drained.Drained[0].ID != good.ID {
+		t.Fatalf("drain %+v %v", drained, err)
+	}
+	if len(drained.DeadLettered) != 1 || drained.DeadLettered[0].ID != "bad" || drained.DeadLettered[0].Error != "" ||
+		drained.DeadLettered[0].Reason == "" {
+		t.Fatalf("dead letters %+v", drained.DeadLettered)
+	}
+	moved, err := os.ReadFile(filepath.Join(root.box("dev", "dlq/new"), "bad.md"))
+	if err != nil || string(moved) != "not a message" {
+		t.Fatalf("dlq copy %q %v", moved, err)
+	}
+	if left, _ := os.ReadDir(root.box("dev", "inbox/new")); len(left) != 0 {
+		t.Fatalf("inbox/new keeps %v", left)
+	}
+	if again, _ := root.Drain("dev", 0, true); again.Count != 0 || len(again.DeadLettered) != 0 {
+		t.Fatalf("second drain %+v", again)
+	}
+}
+
+func TestReadingAnUnreadableMessageByIDDeadLettersIt(t *testing.T) {
+	root := newRoot(t, "dev", "lead", "user")
+	if err := os.WriteFile(filepath.Join(root.box("dev", "inbox/new"), "bad.md"), []byte("---json\n{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.Read("dev", "bad"); err == nil || !strings.Contains(err.Error(), "dlq") {
+		t.Fatalf("read of a bad message: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root.box("dev", "dlq/new"), "bad.md")); err != nil {
+		t.Fatal("not dead-lettered:", err)
+	}
+	if pending, _ := root.Pending("dev"); len(pending) != 0 {
+		t.Fatalf("pending %v", pending)
+	}
+}
+
+func TestAFailedReceiptStillHandsOverTheMessage(t *testing.T) {
+	root := newRoot(t, "dev", "lead", "user")
+	sent, _ := root.Send("lead", []string{"dev"}, "keep me", SendOptions{})
+	// A non-empty directory where the receipt goes makes its rename fail, even as root.
+	blocker := root.receiptPath("dev", sent.ID)
+	if err := os.MkdirAll(filepath.Join(blocker, "x"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	drained, err := root.Drain("dev", 0, true)
+	if err != nil || drained.Count != 1 || *drained.Drained[0].Body != "keep me\n" || drained.Drained[0].ReceiptError == "" {
+		t.Fatalf("drain %+v %v", drained, err)
+	}
+	if err := os.RemoveAll(blocker); err != nil {
+		t.Fatal(err)
+	}
+	// The next read of the message writes the missing receipt.
+	if got, err := root.Read("dev", sent.ID); err != nil || !got.AlreadyReceived {
+		t.Fatalf("read %+v %v", got, err)
+	}
+	if root.receivedAt("dev", sent.ID) == "" {
+		t.Fatal("receipt was not repaired")
+	}
+}
+
+func TestReplyToTodoIsStatus(t *testing.T) {
+	root := newRoot(t, "dev", "lead", "user")
+	todo, _ := root.Send("lead", []string{"dev"}, "do it", SendOptions{Kind: "todo"})
+	if _, err := root.Reply("dev", todo.ID, "done", ""); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := root.Drain("lead", 0, false)
+	if got.Count != 1 || got.Drained[0].Kind != "status" || got.Drained[0].Priority != "low" {
+		t.Fatalf("reply to todo %+v", got)
+	}
+}
+
+func TestPendingReadsNamesOnly(t *testing.T) {
+	root := newRoot(t, "dev", "lead", "user")
+	dir := root.box("dev", "inbox/new")
+	for _, name := range []string{"a.md", "notes.txt", ".hidden.md"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "d.md"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := root.Pending("dev"); err != nil || strings.Join(pending, ",") != "a" {
+		t.Fatalf("pending %v %v", pending, err)
+	}
+}
