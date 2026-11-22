@@ -60,3 +60,24 @@ func TestShowRefusesAMessageNotReceivedAndChangesNothing(t *testing.T) {
 		t.Fatal("an ID with a path must be refused")
 	}
 }
+
+// A file that cannot be parsed, in any folder, never stops a search of the others.
+func TestSearchSkipsUnreadableMessages(t *testing.T) {
+	root := newRoot(t, "lead", "dev")
+	sent, err := root.Send("lead", []string{"dev"}, "배포 절차", SendOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.Read("dev", sent.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, leaf := range []string{"inbox/new", "inbox/cur"} {
+		if err := os.WriteFile(filepath.Join(root.box("dev", leaf), "bad.md"), []byte("not a message"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := root.Search("dev", "배포", 5)
+	if err != nil || len(result.Found) != 1 || result.Found[0].ID != sent.ID {
+		t.Fatalf("search beside unreadable files = %+v %v", result, err)
+	}
+}

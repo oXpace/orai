@@ -82,8 +82,8 @@ func (r Root) Search(me, query string, limit int) (SearchResult, error) {
 	return result, nil
 }
 
-// messagesIn parses every message file in dir; a missing dir is empty and a file that
-// vanishes mid-read (received concurrently) is skipped.
+// messagesIn parses every message file in dir; a missing dir is empty, and a file that
+// vanishes mid-read (received concurrently) or cannot be parsed is skipped.
 func (r Root) messagesIn(dir string) ([]Message, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -99,8 +99,9 @@ func (r Root) messagesIn(dir string) ([]Message, error) {
 		}
 		path := filepath.Join(dir, entry.Name())
 		msg, err := readMessage(path)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
+		var bad *MalformedError
+		if errors.Is(err, fs.ErrNotExist) || errors.As(err, &bad) {
+			continue // one unreadable file must not stop the search; a drain dead-letters it
 		}
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
