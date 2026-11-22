@@ -263,7 +263,7 @@ func Capture(p *project.Project, in io.Reader, out io.Writer) error {
 		if !cleared {
 			return errors.New("unexpected conversation identity; use --fresh explicitly")
 		}
-		// The new ID must never be stored next to the old conversation's transcript.
+		// Without a path the new ID would keep the old conversation's transcript.
 		if str(event, "transcript_path") == "" {
 			return errors.New("clear hook has no transcript path; refusing to replace the identity")
 		}

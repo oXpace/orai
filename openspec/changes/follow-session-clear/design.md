@@ -33,5 +33,7 @@ clear는 지침을 문맥에서 없앤다. "hook은 문서를 다시 읽게 하�
 ## Consequences
 
 - Codex는 clear 뒤 첫 입력 전까지 알림이 이전 thread로 가고, 그대로 종료하면 이전 대화로 재개된다.
-- hook이 끝나기 전에 종료하면 교체되지 않는다.
+- hook이 끝나기 전에 종료하면 교체되지 않을 수 있다.
+- `Capture`는 hook의 순서를 판정하지 않는다. provider가 hook을 순서대로 실행하거나 앞 hook을 취소한다고 전제한다(Claude는 연속 clear와 종료 때 진행 중인 hook을 취소한다). 이 전제가 깨져 앞선 clear나 시작 hook이 늦게 쓰면 이전 대화로 되돌아간다.
+- 교체한 transcript 파일이 끝내 생기지 않으면 다음 재개는 기존 규칙대로 거부된다. 이전 신원은 `history/`에 남는다.
 - Codex 사용자는 hook을 한 번 다시 신뢰한다.

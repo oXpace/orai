@@ -237,7 +237,7 @@ orai status                # 실행 여부, 세션 ID, 알림 준비, 미처리 
 | Claude | `/clear`, 별칭 `/new`·`/reset` | 바로 | `/branch`, 세션 안 `/resume` |
 | Codex | `/clear` | clear 뒤 첫 입력 | `/new`, `/fork`, 세션 안 `/resume` |
 
-Codex에서 `/clear`한 뒤에는 한 번 입력한다. 그 전에는 알림이 이전 대화로 가고, 그대로 종료하면 다음 실행은 이전 대화로 재개된다. 두 provider 모두 hook이 끝나기 전에 종료하면 새 ID가 기록되지 않는다.
+Codex에서 `/clear`한 뒤에는 한 번 입력한다. 그 전에는 알림이 이전 대화로 가고, 그대로 종료하면 다음 실행은 이전 대화로 재개된다. 두 provider 모두 hook이 끝나기 전에 종료하면 새 ID가 기록되지 않을 수 있다.
 
 중지는 해당 CLI를 정상 종료한다. SIGTERM·SIGHUP은 자식 CLI에 전달되고, 종료 후 상태는 `stopped`가 된다. PID만 보고 lock 파일을 지우지 않는다.
 
