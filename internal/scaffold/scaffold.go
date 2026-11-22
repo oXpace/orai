@@ -64,7 +64,12 @@ var SkillFiles = []struct{ Rel, Template string }{
 	{Skill, "skill.md"},
 	{SkillDir + "/references/search.md", "skill-search.md"},
 	{SkillDir + "/references/diagnosis.md", "skill-diagnosis.md"},
+	{SkillDir + "/references/workflow.md", "skill-workflow.md"},
 }
+
+// OpenSpecConfig is OpenSpec's project configuration, which setup writes once with
+// starter rules when the project declares OpenSpec.
+const OpenSpecConfig = config.OpenSpecDir + "/config.yaml"
 
 // miseFiles are the mise config files checked for an Orai pin, in lookup order.
 var miseFiles = []string{"mise.toml", ".mise.toml", "mise.local.toml"}
@@ -806,6 +811,14 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 		sort.Strings(folders)
 		for _, folder := range folders {
 			if _, err := os.Stat(filepath.Join(root, folder)); err != nil {
+				// OpenSpec's own folders hold only what OpenSpec reads; a starter page there
+				// would be taken for a spec. An empty marker keeps the folder in Git.
+				if _, inside := config.Within(config.OpenSpecDir, folder); inside {
+					if p, ok := regular(folder + "/.gitkeep"); ok {
+						actions = append(actions, Action{Description: "Create " + folder + "/.gitkeep", Path: p, Data: []byte{}, Mode: 0o644})
+					}
+					continue
+				}
 				if p, ok := regular(folder + "/README.md"); ok {
 					actions = append(actions, Action{
 						Description: fmt.Sprintf("Create %s/README.md (shelf starter page)", folder),
@@ -814,6 +827,17 @@ func Plan(root string, opts Options) ([]Action, []string, error) {
 						Mode:        0o644,
 					})
 				}
+			}
+		}
+	}
+
+	// OpenSpec keeps an existing config.yaml when `openspec init` runs later, so the
+	// starter rules written here survive it. The file is the project's from then on.
+	if applied != nil && applied.OpenSpec != nil {
+		if p, ok := regular(OpenSpecConfig); ok {
+			if _, err := os.Stat(p); err != nil {
+				actions = append(actions, Action{Description: "Create " + OpenSpecConfig + " (test-first starter rules)",
+					Path: p, Data: []byte(Template("openspec-config.yaml")), Mode: 0o644})
 			}
 		}
 	}

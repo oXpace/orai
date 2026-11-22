@@ -10,6 +10,7 @@ Orai는 Codex와 Claude Code 같은 코딩 에이전트 CLI를 **역할 세션**
 - **프로젝트 메일함**: 역할 사이의 메시지를 프로젝트 안의 메일함으로 주고받는다. 디스크 형식이 [AMQ](https://github.com/avivsinai/agent-message-queue)와 같아 `amq`로도 읽을 수 있지만, AMQ 설치는 필요 없다.
 - **알림만 전달**: 새 메시지를 파일 변경 이벤트로 즉시 감지해 ID만 Codex queue나 Claude 로컬 MCP channel로 알린다. 메시지를 대신 소비하지 않는다.
 - **공통 메시지 액션**: `orai msg inbox`, `orai msg send`, `orai msg reply`
+- **스펙과 테스트 우선**: 새 프로젝트는 [OpenSpec](https://github.com/Fission-AI/OpenSpec)을 스펙 계층으로 쓴다. `setup`이 OpenSpec을 프로젝트 범위로 준비하고 테스트 우선 시작 규칙을 넣으며, Orai 스킬이 스펙 확인 → 실패 테스트 먼저 → 검증 범위를 나눈 보고와 역할 사이 인계를 안내한다.
 - **문서 검색(shelf)과 코드 그래프**: 프로젝트 문서 폴더를 묶음별로 등록해 역할 세션에서 검색하는 shelf(엔진 QMD)와 CodeGraph를 프로젝트별로 격리해 설정·진단·복구한다.
 - **한 번에 준비**: 빈 폴더에서 `orai setup` 한 번으로 저장소, 설정, 에이전트 지침, 메일함, shelf, 코드 그래프까지 준비한다.
 - **역할은 프로젝트가 정한다**: 이름·개수·provider를 `orai setup --role lead=codex --role dev=claude`처럼 고르고, 나중에도 같은 명령으로 추가한다.
@@ -52,7 +53,9 @@ orai setup --role lead=codex --role dev=claude
 | `orai.local.toml` | 이 컴퓨터만의 설정(역할의 모델, 포트, 나만 쓰는 역할). 직접 만들 때만 있고 `orai.toml` 위에 키 단위로 겹친다 | 안 한다 |
 | `AGENTS.md` | Orai 블록: 목적, 할 일별 도구와 스킬 진입점, 설정 위치. `orai:begin`~`orai:end` 사이만 관리하고 나머지는 그대로 둔다 | 한다 |
 | `CLAUDE.md` | 없을 때만 `@AGENTS.md` 한 줄로 만든다 | 한다 |
-| `.agents/skills/orai/`, `.claude/skills/orai` | Orai 명령의 실행법을 담은 스킬(`SKILL.md`: 메시지, `references/`: 문서·코드 찾기, 상태 확인·복구)과 Claude Code용 링크 | 한다 |
+| `.agents/skills/orai/`, `.claude/skills/orai` | Orai 명령의 실행법을 담은 스킬(`SKILL.md`: 메시지, `references/`: 문서·코드 찾기, 스펙과 테스트로 일하기, 상태 확인·복구)과 Claude Code용 링크 | 한다 |
+| `openspec/config.yaml` | `[integrations.openspec]`이 있고 파일이 없을 때만 만드는 OpenSpec 설정. 테스트 우선 시작 규칙이 들어 있고 이후 프로젝트가 고쳐 쓴다 | 한다 |
+| `openspec/`, `.agents/skills/openspec-*`, `.claude/skills/openspec-*` | OpenSpec이 설치돼 있을 때 `setup`이 실행하는 `openspec init --scope project`의 결과(스펙 폴더, OpenSpec 스킬과 링크) | 한다 |
 | `.gitignore` | Orai 블록: `/.orai/`, `/orai.local.toml`, `/.agent-mail/`, `/.codegraph/`, 역할 작업 폴더 | 한다 |
 | `.agents/.gitignore` | Orai 블록: `/roles/` (역할 지침을 저장소에 넣지 않는다) | 한다 |
 | `.agents/roles/<역할>.md` | 역할 지침. 이 컴퓨터에서 고쳐 쓴다 | 안 한다 |
@@ -71,7 +74,7 @@ git worktree add .worktrees/dev             # 프로젝트 폴더를 쓰지 않�
 orai doctor                                 # Status: healthy 확인
 ```
 
-Codex CLI, Claude Code, QMD, CodeGraph가 없으면 설치 명령이 함께 나온다. shelf와 코드 그래프는 선택 기능이라, 쓰지 않으려면 `orai.toml`에서 해당 `[integrations.*]` 표를 지운다.
+Codex CLI, Claude Code, QMD, CodeGraph, OpenSpec이 없으면 설치 명령이 함께 나온다. shelf, 코드 그래프, OpenSpec은 선택 기능이라, 쓰지 않으려면 `orai.toml`에서 해당 `[integrations.*]` 표를 지운다.
 
 **같은 저장소를 받은 사람**은 `mise install` 뒤 `orai setup`을 한 번 실행한다. 버전은 `mise.toml`에, 역할과 설정은 `orai.toml`에 이미 있으므로 그 컴퓨터의 로컬 상태(메일함, 역할 지침의 틀, shelf 색인, 코드 그래프)만 만들어진다. 역할을 실행할 사람은 역할 작업 폴더(`git worktree add`)도 컴퓨터마다 만든다. 역할을 쓰지 않아도 문서 검색과 진단은 그대로 쓴다. 모델이나 포트처럼 컴퓨터마다 달라야 하는 값은 `orai.local.toml`에 적는다([운영 안내](docs/operations.md#공유-설정과-로컬-설정)).
 
@@ -116,6 +119,7 @@ pre-alpha다. 최신 버전은 위 배지와 [Releases](https://github.com/oXpac
 | 호스트 도구(Codex, Claude Code) capability·로그인 진단 | 통과 (`orai doctor`) |
 | 이 저장소 문서의 실제 shelf 색인·의미 검색, 서버 다운 감지와 `recover` | 통과 (`orai doctor --deep`) |
 | 실제 CodeGraph 색인·심볼 조회 | 통과 |
+| 실제 OpenSpec 2.1.1 프로젝트 범위 init, 시작 규칙 주입, 스펙 검증 진단 | 통과 (Linux 컨테이너). 역할 세션의 propose→apply→archive는 **미검증** |
 | Codex↔Claude 실제 요청·회신, 종료 후 동일 대화 복구 | **미검증** — [실제 파일럿](docs/operations.md#실제-파일럿-계정호스트-준비-후) 대기 |
 
 확인한 도구 버전은 [호환성](docs/compatibility.md)에, 날짜별 검증 기록은 [이력](docs/history.md#검증-기록)에 있다.
@@ -125,7 +129,7 @@ pre-alpha다. 최신 버전은 위 배지와 [Releases](https://github.com/oXpac
 | 문서 | 내용 |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | 책임 경계, 식별·상태 모델, 세션·알림·연동 흐름, 진단 모델 |
-| [docs/operations.md](docs/operations.md) | 설치, 버전 올리기와 마이그레이션, 초기화, 실행·중지, 진단, shelf·CodeGraph 운영, 복구, 검증 |
+| [docs/operations.md](docs/operations.md) | 설치, 버전 올리기와 마이그레이션, 초기화, 실행·중지, 진단, shelf·OpenSpec·CodeGraph 운영, 복구, 검증 |
 | [docs/compatibility.md](docs/compatibility.md) | 지원 플랫폼, 도구 버전·capability·설치 출처, 라이선스 |
 | [docs/history.md](docs/history.md) | Pockets 추출 원천, 알려진 장애, 변환 내역, 검증 기록 |
 | [docs/release.md](docs/release.md) | 배포 단계, 버전 정책, 릴리스 점검 |
@@ -135,4 +139,4 @@ pre-alpha다. 최신 버전은 위 배지와 [Releases](https://github.com/oXpac
 
 [MIT](LICENSE) © 2026 oXpace
 
-Orai는 Codex CLI, Claude Code, QMD, CodeGraph를 번들하거나 재배포하지 않는다. 사용자가 설치한 실행 파일을 별도 프로세스로 호출할 뿐이며, 각 도구의 라이선스와 약관(Claude Code는 Anthropic 상용 약관)은 사용자에게 그대로 적용된다.
+Orai는 Codex CLI, Claude Code, QMD, CodeGraph, OpenSpec을 번들하거나 재배포하지 않는다. 사용자가 설치한 실행 파일을 별도 프로세스로 호출할 뿐이며, 각 도구의 라이선스와 약관(Claude Code는 Anthropic 상용 약관)은 사용자에게 그대로 적용된다.

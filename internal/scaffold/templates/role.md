@@ -5,6 +5,7 @@
 {{start}}## 책임
 
 - (이 역할이 맡는 일)
+- 기능 작업은 `.agents/skills/orai/references/workflow.md`의 순서(스펙 확인, 실패 테스트 먼저, 검증 범위를 나눈 보고)를 따른다.
 
 ## 경계
 

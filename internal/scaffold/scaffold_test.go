@@ -1063,7 +1063,7 @@ func TestPresetRolesTakeTheGivenNames(t *testing.T) {
 	}
 	pm, _ := os.ReadFile(filepath.Join(root, ".agents/roles/pm.md"))
 	staff, _ := os.ReadFile(filepath.Join(root, ".agents/roles/staff.md"))
-	if !strings.HasPrefix(string(pm), "# pm 역할") || !strings.Contains(string(pm), "작업을 `staff` 역할에 배정한다") ||
+	if !strings.HasPrefix(string(pm), "# pm 역할") || !strings.Contains(string(pm), "`staff` 역할에 `todo`로 배정한다") ||
 		!strings.HasPrefix(string(staff), "# staff 역할") || !strings.Contains(string(staff), "`pm` 역할이 정한다") ||
 		strings.Contains(string(pm)+string(staff), "{{") {
 		t.Fatalf("guides do not carry the given names:\n%s\n%s", pm, staff)
@@ -1441,4 +1441,83 @@ func TestInvalidLocalFileStopsSetupAndIsNamed(t *testing.T) {
 		t.Fatalf("conflict: %v", conflict)
 	}
 	assertSameSnapshot(t, before, snapshot(t, root))
+}
+
+// --- OpenSpec ------------------------------------------------------------------------
+
+// A new project declares OpenSpec and gets the starter rules OpenSpec will keep; the
+// specs folder is indexed by the shelf and holds no starter page OpenSpec would read.
+func TestNewProjectDeclaresOpenSpecWithTestFirstStarterRules(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	actions, _ := mustPlan(t, root, "", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+
+	cfg, err := config.Load(filepath.Join(root, project.ConfigName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.OpenSpec == nil || cfg.OpenSpec.Telemetry {
+		t.Fatalf("openspec: %+v", cfg.OpenSpec)
+	}
+	if cfg.Shelf.Collections["specs"] != config.OpenSpecSpecs || cfg.Shelf.Context[config.OpenSpecSpecs] == "" {
+		t.Fatalf("the specs are not on the shelf: %+v", cfg.Shelf)
+	}
+	starter, err := os.ReadFile(filepath.Join(root, scaffold.OpenSpecConfig))
+	if err != nil || !strings.Contains(string(starter), "schema: spec-driven") || !strings.Contains(string(starter), "실패하는 테스트를 먼저") {
+		t.Fatalf("starter config.yaml: %v\n%s", err, starter)
+	}
+	if _, err := os.Stat(filepath.Join(root, config.OpenSpecSpecs, ".gitkeep")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, config.OpenSpecSpecs, "README.md")); err == nil {
+		t.Fatal("a starter page was written into openspec/specs")
+	}
+	if again, _ := mustPlan(t, root, "", scaffold.DefaultBranch); len(again) != 0 {
+		t.Fatalf("not idempotent: %+v", again)
+	}
+}
+
+// The config.yaml is the project's once it exists: never rewritten, even from scratch.
+func TestOpenSpecConfigIsNeverRewritten(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	if err := os.MkdirAll(filepath.Join(root, config.OpenSpecDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	own := []byte("schema: spec-driven\n")
+	if err := os.WriteFile(filepath.Join(root, scaffold.OpenSpecConfig), own, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	actions, _ := mustPlan(t, root, "", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	if got, _ := os.ReadFile(filepath.Join(root, scaffold.OpenSpecConfig)); string(got) != string(own) {
+		t.Fatalf("config.yaml was rewritten:\n%s", got)
+	}
+}
+
+// A project that does not declare OpenSpec gets none of its files.
+func TestNoOpenSpecFilesWithoutTheTable(t *testing.T) {
+	root := resolvePath(t, t.TempDir())
+	text := "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\ncollections = { docs = \"docs\" }\n"
+	if err := os.WriteFile(filepath.Join(root, project.ConfigName), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	actions, _ := mustPlan(t, root, "", scaffold.DefaultBranch)
+	mustApply(t, root, actions)
+	if _, err := os.Stat(filepath.Join(root, config.OpenSpecDir)); err == nil {
+		t.Fatal("openspec/ was created for a project that does not declare it")
+	}
+}
+
+// The starter rules are what OpenSpec reads: a YAML file with the keys OpenSpec 2.1.1
+// injects (verified against the real CLI; see docs/history.md).
+func TestOpenSpecStarterUsesOpenSpecKeys(t *testing.T) {
+	text := scaffold.Template("openspec-config.yaml")
+	for _, key := range []string{"\nschema: spec-driven\n", "\ncontext: |\n", "\nrules:\n  specs:\n", "\n  tasks:\n", "\noperations:\n  apply:\n    guidance:\n", "\n  archive:\n    guidance:\n"} {
+		if !strings.Contains(text, key) {
+			t.Errorf("starter lacks %q", key)
+		}
+	}
+	if strings.Contains(text, "\t") {
+		t.Error("YAML must not be indented with tabs")
+	}
 }

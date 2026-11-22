@@ -466,3 +466,20 @@ func TestLoadWithLocalTreatsAMissingFileAsNormal(t *testing.T) {
 	}
 	contains(t, err, local+": `session` belongs in orai.toml")
 }
+
+// --- config: openspec --------------------------------------------------------------
+
+func TestOpenSpecTableKeepsTelemetryOffUnlessTurnedOn(t *testing.T) {
+	if cfg := mustParse(t, base); cfg.OpenSpec != nil {
+		t.Fatalf("no table should mean no OpenSpec: %+v", cfg.OpenSpec)
+	}
+	if cfg := mustParse(t, base+"\n[integrations.openspec]\n"); cfg.OpenSpec == nil || cfg.OpenSpec.Telemetry {
+		t.Fatalf("an empty table should declare OpenSpec with telemetry off: %+v", cfg.OpenSpec)
+	}
+	if cfg := mustParse(t, base+"\n[integrations.openspec]\ntelemetry = true\n"); !cfg.OpenSpec.Telemetry {
+		t.Fatal("telemetry = true was not read")
+	}
+	contains(t, mustFail(t, base+"\n[integrations.openspec]\ntelemetry = \"no\"\n"), "true or false")
+	contains(t, mustFail(t, base+"\n[integrations.openspec]\ntools = \"claude\"\n"), "unknown key(s) tools")
+	contains(t, mustFail(t, base+"\n[roles.openspec]\nprovider = \"codex\"\n"), "openspec")
+}

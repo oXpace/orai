@@ -545,6 +545,30 @@ func TestChildEnvDropsForeignContextAndBindsIdentity(t *testing.T) {
 	}
 }
 
+// OpenSpec's telemetry is off in a role session of a project that declares OpenSpec,
+// whatever the calling shell set, and untouched when the project turns it on or does
+// not use OpenSpec.
+func TestChildEnvKeepsOpenSpecTelemetryOffUnlessTheProjectTurnsItOn(t *testing.T) {
+	clearOraiEnv(t)
+	t.Setenv("OPENSPEC_TELEMETRY", "1")
+	for _, tc := range []struct{ extra, want string }{
+		{"", "1"},
+		{"\n[integrations.openspec]\n", "0"},
+		{"\n[integrations.openspec]\ntelemetry = true\n", "1"},
+	} {
+		p := writeProject(t, t.TempDir(), twoRoles+tc.extra)
+		var values []string
+		for _, kv := range childEnv(p, p.Config.Roles["lead"], "n1") {
+			if value, ok := strings.CutPrefix(kv, "OPENSPEC_TELEMETRY="); ok {
+				values = append(values, value)
+			}
+		}
+		if len(values) != 1 || values[0] != tc.want {
+			t.Errorf("with %q: OPENSPEC_TELEMETRY = %v, want [%s]", tc.extra, values, tc.want)
+		}
+	}
+}
+
 func TestStatusCountsPendingWithoutConsuming(t *testing.T) {
 	f := newFixture(t)
 	root := mail.Root(f.p.MailRoot())

@@ -82,7 +82,7 @@ func TestEmptyFolderBecomesATrunkRepositoryWithNoTools(t *testing.T) {
 	if !strings.Contains(text, "does not pin Orai") || !strings.Contains(text, scaffold.InstallSpec) {
 		t.Fatalf("output missing the Orai-pin note:\n%s", text)
 	}
-	if !strings.Contains(text, "shelf, codegraph: skipped (--no-tools)") {
+	if !strings.Contains(text, "openspec, shelf, codegraph: skipped (--no-tools)") {
 		t.Fatalf("output missing the --no-tools line:\n%s", text)
 	}
 	if !strings.Contains(text, "Diagnosis:") {
@@ -214,7 +214,7 @@ func TestToolsDisabledSkipsStepsEntirely(t *testing.T) {
 	if called {
 		t.Fatal("step was called despite tools=false")
 	}
-	if !strings.Contains(out.String(), "shelf, codegraph: skipped (--no-tools)") {
+	if !strings.Contains(out.String(), "openspec, shelf, codegraph: skipped (--no-tools)") {
 		t.Fatalf("output missing the skip line:\n%s", out.String())
 	}
 }

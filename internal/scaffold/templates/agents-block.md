@@ -6,6 +6,7 @@
 |---|---|---|
 | 프로젝트 문서 찾기 | MCP 서버 `shelf` | `.agents/skills/orai/references/search.md` |
 | 코드 구조·호출 관계 찾기 | CodeGraph (`.codegraph/`가 있을 때) | `.agents/skills/orai/references/search.md` |
+| 기능 작업을 시작·인계·보고할 때 (스펙과 테스트 우선) | OpenSpec (`openspec/`가 있을 때), 프로젝트 테스트 | `.agents/skills/orai/references/workflow.md` |
 | 도구 상태 확인·복구 | `orai doctor` | `.agents/skills/orai/references/diagnosis.md` |
 | 다른 역할·사용자와 메시지 주고받기 | `orai msg` | `.agents/skills/orai/SKILL.md` |
 

@@ -17,6 +17,7 @@ import (
 	"github.com/oXpace/orai/internal/config"
 	"github.com/oXpace/orai/internal/doctor"
 	"github.com/oXpace/orai/internal/mail"
+	"github.com/oXpace/orai/internal/openspec"
 	"github.com/oXpace/orai/internal/project"
 	"github.com/oXpace/orai/internal/runtime"
 	"github.com/oXpace/orai/internal/scaffold"
@@ -65,7 +66,7 @@ const setupHelp = `usage: orai setup [--role NAME=PROVIDER[:WORKTREE] ... [--loc
                   [--branch NAME] [--dry-run] [--no-tools] [--project PATH]
 
 Set up the project in this folder: Git repository, orai.toml, agent instructions,
-mailboxes, project shelf and code graph, then a diagnosis. Safe to re-run: existing
+mailboxes, OpenSpec, project shelf and code graph, then a diagnosis. Safe to re-run: existing
 files are kept, and only what is missing is added.
 
 roles:
@@ -112,7 +113,15 @@ examples:
 options:
   --branch NAME         branch for a new repository (default trunk)
   --dry-run             print the plan and change nothing
-  --no-tools            files only: skip the shelf index/server and the code graph
+  --no-tools            files only: skip openspec init, the shelf index/server and the
+                        code graph
+
+specs:
+  A new orai.toml declares [integrations.openspec]. When OpenSpec 2 or later is
+  installed (` + "`npm install -g @fission-ai/openspec@latest`" + `), setup writes a starter
+  openspec/config.yaml with test-first rules (only when there is none) and runs
+  ` + "`openspec init --tools claude,codex --scope project`" + ` once. Role sessions get
+  OPENSPEC_TELEMETRY=0 unless the table says telemetry = true. Remove the table to opt out.
 `
 
 const runHelp = `usage: orai run <role> [--fresh] [--dry-run] [--project PATH]
@@ -412,7 +421,9 @@ func runSetup(argv []string, stdout io.Writer) (int, error) {
 	if info, err := os.Stat(root); err != nil || !info.IsDir() {
 		return exitUsage, usagef("not a directory: %s", root)
 	}
+	// OpenSpec first: its init creates openspec/specs, which the shelf may index.
 	steps := []func(*project.Project) string{
+		openspec.SetupStep,
 		func(p *project.Project) string { return shelf.SetupStep(p, stdout) },
 		codegraph.SetupStep,
 	}
@@ -436,7 +447,8 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	checks = append(checks, doctor.ToolChecks(p.Config.Providers())...)
 	checks = append(checks, local[1:]...)
 	checks = append(checks, shelf.Diagnose(p, deep)...)
-	return append(checks, codegraph.Diagnose(p, deep)...)
+	checks = append(checks, codegraph.Diagnose(p, deep)...)
+	return append(checks, openspec.Diagnose(p, deep)...)
 }
 
 func runDoctor(argv []string, stdout io.Writer) (int, error) {

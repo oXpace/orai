@@ -1,6 +1,6 @@
 ---
 name: orai
-description: Orai 명령의 실행법. 오라이 새 메시지 알림을 받았을 때, 다른 역할이나 사용자에게 메시지를 보내거나 회신할 때, 프로젝트 문서나 코드 구조를 찾을 때, 도구 상태를 확인하거나 복구할 때 읽는다.
+description: Orai 명령의 실행법. 오라이 새 메시지 알림을 받았을 때, 다른 역할이나 사용자에게 메시지를 보내거나 회신할 때, 프로젝트 문서나 코드 구조를 찾을 때, 기능 작업을 스펙과 테스트로 시작하거나 보고할 때, 도구 상태를 확인하거나 복구할 때 읽는다.
 ---
 <!-- orai:generated — `orai setup`이 관리한다. 프로젝트 규칙은 AGENTS.md나 역할 지침에 둔다. -->
 
@@ -13,6 +13,7 @@ description: Orai 명령의 실행법. 오라이 새 메시지 알림을 받았�
 | 메시지 받기, 회신, 보내기 | 아래 "메시지" |
 | 프로젝트 문서와 코드 구조 찾기 | [references/search.md](references/search.md) |
 | 도구 상태 확인과 복구 | [references/diagnosis.md](references/diagnosis.md) |
+| 스펙과 테스트로 일하기, 작업 인계와 보고 형식 | [references/workflow.md](references/workflow.md) |
 
 필요한 절만 읽는다. 같은 세션에서 이미 읽은 절은 다시 읽지 않는다.
 

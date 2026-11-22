@@ -11,7 +11,7 @@ session = "orai"            # mailbox name: .agent-mail/<session>/
 # `shelf`). Needs QMD (`npm install -g @tobilu/qmd`). After editing documents:
 # `orai shelf sync`. Guide: `orai shelf --help`. Remove this table to opt out.
 [integrations.shelf]
-collections = { docs = "docs" }   # name = folder. To split a folder, give part of it a pattern:
+collections = { docs = "docs", specs = "openspec/specs" }   # name = folder. To split a folder, give part of it a pattern:
 #   { core = { path = "docs", pattern = "*.md" }, adr = "docs/adr" }
 # port = 18181              # optional; fix it when the address is written in .mcp.json or .codex/config.toml
 # embed_model = "hf:..."    # optional; read by the first `orai shelf init` only
@@ -19,10 +19,20 @@ collections = { docs = "docs" }   # name = folder. To split a folder, give part 
 # lex = "unique term"                        # keyword query only one document matches
 # vec = "a question that document answers"   # meaning-based query for the same document
 # expect = "docs/architecture.md"            # the document both searches must return
-# [integrations.shelf.context]   # optional: what the documents under a folder are for, one
-# "docs/adr" = "..."             # line each; search results carry it. Apply: `orai shelf recover`
+# What the documents under a folder are for, one line each; search results carry it.
+# After editing: `orai shelf recover`.
+[integrations.shelf.context]
+"openspec/specs" = "OpenSpec 스펙: 기능별 요구(SHALL)와 시나리오(WHEN/THEN). 구현과 테스트의 기준"
+# "docs/adr" = "..."
 
 # Code graph: symbol and call index in .codegraph/ (CodeGraph,
 # `npm install -g @colbymchenry/codegraph`). Remove this table to opt out.
 [integrations.codegraph]
 # smoke_symbol = "main"     # optional; a symbol `orai doctor --deep` must find
+
+# Specs: OpenSpec (`npm install -g @fission-ai/openspec@latest`, 2.0 or later) keeps the
+# specs in openspec/specs and proposed changes in openspec/changes. `orai setup` runs
+# `openspec init` at project scope once and writes a starter openspec/config.yaml with
+# test-first rules. Remove this table to opt out.
+[integrations.openspec]
+# telemetry = true          # OpenSpec's usage reporting; off in role sessions unless set

@@ -149,7 +149,24 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **보존한 동작**: ID로 받기, 원래 대화에 회신, 중복 수신(`already_received`), 신원 유지, 세션을 다시 열었을 때의 미처리 메시지 확인. 마지막 항목은 시작 프롬프트에만 있던 것을 스킬에도 적었다. `TestTheAgentsBlockIsAnEntryPoint`가 지킨다.
 - **링크**: 생성 문서가 가리키는 경로가 모두 `setup`이 쓰는 파일인지 `TestGeneratedGuidancePointsOnlyAtFilesSetupWrites`가 확인한다.
 
+## 스펙과 테스트 주도 기본 환경 (다음 버전)
+
+사용자가 Orai를 설치하면 역할 세션이 스펙 주도와 테스트 주도 흐름을 이해하는 환경이 기본으로 갖춰지기를 요청했고, 쓰고 있던 OpenSpec(Fission-AI/OpenSpec)의 도입을 검토하게 했다(2026-11-22). 스펙 형식을 Orai가 새로 만들지 않고 OpenSpec을 shelf·CodeGraph와 같은 선택 연동으로 붙이기로 했다(사용자 결정: 기본 포함, 미설치 시 안내).
+
+- **연동**: `[integrations.openspec]`(새 `orai.toml` 기본). `setup`이 `openspec init`을 프로젝트 범위로 한 번 실행한다. OpenSpec 2.x는 스킬을 `.agents/skills/`에 한 본 두고 `.claude/skills/`에 링크하므로 Orai 스킬과 같은 배치다. OpenSpec의 기본 범위가 전역이라 프로젝트 범위를 명시한다.
+- **테스트 우선**: OpenSpec 문서에는 TDD 안내가 없다. `setup`이 `openspec/config.yaml`을 처음 한 번 테스트 우선 규칙으로 만들고, OpenSpec이 이를 모든 워크플로 지시에 넣는다. OpenSpec 스킬은 `openspec update`가 다시 쓰므로 고치지 않는다.
+- **안내**: Orai 스킬에 `references/workflow.md`(스펙 확인, 실패 테스트 먼저, 검증 범위를 나눈 보고, 역할 사이 인계)를 더하고 AGENTS 블록에 한 줄로 가리킨다. manager·engineer·role 템플릿이 이 흐름을 따른다. 이 저장소 AGENTS.md의 "fixture 통과, 실제 동작, 미검증 구분" 원칙을 소비 프로젝트로 옮긴 것이다.
+- **진단**: `openspec`(설치, 버전 2.0 이상, 프로젝트 스킬), `openspec.specs`(`--deep`에서 `validate --specs`). 테스트를 실행하거나 흐름 준수를 판정하지 않는다.
+- **텔레메트리**: 역할 세션과 Orai의 실행에 `OPENSPEC_TELEMETRY=0`. `telemetry = true`로 켠다.
+- **하지 않은 것**: 흐름을 강제하는 hook(테스트 없는 수정 차단, 테스트 통과 전 종료 금지). 업무 규칙의 강제는 프로젝트 소유이고, provider마다 hook 능력이 다르다.
+
 ## 검증 기록
+
+### 2026-11-22, OpenSpec 연동 개발본 (Linux x64 컨테이너)
+
+- `go test -race ./...`, `gofmt`, `go vet` 통과. OpenSpec 단계·진단은 가짜 `openspec`(셸 스크립트)으로 테스트한다.
+- 실제 OpenSpec 2.1.1(npm)로 확인: 격리한 HOME에서 개발본 `orai setup --role lead=codex --role dev=claude`가 `openspec/config.yaml`(시작 규칙)과 `openspec/specs/.gitkeep`을 만든 뒤 `openspec init`을 실행했고, `.agents/skills/openspec-*` 여섯 개와 `.claude/skills/` 링크가 생겼다. Orai 스킬과 `config.yaml`은 그대로였다. `orai doctor --deep`은 `openspec` healthy(2.1.1, telemetry false), `openspec.specs` healthy(0개)였다. `openspec instructions specs|tasks|apply --json`에 시작 규칙의 `rules`, `operationGuidance`, `context`가 실렸다. `validate`는 실패한 항목이 있어도 종료 코드 0이었다. `init`이 HOME에 남긴 것은 `~/.local/share/openspec/projects.json`뿐이었다.
+- 미검증: macOS에서의 OpenSpec, QMD가 빈 `openspec/specs` 묶음을 등록하는 동작, 실제 역할 세션이 workflow.md와 OpenSpec 스킬을 따라 propose→apply→archive를 수행하는지.
 
 ### 2026-10-09, 0.6.0 (macOS 27.0 arm64)
 

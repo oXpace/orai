@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -228,6 +229,8 @@ func TestProjectFromZeroThreeKeepsWorkingAndIsToldWhatToEdit(t *testing.T) {
 	orai(t, project, "", "", "setup", "--role", "lead=codex", "--no-tools")
 	file := filepath.Join(project, "orai.toml")
 	data, _ := os.ReadFile(file)
+	// 0.3 had no folder descriptions: drop that table before renaming the shelf.
+	data = regexp.MustCompile(`(?s)\[integrations\.shelf\.context\].*?\n\n`).ReplaceAll(data, nil)
 	old := strings.NewReplacer("schema = 2", "schema = 1", "[integrations.shelf]", "[integrations.wiki]").Replace(string(data))
 	if old == string(data) || !strings.Contains(old, "[integrations.wiki]") {
 		t.Fatalf("fixture was not rewritten:\n%s", data)
