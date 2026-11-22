@@ -217,10 +217,6 @@ func TestUsageErrorsExitTwo(t *testing.T) {
 		{[]string{"msg", "inbox", "--project", other.Root}, "another project"},
 		{[]string{"msg", "inbox", "--limit", "-1"}, "non-negative"},
 		{[]string{"msg", "send", "dev", "--kind", "chat", "--body", "x"}, "--kind"},
-		{[]string{"inbox"}, "orai msg inbox"},
-		{[]string{"qmd", "check"}, "orai shelf"},
-		{[]string{"wiki", "refresh"}, "`wiki` moved; use `orai shelf`"},
-		{[]string{"init"}, "orai setup"},
 	} {
 		if r := run("", tc.argv...); r.code != 2 || !strings.Contains(r.errOut, tc.want) {
 			t.Fatalf("%v: %+v", tc.argv, r)

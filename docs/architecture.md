@@ -44,7 +44,7 @@ Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 �
 
 ## 설정과 로컬 상태
 
-공유 설정(`orai.toml`, 커밋 대상)에는 이식 가능한 사실만 둔다. schema 버전, 메일함 세션 이름, 역할(provider, 상대경로, 선택적 model·effort·branch), 연동 설정이 여기에 해당한다. 모델과 effort는 코어에 기본값이 없다. 값이 없으면 각 provider의 기본값을 쓴다. 모르는 키, 절대경로, 루트를 벗어나는 지침 경로, 예약어 역할명(`setup`, `run`, `msg`, `shelf`, `user` 등 CLI 명령과 사용자 handle)은 거부한다. 현재 schema는 2다. schema 1은 문서 검색 표의 이름이 `[integrations.wiki]`였고, 그 파일도 그대로 읽는다. Orai는 `orai.toml` 본문을 고치지 않으므로 doctor가 고칠 두 줄을 알려 준다.
+공유 설정(`orai.toml`, 커밋 대상)에는 이식 가능한 사실만 둔다. schema 버전, 메일함 세션 이름, 역할(provider, 상대경로, 선택적 model·effort·branch), 연동 설정이 여기에 해당한다. 모델과 effort는 코어에 기본값이 없다. 값이 없으면 각 provider의 기본값을 쓴다. 모르는 키, 절대경로, 루트를 벗어나는 지침 경로, 예약어 역할명(`setup`, `run`, `msg`, `shelf`, `user` 등 CLI 명령과 사용자 handle)은 거부한다. 현재 schema는 2다. schema 1(0.3 이하, 문서 검색 표의 이름이 `[integrations.wiki]`)은 0.7.0부터 읽지 않고, 고칠 두 줄을 알려 주며 거부한다. Orai는 `orai.toml` 본문을 고치지 않는다.
 
 이 컴퓨터만의 설정은 `orai.toml` 옆의 `orai.local.toml`(커밋 제외, 없어도 된다)에 둔다. 역할 worktree에서 실행해도 프로젝트는 main checkout이므로 이 파일의 자리는 main checkout 한 곳이다. 읽는 순서는 다음과 같다.
 

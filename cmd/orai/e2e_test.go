@@ -220,10 +220,9 @@ func TestChannelStartsAndStopsOnEOF(t *testing.T) {
 	}
 }
 
-// A project set up by 0.3 keeps working after the binary is upgraded: its schema 1
-// orai.toml is read as written, doctor names the two-line edit, and the old command
-// name points at the new one.
-func TestProjectFromZeroThreeKeepsWorkingAndIsToldWhatToEdit(t *testing.T) {
+// A project set up by 0.3 or earlier (schema 1 orai.toml) is no longer read: doctor and
+// every command stop with the two-line edit, and the file is left as it was.
+func TestProjectFromZeroThreeIsToldWhatToEdit(t *testing.T) {
 	project := filepath.Join(t.TempDir(), "app")
 	_ = os.Mkdir(project, 0o755)
 	orai(t, project, "", "", "setup", "--role", "lead=codex", "--no-tools")
@@ -238,17 +237,12 @@ func TestProjectFromZeroThreeKeepsWorkingAndIsToldWhatToEdit(t *testing.T) {
 	if err := os.WriteFile(file, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, errOut, _ := orai(t, project, "", "", "doctor")
-	for _, want := range []string{"! project", "uses schema 1", "set `schema = 2` and rename `[integrations.wiki]` to `[integrations.shelf]`", "shelf"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("doctor output lacks %q:\n%s%s", want, out, errOut)
-		}
+	edit := "set `schema = 2` and rename `[integrations.wiki]` to `[integrations.shelf]`"
+	if out, errOut, code := orai(t, project, "", "", "doctor"); code == 0 || !strings.Contains(out, "✗ project") || !strings.Contains(out, edit) {
+		t.Fatalf("doctor with a schema 1 file: %d\n%s%s", code, out, errOut)
 	}
-	if status, _, code := orai(t, project, "", "", "status"); code != 0 || !strings.Contains(status, `"role": "lead"`) {
-		t.Fatalf("status with a schema 1 file: %d %s", code, status)
-	}
-	if _, errOut, code := orai(t, project, "", "", "wiki", "refresh"); code != 2 || !strings.Contains(errOut, "`wiki` moved; use `orai shelf`") {
-		t.Fatalf("old command name: %d %s", code, errOut)
+	if _, errOut, code := orai(t, project, "", "", "status"); code != 2 || !strings.Contains(errOut, edit) {
+		t.Fatalf("status with a schema 1 file: %d %s", code, errOut)
 	}
 	after, _ := os.ReadFile(file)
 	if string(after) != old {

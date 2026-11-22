@@ -99,18 +99,6 @@ func NewSettings(p *project.Project) *Settings {
 	return s
 }
 
-// LegacyDirectory is where Orai 0.3 kept this index (.orai/wiki). The index name, port
-// and PID file did not change, so moving the folder is all an upgrade needs.
-func (s *Settings) LegacyDirectory() string {
-	return filepath.Join(s.Project.StateDir(), "wiki")
-}
-
-// legacyOnly reports an index that is still in the 0.3 location and nowhere else. An
-// empty .orai/shelf (a move that was interrupted) does not count as "elsewhere".
-func (s *Settings) legacyOnly() bool {
-	return !exists(s.ConfigFile) && !exists(s.DB) && exists(s.LegacyDirectory())
-}
-
 // Env is the environment for a `qmd` invocation: the process environment plus
 // QMD_CONFIG_DIR and INDEX_PATH, which keep the per-index config and DB inside
 // .orai/shelf. The model cache is left on its default (shared) location.

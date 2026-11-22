@@ -126,28 +126,18 @@ func TestWrongSchemaRejected(t *testing.T) {
 	}
 }
 
-// Schema 1 called the document search `wiki`. Such a file is still read as written, so
-// a project keeps working after the binary is upgraded; mixing the two is refused with
-// the edit that fixes it.
-func TestSchemaOneWikiTableIsReadAsShelf(t *testing.T) {
-	cfg, err := config.Parse([]byte("schema = 1\n[integrations.wiki]\ncollections = { notes = \"notes\" }\n[integrations.wiki.smoke]\nlex = \"a\"\nvec = \"b\"\nexpect = \"notes/x.md\"\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Schema != 1 || cfg.Shelf == nil || cfg.Shelf.Collections["notes"] != "notes" || cfg.Shelf.Smoke.Expect != "notes/x.md" {
-		t.Fatalf("schema 1 wiki table not read: %+v %+v", cfg, cfg.Shelf)
-	}
+// Schema 1 (Orai 0.3 and earlier) called the document search `wiki`. It is no longer
+// read; the error names the edit that brings the file to the current schema.
+func TestSchemaOneIsRefusedWithTheEdit(t *testing.T) {
+	err := mustFail(t, "schema = 1\n[integrations.wiki]\n")
+	contains(t, err, "schema 1 is from Orai 0.3 or earlier")
+	contains(t, err, "rename `[integrations.wiki]` to `[integrations.shelf]`")
 	current, err := config.Parse([]byte("schema = 2\n[integrations.shelf]\n"))
 	if err != nil || current.Schema != config.Schema || current.Shelf == nil {
 		t.Fatalf("schema 2 shelf table: %v %+v", err, current)
 	}
 	err = mustFail(t, "schema = 2\n[integrations.wiki]\n")
-	contains(t, err, "integrations.wiki is now integrations.shelf")
-	err = mustFail(t, "schema = 1\n[integrations.shelf]\n")
-	contains(t, err, "integrations.shelf needs `schema = 2`")
-	// Errors inside a schema 1 table name the table as the file spells it.
-	err = mustFail(t, "schema = 1\n[integrations.wiki]\nport = 80\n")
-	contains(t, err, "integrations.wiki.port")
+	contains(t, err, "unknown key(s) wiki")
 }
 
 func TestBadProviderRejected(t *testing.T) {
@@ -430,9 +420,9 @@ func TestLocalFileErrorsNameTheFile(t *testing.T) {
 		t.Fatalf("an invalid shared file: %v", err)
 	}
 	contains(t, err, "roles.pm.provider")
-	// Schema 1 has another table name for the shelf; the local file is for schema 2.
+	// A schema 1 shared file is refused before the local file is looked at.
 	_, err = config.Overlay([]byte("schema = 1\n"), []byte(""))
-	contains(t, err, "orai.local.toml needs `schema = 2` in orai.toml")
+	contains(t, err, "schema 1 is from Orai 0.3 or earlier")
 }
 
 // A project without the local file loads exactly as before, and an error in the local

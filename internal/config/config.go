@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	// Schema is the orai.toml schema this version writes. Schema 1 named the document
-	// search `[integrations.wiki]`; it is still read, and doctor asks for the two-line edit.
+	// Schema is the orai.toml schema this version reads and writes. Schema 1 (Orai 0.3
+	// and earlier) is no longer read; Parse names the two-line edit instead.
 	Schema     = 2
 	UserHandle = "user"
 	// LocalName is the optional file next to orai.toml that holds this computer's own
@@ -142,7 +142,7 @@ const (
 )
 
 type Config struct {
-	Schema    int // as written in the file; 1 is still read (see Schema)
+	Schema    int // as written in the file; always Schema
 	Name      string
 	Session   string
 	Roles     map[string]Role
@@ -324,8 +324,8 @@ func filePattern(value any, where string) (string, error) {
 	return pattern, nil
 }
 
-// parseShelf reads the document search table. where is its name in this file
-// (integrations.shelf, or integrations.wiki in a schema 1 file) so errors point at it.
+// parseShelf reads the document search table. where is its name in the file
+// (integrations.shelf) so errors point at it.
 func parseShelf(value any, where string) (*Shelf, error) {
 	t, err := table(value, where, "engine", "collections", "port", "embed_model", "smoke", "context")
 	if err != nil {
@@ -473,9 +473,6 @@ func Overlay(shared, local []byte) (*Config, error) {
 	if _, err := table(over, LocalName, "roles", "integrations"); err != nil {
 		return nil, err
 	}
-	if schema, _ := base["schema"].(int64); schema != Schema {
-		return nil, errorf("%s needs `schema = %d` in orai.toml", LocalName, Schema)
-	}
 	var keys []string
 	cfg, err := validate(overlay(base, over, "", &keys))
 	if err != nil {
@@ -513,7 +510,10 @@ func validate(raw map[string]any) (*Config, error) {
 		return nil, err
 	}
 	schema, _ := t["schema"].(int64)
-	if schema != Schema && schema != 1 {
+	if schema == 1 {
+		return nil, errorf("orai.toml: schema 1 is from Orai 0.3 or earlier and is no longer read: set `schema = %d` and rename `[integrations.wiki]` to `[integrations.shelf]` (also `[integrations.wiki.smoke]`)", Schema)
+	}
+	if schema != Schema {
 		return nil, errorf("orai.toml: schema must be %d (found %v)", Schema, t["schema"])
 	}
 	cfg := &Config{Schema: int(schema), Session: "orai", Roles: map[string]Role{}}
@@ -539,18 +539,7 @@ func validate(raw map[string]any) (*Config, error) {
 		}
 	}
 	if raw, ok := t["integrations"]; ok {
-		// The document search table was `wiki` in schema 1 and is `shelf` from schema 2.
 		key := "shelf"
-		if cfg.Schema == 1 {
-			key = "wiki"
-		}
-		integrations, isTable := raw.(map[string]any)
-		if _, old := integrations["wiki"]; isTable && old && cfg.Schema != 1 {
-			return nil, errorf("integrations.wiki is now integrations.shelf: rename the table (and `[integrations.wiki.smoke]`) in orai.toml")
-		}
-		if _, next := integrations["shelf"]; isTable && next && cfg.Schema == 1 {
-			return nil, errorf("integrations.shelf needs `schema = %d`: change the schema line in orai.toml", Schema)
-		}
 		integrations, err := table(raw, "integrations", key, "codegraph", "openspec")
 		if err != nil {
 			return nil, err

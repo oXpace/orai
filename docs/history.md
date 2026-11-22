@@ -149,6 +149,17 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **보존한 동작**: ID로 받기, 원래 대화에 회신, 중복 수신(`already_received`), 신원 유지, 세션을 다시 열었을 때의 미처리 메시지 확인. 마지막 항목은 시작 프롬프트에만 있던 것을 스킬에도 적었다. `TestTheAgentsBlockIsAnEntryPoint`가 지킨다.
 - **링크**: 생성 문서가 가리키는 경로가 모두 `setup`이 쓰는 파일인지 `TestGeneratedGuidancePointsOnlyAtFilesSetupWrites`가 확인한다.
 
+## 0.3 이하 이전 경로 제거 (0.7.0)
+
+사용자 결정(2026-11-22)으로 0.1~0.3에서 올라오는 경로를 지웠다. 0.3 이하의 프로젝트는 0.6.0을 거쳐 올린다. 0.x 정책대로 minor 버전에서 호환을 끊는다.
+
+- **schema 1**: `orai.toml`의 schema 1과 `[integrations.wiki]`를 읽지 않는다. 고칠 두 줄을 담은 오류로 거부한다(`TestSchemaOneIsRefusedWithTheEdit`, `TestProjectFromZeroThreeIsToldWhatToEdit`). doctor의 "schema 1을 쓰고 있다" degraded 항목도 함께 없어졌다.
+- **`.orai/wiki` 색인 이전**: `recover`·`stop`·`setup`이 0.3 색인을 옮기던 경로와 doctor·`check`의 안내를 지웠다.
+- **예전 명령 이름 안내**: `orai inbox|send|reply|qmd|wiki|init`이 새 이름을 알려 주던 표를 지웠다. 예약어 목록에는 남겨 역할 이름이 될 수 없다.
+- **`pypi:` 고정**: setup의 고정 검사가 0.1.0의 `pypi:oXpace/orai`를 Orai 고정으로 보지 않는다.
+- **남긴 것**: 0.6.0에서 생긴 `--preset pm-staff` 별칭, 이전 문구의 관리 블록 표식을 접두어로 찾아 교체하는 동작, 같은 포트를 다른 이름으로 등록한 MCP 설정 진단은 0.3 이전용이 아니라서 그대로 둔다.
+- **문서**: 운영 안내의 0.1~0.4 마이그레이션 절을 "0.3 이하에서 올릴 때" 한 절로 줄이고 0.6.0 태그의 안내를 가리키게 했다.
+
 ## 스펙과 테스트 주도 기본 환경 (다음 버전)
 
 사용자가 Orai를 설치하면 역할 세션이 스펙 주도와 테스트 주도 흐름을 이해하는 환경이 기본으로 갖춰지기를 요청했고, 쓰고 있던 OpenSpec(Fission-AI/OpenSpec)의 도입을 검토하게 했다(2026-11-22). 스펙 형식을 Orai가 새로 만들지 않고 OpenSpec을 shelf·CodeGraph와 같은 선택 연동으로 붙이기로 했다(사용자 결정: 기본 포함, 미설치 시 안내).
@@ -167,6 +178,14 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - `go test -race ./...`, `gofmt`, `go vet` 통과. OpenSpec 단계·진단은 가짜 `openspec`(셸 스크립트)으로 테스트한다.
 - 실제 OpenSpec 2.1.1(npm)로 확인: 격리한 HOME에서 개발본 `orai setup --role lead=codex --role dev=claude`가 `openspec/config.yaml`(시작 규칙)과 `openspec/specs/.gitkeep`을 만든 뒤 `openspec init`을 실행했고, `.agents/skills/openspec-*` 여섯 개와 `.claude/skills/` 링크가 생겼다. Orai 스킬과 `config.yaml`은 그대로였다. `orai doctor --deep`은 `openspec` healthy(2.1.1, telemetry false), `openspec.specs` healthy(0개)였다. `openspec instructions specs|tasks|apply --json`에 시작 규칙의 `rules`, `operationGuidance`, `context`가 실렸다. `validate`는 실패한 항목이 있어도 종료 코드 0이었다. `init`이 HOME에 남긴 것은 `~/.local/share/openspec/projects.json`뿐이었다.
 - 미검증: macOS에서의 OpenSpec, QMD가 빈 `openspec/specs` 묶음을 등록하는 동작, 실제 역할 세션이 workflow.md와 OpenSpec 스킬을 따라 propose→apply→archive를 수행하는지.
+
+### 2026-11-22, 0.6.0 실사용 확인 (macOS)
+
+사용자 보고로 기록한다(이 저장소의 자동 검증이나 별도 파일럿 기록이 아니다).
+
+- 사용자가 0.6.0을 실제 업무 프로젝트에서 Codex·Claude 역할로 쓰고 있고, 다른 Mac에서도 동작을 확인했다. 그래서 [운영 안내](operations.md#실제-파일럿-계정호스트-준비-후)의 실제 파일럿 범위(요청·회신과 알림, 종료 후 같은 대화로 재개, 중복 실행 거부, SessionStart hook 전제)를 macOS에서 확인된 것으로 본다.
+- 항목별 provider·도구 버전과 날짜별 관찰은 남기지 않았다. 버전을 바꾸면 같은 절차로 다시 확인한다.
+- 미검증: Linux에서의 실제 provider 실행.
 
 ### 2026-10-09, 0.6.0 (macOS 27.0 arm64)
 
@@ -279,6 +298,5 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 
 ### 미검증
 
-- Codex↔Claude 실제 요청·회신, 알림 도착(Codex queue·Claude channel), 종료 후 동일 UUID 복구, 중복 실행 거부.
-- 설치 버전의 SessionStart hook 전제: Claude 재개 시 `session_id` 유지, Codex payload의 `cwd`·`transcript_path`, `codex resume` 시 hook 실행. 틀리면 실패는 안전한 쪽(신원 덮어쓰기 없이 캡처 거부)이지만 해당 provider의 재개나 알림이 동작하지 않는다. [운영 안내](operations.md#실제-파일럿-계정호스트-준비-후) 절차로 수행한다.
+- macOS의 Codex↔Claude 실제 흐름은 [2026-11-22 실사용 확인](#2026-11-22-060-실사용-확인-macos)으로 옮겼다.
 - Linux에서의 실제 provider 실행, QMD CPU fallback, 재부팅 후 자동 복구(현재는 수동 `recover`).

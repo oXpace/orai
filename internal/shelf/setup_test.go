@@ -38,12 +38,10 @@ func TestShelfStepSkipsWithoutEngineOrDocuments(t *testing.T) {
 func TestShelfStepInitializesOnceThenRecovers(t *testing.T) {
 	for _, tc := range []struct {
 		existing bool
-		legacy   bool // the index is still in .orai/wiki, where Orai 0.3 kept it
 		want     string
 	}{
-		{false, false, "init"},
-		{true, false, "recover"},
-		{true, true, "recover"}, // recover moves it; init would build a second index
+		{false, "init"},
+		{true, "recover"},
 	} {
 		p := writeProject(t, filepath.Join(t.TempDir(), "p"), "schema = 2\nsession = \"orai\"\n\n[integrations.shelf]\n")
 		if err := os.MkdirAll(filepath.Join(p.Root, "docs"), 0o755); err != nil {
@@ -58,9 +56,6 @@ func TestShelfStepInitializesOnceThenRecovers(t *testing.T) {
 		if tc.existing {
 			s := NewSettings(p)
 			dir := s.Directory
-			if tc.legacy {
-				dir = s.LegacyDirectory()
-			}
 			if err := os.MkdirAll(dir, 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -224,7 +219,7 @@ func TestRegistrationComparesProjectMCPSettingsWithTheShelfAddress(t *testing.T)
 		t.Fatalf("registered: %+v", c)
 	}
 
-	// A different port, and the server still under its 0.3 name.
+	// A different port, and the server under another name.
 	write(".codex/config.toml", "[mcp_servers.shelf]\nurl = \"http://127.0.0.1:8181/mcp\"\n")
 	write(".mcp.json", `{"mcpServers": {"wiki-proj": {"type": "http", "url": "http://127.0.0.1:18338/mcp"}}}`)
 	c := check()

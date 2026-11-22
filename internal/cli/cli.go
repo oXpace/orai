@@ -33,9 +33,6 @@ var commands = map[string]bool{"setup": true, "run": true, "status": true, "doct
 
 var shelfActions = map[string]bool{"init": true, "recover": true, "sync": true, "refresh": true, "check": true, "stop": true}
 
-var renamed = map[string]string{"inbox": "orai msg inbox", "send": "orai msg send", "reply": "orai msg reply",
-	"qmd": "orai shelf", "wiki": "orai shelf", "init": "orai setup"}
-
 const help = `usage: orai [--project PATH] <command> ...
 
 Run Codex and Claude Code as role sessions with exact resume, notifications and
@@ -285,9 +282,6 @@ func Main(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
 	index, word := firstWord(argv)
-	if hint, ok := renamed[word]; ok {
-		return exitUsage, usagef("`%s` moved; use `%s`", word, hint)
-	}
 	switch {
 	case word == "--version" || word == "version":
 		fmt.Fprintln(stdout, "orai "+version.String())
