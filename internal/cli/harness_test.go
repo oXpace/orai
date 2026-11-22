@@ -89,6 +89,14 @@ func TestSearchCoversTheRolesMailboxAndDocsWithoutReceiving(t *testing.T) {
 	if !strings.Contains(r.out, "1 message(s) not received yet also match") {
 		t.Fatalf("the pending message is counted, not shown: %s", r.out)
 	}
+	weak := run("", "search", "zzqx", "절차", "--in", "docs")
+	if !strings.Contains(weak.out, "weak match: nothing matched; no document contains zzqx") || !strings.Contains(weak.out, "--also") {
+		t.Fatalf("a weak result says so and how to retry: %s", weak.out)
+	}
+	retry := run("", "search", "zzqx", "절차", "--in", "docs", "--also", "태그", "--also", "  ")
+	if !strings.Contains(retry.out, "[docs] docs/deploy.md:3  배포") || strings.Contains(retry.out, "weak match") {
+		t.Fatalf("another phrasing finds the document: %s", retry.out)
+	}
 	peek := run("", "inbox", "--peek")
 	var listed []map[string]any
 	_ = json.Unmarshal([]byte(peek.out), &listed)

@@ -26,7 +26,7 @@ type options struct {
 
 // repeatable flags collect every occurrence (options.lists) instead of rejecting a
 // second one.
-var repeatable = map[string]bool{"role": true}
+var repeatable = map[string]bool{"role": true, "also": true}
 
 func (o options) has(name string) bool   { _, ok := o.values[name]; return ok || o.bools[name] }
 func (o options) get(name string) string { return o.values[name] }

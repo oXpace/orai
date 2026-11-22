@@ -42,8 +42,19 @@ func TestSearchFallsBackToKeywordsWithTheReasonWhenNotBuilt(t *testing.T) {
 	if out.Mode != "keyword" || out.Fix != "orai shelf init" || out.Reason == "" {
 		t.Fatalf("outcome = %+v", out)
 	}
-	if len(out.Hits) != 1 || out.Hits[0].Path != "docs/deploy.md" || out.Hits[0].Line != 3 {
+	if len(out.Hits) != 1 || out.Hits[0].Path != "docs/deploy.md" || out.Hits[0].Line != 3 || out.Hits[0].Title != "배포" {
 		t.Fatalf("hits = %+v", out.Hits)
+	}
+	if out.Weak {
+		t.Fatalf("every word matched, so the result is not weak: %+v", out)
+	}
+	weak := Search(NewSettings(p), "zzqx 절차", 5)
+	if len(weak.Hits) != 0 || !weak.Weak || len(weak.Unknown) != 1 || weak.Unknown[0] != "zzqx" {
+		t.Fatalf("an unknown word is reported: %+v", weak)
+	}
+	fused := Search(NewSettings(p), "zzqx 절차", 5, "release")
+	if len(fused.Hits) != 1 || fused.Hits[0].Path != "docs/deploy.md" {
+		t.Fatalf("another phrasing finds it: %+v", fused)
 	}
 }
 
@@ -67,7 +78,7 @@ func TestSearchUsesTheEngineAndMapsPathsToTheProject(t *testing.T) {
 				"file": "docs/a.md", "title": "A", "score": 0.8, "context": "설계 문서", "line": float64(4), "snippet": "4: 내용"}}}}
 		},
 	})
-	out := Search(s, "질문", 3)
+	out := Search(s, "질문", 3, "다른 표현")
 	if out.Mode != "engine" || len(out.Hits) != 1 {
 		t.Fatalf("outcome = %+v", out)
 	}
@@ -76,7 +87,7 @@ func TestSearchUsesTheEngineAndMapsPathsToTheProject(t *testing.T) {
 		t.Fatalf("hit = %+v", hit)
 	}
 	searches := calls[len(calls)-1].Args["searches"].([]map[string]any)
-	if len(searches) != 2 || searches[0]["type"] != "lex" || searches[1]["type"] != "vec" {
+	if len(searches) != 4 || searches[0]["type"] != "lex" || searches[1]["type"] != "vec" || searches[3]["query"] != "다른 표현" {
 		t.Fatalf("query args = %+v", calls[len(calls)-1].Args)
 	}
 }

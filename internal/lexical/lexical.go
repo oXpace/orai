@@ -1,8 +1,9 @@
 // Package lexical is the keyword matching `orai search` uses where no index answers:
 // the mailbox (never indexed, so a role's mail stays out of the shared document index)
-// and the documents when the shelf server cannot be reached. It is deliberately
-// simple: case-insensitive substring counts over query terms, with a crude stem for
-// Korean words so a particle on either side ("신원을" against "신원이") still matches.
+// and the documents when the shelf server cannot be reached. Matching is
+// case-insensitive substring counting over query words and their shorter forms, so a
+// particle on either side ("신원을" against "신원이") still matches. Messages are
+// ranked by Score; documents by SearchDocs (docs.go), which ranks sections.
 package lexical
 
 import (
@@ -31,23 +32,49 @@ func Terms(query string) []Term {
 			continue
 		}
 		seen[field] = true
-		forms := []string{field}
-		if stem := hangulStem(field); stem != "" {
-			forms = append(forms, stem)
-		}
+		forms := variants(field)
 		terms = append(terms, Term{Word: field, Forms: forms})
 	}
 	return terms
 }
 
-// hangulStem drops the last syllable of a Hangul word of three or more syllables,
-// which is usually a particle or ending ("신원을" → "신원"). Empty when not applicable.
-func hangulStem(word string) string {
-	runes := []rune(word)
-	if len(runes) < 3 || !unicode.Is(unicode.Hangul, runes[len(runes)-1]) {
-		return ""
+// variants are the forms a query word may match, longest first: the word itself, the
+// Latin or digit runs inside a mixed word ("hook이" → "hook"), and for a word ending in
+// Hangul the word without its last one or two syllables, which are usually a particle
+// or ending ("신원을" → "신원", "컴포넌트들을" → "컴포넌트"). A form keeps at least two
+// characters. The idea is wikimap's (MIT): trim the tail instead of keeping a grammar.
+func variants(word string) []string {
+	forms := []string{word}
+	seen := map[string]bool{word: true}
+	add := func(form string) {
+		if utf8.RuneCountInString(form) >= 2 && !seen[form] {
+			seen[form] = true
+			forms = append(forms, form)
+		}
 	}
-	return string(runes[:len(runes)-1])
+	runes := []rune(word)
+	for cut := 1; cut <= 2 && len(runes)-cut >= 2 && unicode.Is(unicode.Hangul, runes[len(runes)-cut]); cut++ {
+		add(string(runes[:len(runes)-cut]))
+	}
+	var run []rune
+	flush := func() {
+		if len(run) > 0 && len(run) < len(runes) {
+			add(string(run))
+		}
+		run = run[:0]
+	}
+	for _, r := range runes {
+		if r < utf8.RuneSelf && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			run = append(run, r)
+			continue
+		}
+		flush()
+	}
+	flush()
+	sort.SliceStable(forms[1:], func(i, j int) bool {
+		return utf8.RuneCountInString(forms[1+i]) > utf8.RuneCountInString(forms[1+j])
+	})
+	return forms
 }
 
 // Match is how one text answers a query.

@@ -65,7 +65,7 @@ func mailIdentity(o options, required bool) (*project.Project, string, int, erro
 	return p, config.UserHandle, 0, nil
 }
 
-const searchHelp = `usage: orai search <words or a question> [--in docs,mail,code] [--limit N] [--json] [--as user]
+const searchHelp = `usage: orai search <words or a question> [--also <other words>]... [--in docs,mail,code] [--limit N] [--json] [--as user]
 
 Search the project's documents, your own mailbox and the code graph at once, and print
 what was found as text: where (path and line, message ID, symbol), the matching lines,
@@ -75,11 +75,16 @@ and the folder's declared purpose. Then open what you need with ` + "`orai read`
                 here. docs = the shelf folders in orai.toml, mail = your received and
                 sent messages (a role session's own, or the user's with --as user),
                 code = the code graph of this checkout
+  --also TEXT   the same question in other words (repeatable). Documents are searched
+                with every phrasing and the rankings fused, so a document several
+                phrasings agree on comes first. Worth it when a docs line says
+                "weak match"; mail and code use the first phrasing only
   --limit N     results per source (default 5)
   --json        machine-readable output
 
 Each source gets a status line first. When the shelf server cannot answer, the files
-are scanned by keyword instead and the line says why and what fixes it; an index
+are scanned by keyword instead (sections ranked by rare words, title and heading hits
+first) and the line says why and what fixes it; an index
 that is behind its documents is noted too. Searching changes nothing: it receives no
 message (messages not yet received are only counted; ` + "`orai inbox`" + ` receives them),
 starts no server and syncs no index.
@@ -132,9 +137,15 @@ Orai never runs ` + "`codegraph install`" + ` or changes global agent settings.
 const searchLimitDefault = 5
 
 func runSearch(argv []string, stdout io.Writer) (int, error) {
-	o, err := parse(argv, map[string]bool{"project": true, "as": true, "in": true, "limit": true, "json": false})
+	o, err := parse(argv, map[string]bool{"project": true, "as": true, "in": true, "limit": true, "also": true, "json": false})
 	if err != nil {
 		return exitUsage, err
+	}
+	var also []string
+	for _, phrasing := range o.lists["also"] {
+		if phrasing = strings.TrimSpace(phrasing); phrasing != "" {
+			also = append(also, phrasing)
+		}
 	}
 	query := strings.TrimSpace(strings.Join(o.args, " "))
 	if query == "" {
@@ -170,7 +181,7 @@ func runSearch(argv []string, stdout io.Writer) (int, error) {
 		return code, err
 	}
 	cwd, _ := os.Getwd()
-	opts := search.Options{Query: query, Sources: sources, Limit: limit, Cwd: cwd}
+	opts := search.Options{Query: query, Also: also, Sources: sources, Limit: limit, Cwd: cwd}
 	if me != "" {
 		opts.Mailbox = &search.Mailbox{Root: mail.Root(p.MailRoot()), Me: me}
 	}

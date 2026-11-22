@@ -32,6 +32,7 @@ type Mailbox struct {
 // Options say what to search.
 type Options struct {
 	Query   string
+	Also    []string        // other phrasings of the same question (documents only)
 	Sources map[string]bool // requested explicitly; nil = every source that is set up
 	Limit   int             // per source
 	Mailbox *Mailbox        // nil outside a role session without --as user
@@ -101,11 +102,21 @@ func docs(p *project.Project, o Options, asked bool, r *Result) Source {
 		return skipped("docs", "no [integrations.shelf] in orai.toml", "", asked)
 	}
 	s := shelf.NewSettings(p)
-	out := shelf.Search(s, o.Query, o.Limit)
+	out := shelf.Search(s, o.Query, o.Limit, o.Also...)
 	r.Docs = out.Hits
 	src := Source{Name: "docs", State: "ok", Detail: fmt.Sprintf("keyword + meaning (shelf :%d)", out.Port)}
 	if out.Mode != "engine" {
 		src.State, src.Detail, src.Reason, src.Fix = "fallback", "keyword scan of the files", out.Reason, out.Fix
+	}
+	if out.Mode != "engine" && out.Weak {
+		note := "weak match: the top result covers few of the words"
+		if len(out.Hits) == 0 {
+			note = "weak match: nothing matched"
+		}
+		if len(out.Unknown) > 0 {
+			note += "; no document contains " + strings.Join(first(out.Unknown, 5), ", ")
+		}
+		src.Notes = append(src.Notes, note+". Ask again with --also '<the same question in other words>'")
 	}
 	if n := len(out.Stale); n > 0 {
 		src.Notes = append(src.Notes, fmt.Sprintf("%d document(s) changed since the last sync, so the index may be behind (%s): orai shelf sync",

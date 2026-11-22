@@ -1,7 +1,6 @@
 package shelf
 
 import (
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -18,7 +17,7 @@ import (
 type Hit struct {
 	Path    string  `json:"path"`                // from the project folder, slash-separated
 	Line    int     `json:"line,omitempty"`      // best matching line, 1-based
-	Title   string  `json:"title,omitempty"`     // engine searches only
+	Title   string  `json:"title,omitempty"`     // document title (› section, keyword scans)
 	Score   float64 `json:"score,omitempty"`     // engine searches only
 	Context string  `json:"context,omitempty"`   // the folder's declared purpose
 	Excerpt string  `json:"excerpt,omitempty"`   // the matching lines
@@ -35,31 +34,39 @@ type SearchOutcome struct {
 	Stale  []string `json:"stale,omitempty"` // documents changed since the last sync
 	Port   int      `json:"port,omitempty"`
 	Hits   []Hit    `json:"hits"`
+	// Keyword scans only: Weak says nothing matched or the top result covers little of
+	// the query, so other words for the same question may do better;
+	// Unknown lists the query words no document contains.
+	Weak    bool     `json:"weak,omitempty"`
+	Unknown []string `json:"unknown_words,omitempty"`
 }
 
 // searchTimeout bounds one engine search: the first search after a start loads the
 // models, so it is generous; a hung server still falls back to the keyword scan.
 var searchTimeout = 120 * time.Second
 
-// Search finds documents for query, at most limit. It asks the shelf server first and
+// Search finds documents for query, at most limit. Each of also is another phrasing of
+// the same question: the server gets every phrasing in one query, and the keyword scan
+// ranks each and fuses the rankings. It asks the shelf server first and
 // scans the declared folders itself when the server is missing, refuses, serves
 // another project or fails; the outcome says which happened. It never starts, stops or
 // re-indexes anything.
-func Search(s *Settings, query string, limit int) SearchOutcome {
+func Search(s *Settings, query string, limit int, also ...string) SearchOutcome {
+	phrasings := append([]string{query}, also...)
 	outcome := SearchOutcome{Port: s.Port, Stale: s.staleDocuments()}
-	hits, reason, fix := engineSearch(s, query, limit)
+	hits, reason, fix := engineSearch(s, phrasings, limit)
 	if reason == "" {
 		outcome.Mode, outcome.Hits = "engine", hits
 		return outcome
 	}
 	outcome.Mode, outcome.Reason, outcome.Fix = "keyword", reason, fix
-	outcome.Hits = s.keywordSearch(query, limit)
+	outcome.Hits, outcome.Weak, outcome.Unknown = s.keywordSearch(phrasings, limit)
 	return outcome
 }
 
 // engineSearch runs a lex+vec query on this project's server. A non-empty reason means
 // it could not, with the command that fixes it.
-func engineSearch(s *Settings, query string, limit int) ([]Hit, string, string) {
+func engineSearch(s *Settings, phrasings []string, limit int) ([]Hit, string, string) {
 	if !exists(s.DB) {
 		return nil, "the shelf has not been built for this project", "orai shelf init"
 	}
@@ -79,8 +86,12 @@ func engineSearch(s *Settings, query string, limit int) ([]Hit, string, string) 
 	if mismatch := identity(status, s); mismatch != "" {
 		return nil, fmt.Sprintf("port %d serves another index (%s)", s.Port, mismatch), "orai doctor"
 	}
+	var searches []map[string]any
+	for _, q := range phrasings {
+		searches = append(searches, map[string]any{"type": "lex", "query": q}, map[string]any{"type": "vec", "query": q})
+	}
 	result, err := client.Tool("query", map[string]any{
-		"searches":    []map[string]any{{"type": "lex", "query": query}, {"type": "vec", "query": query}},
+		"searches":    searches,
 		"collections": s.collectionNames(),
 		"limit":       limit,
 	})
@@ -207,36 +218,32 @@ func (s *Settings) staleDocuments() []string {
 	return stale
 }
 
-// keywordSearch scans the declared documents directly, best first.
-func (s *Settings) keywordSearch(query string, limit int) []Hit {
-	terms := lexical.Terms(query)
-	type scored struct {
-		hit   Hit
-		match lexical.Match
-	}
-	var found []scored
+// keywordSearch scans the declared documents directly and ranks their sections
+// (lexical.SearchDocs), best first.
+func (s *Settings) keywordSearch(phrasings []string, limit int) ([]Hit, bool, []string) {
+	var docs []lexical.Doc
+	abs := map[string]string{}
 	for _, path := range s.Documents() {
 		data, err := os.ReadFile(path)
-		if errors.Is(err, fs.ErrNotExist) || err != nil {
-			continue
-		}
-		m := lexical.Score(string(data), terms)
-		if !m.Enough(terms) {
+		if err != nil {
 			continue
 		}
 		rel, _ := filepath.Rel(s.Project.Root, path)
-		found = append(found, scored{Hit{Path: filepath.ToSlash(rel), Line: m.Line, Excerpt: m.Excerpt,
-			Context: s.contextFor(path)}, m})
+		rel = filepath.ToSlash(rel)
+		abs[rel] = path
+		docs = append(docs, lexical.ParseMarkdown(rel, string(data)))
 	}
-	lexical.Rank(found, func(f scored) lexical.Match { return f.match })
+	result := lexical.SearchDocs(docs, phrasings, limit)
 	hits := []Hit{}
-	for i, f := range found {
-		if limit > 0 && i >= limit {
-			break
+	for _, h := range result.Hits {
+		title := h.Title
+		if h.Heading != "" && h.Heading != h.Title {
+			title += " › " + h.Heading
 		}
-		hits = append(hits, f.hit)
+		hits = append(hits, Hit{Path: h.Path, Line: h.Line, Title: title, Excerpt: h.Excerpt,
+			Context: s.contextFor(abs[h.Path])})
 	}
-	return hits
+	return hits, result.Weak, result.Unknown
 }
 
 // contextFor is the declared folder purpose ([integrations.shelf.context]) of the

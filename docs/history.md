@@ -184,6 +184,15 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **지침**: `AGENTS.md` 블록과 스킬을 다섯 명령 중심으로 바꿨다. `references/search.md`는 검색 결과를 자세히 읽는 참조로 남겼다. Kickoff 프롬프트의 메시지 확인 단계도 `orai inbox`로 바꿨다.
 - **하지 않은 것**: 엔진 재구현(다중 언어 파서가 의존성을 늘린다), 메일의 의미 검색, 검색 중 자동 sync.
 
+## 키워드 검색 개선 (wikimap 검토)
+
+사용자 요청(2026-11-22)이다. 사용자가 QMD 대안으로 [wikimap](https://github.com/dhha22/wikimap)을 찾아왔다. 커밋 `9991f60`(1.5.1, MIT, Python 단일 파일, 표준 라이브러리만 사용)의 소스를 읽고 비교했다. 받아 온 코드를 실행하는 것은 작업 환경이 막아서 실행해 보지는 않았다.
+
+- **엔진으로 쓰지 않은 이유**: 벡터 검색이 들어 있지 않다(임베딩은 호출자가 넣는다). MCP 서버가 없다. 색인이 `<루트>/.wikimap`으로 고정이라 `.orai/shelf/`로 옮길 수 없다. 루트를 하나만 받아 묶음 개념이 없고, 기본으로 루트에 `MAP.md`를 쓴다. 답 메모와 문서 연결을 저장하는 층은 "shelf는 지식을 소유하지 않는다"는 경계와 겹친다. 그리고 Python 런타임이 새 의존성이 된다.
+- **가져온 것**: 사용자는 랭킹 방식만 Go로 옮기는 안을 골랐다. 절 단위 결과와 줄 번호, IDF, 제목·경로·절 제목 가중치, 한글 낱말 꼬리 자르기(문법표 없이 끝 음절 한두 개), 섞인 낱말의 라틴 문자 부분(`hook이` → `hook`), 여러 표현의 순위 역수 합치기, 약한 결과 신호다. 코드는 옮기지 않았다. 가중치와 판정 기준은 Orai의 것이다(`internal/lexical/docs.go`).
+- **바뀐 동작**: 대체 검색은 문서 전체가 아니라 절을 순위 매기므로 결과 줄과 제목(`문서 제목 › 절 제목`)이 달라진다. 메일 검색도 같은 낱말 형태(`Terms`)를 쓰므로, 한글 낱말 꼬리를 두 음절까지 자른 형태와 라틴 문자 부분이 맞는다. `orai search --also`를 더했다.
+- **하지 않은 것**: wikimap의 답 메모·연결 층, 색인 파일(매번 파일을 읽는다), HTML·PDF 색인.
+
 ## 검증 기록
 
 ### 2026-11-22, 통합 검색 (Linux, 클라우드 컨테이너)
@@ -195,6 +204,14 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 | 실제 CodeGraph 1.6.0 (linux-x64, 이 저장소 사본) | `codegraph init`, `query --json`, `status --json`, `explore` 출력 형식 확인. `orai search ValidateSaved --in code`가 `internal/runtime/runtime.go:277-295`를 반환 |
 | 이 저장소 사본에서 `orai search`(shelf 미구축) | 키워드 대체 검색이 smoke 질문으로 `docs/architecture.md:94`를 첫 결과로 반환, 상태 줄에 `orai shelf init` 안내, 종료 코드 1 |
 | 미검증 | 실제 QMD 서버를 거친 `orai search`(필드 이름은 소스로만 확인), 역할 세션 중 자동 sync의 실제 `qmd update`·`embed`, 역할 세션에서 `codegraph` MCP 연결과 같은 이름 전역 등록과의 우선순위, Codex·Claude가 `orai search` 출력을 그대로 받는지, macOS |
+
+### 2026-11-22, 키워드 검색 개선 (Linux, 클라우드 컨테이너)
+
+| 범위 | 결과 |
+|---|---|
+| fake·fixture: 절 나누기(front matter, 코드 블록 안 `#`), 낱말 형태, IDF 우선, 제목 가중치, 표현 합치기, 약한 결과와 없는 낱말, 짧은 질문의 모든 낱말 조건, `--also` CLI·엔진 질의 | 통과 |
+| 이 저장소 `docs/`에서 이전 바이너리와 비교(shelf 미구축) | smoke 질문의 첫 결과가 `docs/history.md:266`에서 `docs/architecture.md:94`(정답)로 바뀜. "문서를 고쳤는데 검색에 안 나옴"은 두 바이너리 모두 복구 표 줄(`docs/operations.md`)을 첫 결과로 냄. "릴리스 버전 정책"은 `docs/release.md`의 버전 정책 절이 첫 결과가 됨 |
+| 미검증 | 큰 묶음(수백 문서)에서의 품질과 속도, 실제 QMD 서버에 여러 표현을 보내는 질의 |
 
 ### 2026-11-22, 0.6.0 실사용 확인 (macOS)
 
