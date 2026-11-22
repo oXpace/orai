@@ -46,7 +46,8 @@ var InitArgs = []string{"init", "--tools", Tools, "--scope", "project", "--no-an
 var lookPath = exec.LookPath
 
 // run runs argv in dir with env added to this process's environment and returns stdout.
-// A non-zero exit becomes an error built from stderr, falling back to stdout.
+// A non-zero exit becomes an error built from stderr, falling back to stdout, and is
+// returned with the stdout it printed.
 var run = func(argv []string, dir string, env []string, timeout time.Duration) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -70,7 +71,7 @@ var run = func(argv []string, dir string, env []string, timeout time.Duration) (
 		if len(msg) > 300 {
 			msg = msg[len(msg)-300:]
 		}
-		return nil, fmt.Errorf("%s", msg)
+		return stdout.Bytes(), fmt.Errorf("%s", msg)
 	}
 	return stdout.Bytes(), nil
 }
@@ -139,9 +140,11 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 	if !deep {
 		return append(checks, doctor.New(Component+".specs", doctor.NotChecked, "spec validation runs with --deep", ""))
 	}
-	out, err := run([]string{binary, "validate", "--specs", "--json", "--no-interactive"}, p.Root, env, 120*time.Second)
-	if err != nil {
-		return append(checks, doctor.New(Component+".specs", doctor.Blocked, fmt.Sprintf("openspec validate failed: %v", err),
+	out, runErr := run([]string{binary, "validate", "--specs", "--json", "--no-interactive"}, p.Root, env, 120*time.Second)
+	// validate exits 1 when a spec is invalid and still prints the report: read that
+	// first. A failed run that names no invalid spec is never healthy.
+	failedRun := func() []doctor.Check {
+		return append(checks, doctor.New(Component+".specs", doctor.Blocked, fmt.Sprintf("openspec validate failed: %v", runErr),
 			"Run `openspec validate --specs` in the project folder to see the error"))
 	}
 	var report struct {
@@ -151,6 +154,9 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(out, &report); err != nil {
+		if runErr != nil {
+			return failedRun()
+		}
 		return append(checks, doctor.New(Component+".specs", doctor.Blocked,
 			fmt.Sprintf("openspec validate printed something other than its JSON report: %v", err),
 			"Run `openspec validate --specs --json` in the project folder to see the output"))
@@ -165,6 +171,9 @@ func Diagnose(p *project.Project, deep bool) []doctor.Check {
 		return append(checks, doctor.New(Component+".specs", doctor.Degraded,
 			fmt.Sprintf("%d of %d spec(s) fail validation: %s", len(failed), len(report.Items), strings.Join(failed, ", ")),
 			"`openspec validate --specs` shows what each one lacks"))
+	}
+	if runErr != nil {
+		return failedRun()
 	}
 	return append(checks, doctor.New(Component+".specs", doctor.Healthy, fmt.Sprintf("%d spec(s) valid", len(report.Items)), ""))
 }

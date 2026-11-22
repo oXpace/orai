@@ -40,7 +40,7 @@ const (
 	InstallClaude    = "Install Claude Code: `curl -fsSL https://claude.ai/install.sh | bash` (or `npm install -g @anthropic-ai/claude-code`), then `claude auth login`"
 	InstallQMD       = "Install QMD: `npm install -g @tobilu/qmd` (needs Node 22+), then `orai setup`. Or remove [integrations.shelf] from orai.toml to opt out"
 	InstallCodegraph = "Install CodeGraph: `npm install -g @colbymchenry/codegraph`, then `orai setup`. Or remove [integrations.codegraph] from orai.toml to opt out"
-	InstallOpenSpec  = "Install OpenSpec 2 or later: `npm install -g @fission-ai/openspec@latest` (needs Node 20.19+), then `orai setup`. Or remove [integrations.openspec] from orai.toml to opt out"
+	InstallOpenSpec  = "Install OpenSpec 2 or later: `npm install -g @fission-ai/openspec@latest` (needs Node 22.20+), then `orai setup`. Or remove [integrations.openspec] from orai.toml to opt out"
 	// CannotRun is the next step when a tool is installed but fails to start. The usual
 	// cause in a fresh shell: an npm-installed tool whose `node` is not on PATH.
 	CannotRun = "Run `%s --version` in this shell. If it fails, the tool is installed but cannot start: tools installed with npm need `node` on PATH (activate mise/nvm here), otherwise reinstall it"

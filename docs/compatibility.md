@@ -32,7 +32,7 @@ Go 의존성의 정본은 `go.mod`와 `go.sum`이다. mise는 Go 버전과 task�
 | Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` 또는 `npm install -g @anthropic-ai/claude-code`, 이후 `claude auth login` | provider가 `claude`인 역할이 있을 때 |
 | QMD | `npm install -g @tobilu/qmd` (Node 22 이상) | `[integrations.shelf]`를 쓸 때 (선택) |
 | CodeGraph | `npm install -g @colbymchenry/codegraph` | `[integrations.codegraph]`를 쓸 때 (선택) |
-| OpenSpec | `npm install -g @fission-ai/openspec@latest` (Node 20.19 이상) 또는 단일 바이너리·Homebrew | `[integrations.openspec]`를 쓸 때 (선택, 새 프로젝트 기본). 2.0 이상 |
+| OpenSpec | `npm install -g @fission-ai/openspec@latest` (Node 22.20 이상) 또는 단일 바이너리·Homebrew | `[integrations.openspec]`를 쓸 때 (선택, 새 프로젝트 기본). 2.0 이상 |
 
 2026-11-22 macOS 27.2.1 arm64 호스트에서 확인했다. Codex와 Claude Code는 doctor의 capability 검사와 MCP 설정 우선순위까지만 확인했고, 이 버전의 실제 역할 세션은 확인하지 않았다.
 
