@@ -5,6 +5,7 @@ name = "orai"
 session = "orai"
 
 [integrations.shelf]
+engine = "builtin"
 collections = { docs = "docs", specs = "openspec/specs" }
 
 [integrations.shelf.smoke]
