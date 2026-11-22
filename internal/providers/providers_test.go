@@ -134,3 +134,17 @@ func TestCodexArgsInjectHookAndServers(t *testing.T) {
 		}
 	}
 }
+
+// openspec role-sessions "같은 실행에서 clear한다": both providers call the hook on clear.
+func TestSessionStartHookRunsOnClear(t *testing.T) {
+	const want = "startup|resume|compact|clear"
+	role := config.Role{Name: "lead"}
+	codex := CodexArgs(role, "", "prompt", "hook cmd", "/root", nil)
+	if !strings.Contains(strings.Join(codex, "\n"), `"matcher" = "`+want+`"`) {
+		t.Fatalf("codex %v", codex)
+	}
+	claude, _ := ClaudeArgs(role, "", "id", "prompt", "hook cmd", "/root", nil, "p/lead", []string{"orai", "_channel"})
+	if !strings.Contains(strings.Join(claude, "\n"), `"matcher":"`+want+`"`) {
+		t.Fatalf("claude %v", claude)
+	}
+}

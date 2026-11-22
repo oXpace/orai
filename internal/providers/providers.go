@@ -24,7 +24,7 @@ func Notice(ids []string) string {
 }
 
 func SessionStartHook(command string) []any {
-	return []any{map[string]any{"matcher": "startup|resume|compact",
+	return []any{map[string]any{"matcher": "startup|resume|compact|clear",
 		"hooks": []any{map[string]any{"type": "command", "command": command, "timeout": 10}}}}
 }
 

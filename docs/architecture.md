@@ -64,7 +64,7 @@ Orai는 서로 다른 코딩 에이전트 CLI(Codex, Claude Code)를 **역할 �
   roles/<role>.json         provider, cwd, nonce, status, session_id, transcript, captured_at
   roles/<role>.lock         역할당 하나의 실행 (flock; 자식 프로세스에 상속)
   roles/<role>.delivery.json / .channel.json   알림 준비 상태 (run nonce 단위)
-  history/                  --fresh로 교체된 이전 상태
+  history/                  --fresh나 /clear로 교체된 이전 상태
   backups/<stamp>/          setup이 수정한 파일의 원본
   shelf/                    QMD를 켰을 때 이 프로젝트 전용 설정·DB
 .agent-mail/<session>/       프로젝트 메일함 (AMQ schema 1 호환, 0700/0600)
@@ -92,11 +92,11 @@ orai run <role>
   └─ 종료: status=stopped, lock 해제
 ```
 
-**신원 캡처.** provider의 SessionStart hook이 `_capture`를 호출한다. `_capture`는 환경변수의 run nonce가 상태 파일의 nonce와 같을 때만 세션 ID·transcript를 기록한다. 이전 실행이 남긴 낡은 hook은 nonce가 달라 거부되고, 신원을 덮어쓰지 못한다. cwd가 역할 worktree와 다르거나 이미 기록된 ID와 다른 ID가 오면 역시 거부한다. hook 출력은 역할·기준 경로 한 줄(300자 미만)만 복원하며 지침 전체를 다시 주입하지 않는다.
+**신원 캡처.** provider의 SessionStart hook이 `_capture`를 호출한다. `_capture`는 환경변수의 run nonce가 상태 파일의 nonce와 같을 때만 세션 ID·transcript를 기록한다. 이전 실행이 남긴 낡은 hook은 nonce가 달라 거부되고, 신원을 덮어쓰지 못한다. cwd가 역할 worktree와 다르면 역시 거부한다. 이미 기록된 ID와 다른 ID는 `source=clear`이고 transcript 경로가 있을 때만 받는다. 이때 이전 상태를 `history/`에 남긴 뒤 ID와 transcript를 함께 바꾸고, 그 밖의 다른 ID는 거부한다. hook 출력은 역할·기준 경로 한 줄(300자 미만)만 복원하며 지침 전체를 다시 주입하지 않는다.
 
-**정확한 재개.** 기본 동작은 캡처된 UUID로 재개하는 것이다. provider, cwd, 기록된 transcript 파일이 모두 일치해야 한다. "가장 최근 대화"를 추측하거나 writer lock을 지워 복구하지 않는다. 새 대화는 `--fresh`로만 시작하며, 이때 이전 상태는 `history/`로 옮긴다.
+**정확한 재개.** 기본 동작은 캡처된 UUID로 재개하는 것이다. provider, cwd, 기록된 transcript 파일이 모두 일치해야 한다. "가장 최근 대화"를 추측하거나 writer lock을 지워 복구하지 않는다. `orai run`의 새 대화는 `--fresh`로만 시작하며, 이때 이전 상태는 `history/`로 옮긴다. 실행 중 `/clear`로 생긴 대화는 신원 캡처가 이어받으므로 다음 실행은 그 대화로 재개한다.
 
-**부트스트랩 분리.** 새 세션 시작, 재개 안내, compact hook, 메시지 알림은 서로 다른 경로다. 알림은 메시지 ID만 전달한다.
+**부트스트랩 분리.** 새 세션 시작, 재개 안내, compact hook, clear hook, 메시지 알림은 서로 다른 경로다. 알림은 메시지 ID만 전달한다.
 
 시작 프롬프트는 기본 사항만 담는다. 프로젝트·역할·프로젝트 폴더, 읽을 문서 세 개의 경로(프로젝트 `AGENTS.md`, `orai.toml`의 `guide`가 가리키는 역할 지침, Orai 스킬), 그리고 시작 단계다. 작업 규칙은 프롬프트가 아니라 그 문서들이 소유한다. 프로젝트 폴더만 루트의 절대 경로로 적고, 문서 경로는 모두 그 프로젝트 폴더 기준 상대 경로다(`AGENTS.md`, `.agents/roles/dev.md`). `orai.toml`에 적힌 값과 같고, 어느 폴더에서 일하는 역할이든 같은 경로를 받는다. 자기 worktree에서 일하는 역할이 worktree의 사본 대신 프로젝트 폴더의 문서를 읽어야 한다는 규칙은 `AGENTS.md`의 Orai 블록에 있다.
 
@@ -107,7 +107,7 @@ orai run <role>
 
 프롬프트는 지침에 "세션 시작" 절이 있을 때만 "그 절을 따른다"는 단계를 넣는다. Claude 역할인데 지침에 `channel_ready`가 없으면(지침이 없거나, 이전 버전에서 만들었거나, 손으로 쓴 경우) 프롬프트가 그 호출을 직접 적는다. 이 호출이 빠지면 알림이 조용히 오지 않기 때문에 지침 내용에만 맡기지 않는다.
 
-다시 연 세션은 문서 목록 없이 같은 단계("문서를 읽는다" 제외, 마지막은 "하던 작업을 이어간다")와 지침 경로 한 줄만 받는다. SessionStart hook은 역할과 문서 위치를 한 줄로 다시 알려 줄 뿐 문서를 다시 읽게 하지 않는다. `orai run <역할> --dry-run`으로 실제 프롬프트를 볼 수 있다.
+다시 연 세션은 문서 목록 없이 같은 단계("문서를 읽는다" 제외, 마지막은 "하던 작업을 이어간다")와 지침 경로 한 줄만 받는다. SessionStart hook은 역할과 문서 위치를 한 줄로 다시 알려 줄 뿐 문서를 다시 읽게 하지 않는다. clear 뒤에는 예외로, 문맥에서 사라진 프로젝트·역할 지침을 읽고 `orai inbox`를 확인하라고 한 줄로 안내한다(본문은 넣지 않는다). `orai run <역할> --dry-run`으로 실제 프롬프트를 볼 수 있다.
 
 ## 알림
 

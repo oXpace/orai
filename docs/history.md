@@ -242,7 +242,30 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 
 사용자 규칙(2026-11-22)이다. 스펙은 기획, change는 설계·기술 결정과 구현 단계, GitHub 이슈는 검증·재검증·테스트 보강·버그를 담는다. `verify-real-hosts`와 `close-test-gaps`는 change에서 빼 이슈로 옮긴다. 보관된 change와 이전 기록의 언급은 당시 그대로 둔다.
 
+## 세션 안 clear 따라가기 (0.7.0)
+
+사용자 요청(2026-11-22)이다. 역할 세션에서 `/clear`하면 provider의 세션 ID가 바뀌는데 Orai가 따라가지 못해 매번 종료하고 `--fresh`로 다시 열어야 했다.
+
+- **원인**: SessionStart matcher에 `clear`가 없어 hook이 실행되지 않았고, `_capture`는 기록과 다른 ID를 모두 거부했다.
+- **바꾼 것**: 같은 실행의 `source=clear`만 신원 교체로 받는다(`follow-session-clear`). clear 뒤에는 지침과 inbox를 안내한다.
+- **바꾸지 않은 것**: Codex `/new`(사용자 결정). `source=startup`으로 와서 clear와 같은 규칙으로 받을 수 없다.
+
 ## 검증 기록
+
+### 2026-11-22, clear 따라가기 (macOS)
+
+브랜치 빌드와 실제 CLI(Claude Code 2.1.330, Codex 0.171.0)를 임시 HOME, 설정, 프로젝트에서 실행했다. Claude는 로그인하지 않았고 Codex의 모델은 로컬 모의 서버다.
+
+| 범위 | 종류 | 결과 |
+|---|---|---|
+| gofmt, go vet, `go test -race ./...` | fake·fixture | 통과. `amq`는 PATH에서 빼 교차 호환 테스트는 건너뛰었다 |
+| Claude `/clear`, `/new`, `/reset`, 입력 없이 종료, 재실행 | 실제 CLI·바이너리 | 바로 새 ID로 교체, history 보존, 새 ID로 재개 |
+| Codex `/clear`, 첫 입력, 종료, 재실행 | 실제 CLI·바이너리, 모의 모델 | 첫 입력 때 새 ID로 교체, history 보존, 새 ID로 재개 |
+| clear 뒤 안내 문맥 | 실제 CLI | Claude transcript와 Codex 모델 요청에 들어감 |
+| clear 뒤 Codex 알림 | 실제 `codex queue` | 새 대화에 ID만 전달, 본문 없음 |
+| Claude `/branch`·세션 안 `/resume`, Codex `/new`·`/fork` | 실제 CLI의 hook 입력 | clear가 아닌 source이거나 hook이 없다 |
+| 독립 리뷰 | 코드 읽기 | 차단 결함 없음. hook 순서와 transcript 생성 시점의 전제를 design에 적었다 |
+| 로그인한 역할 세션, Claude channel 알림, Codex 세션 안 `/resume`, Linux | | 미검증 |
 
 ### 2026-11-22, 0.7.0 수정 뒤 재검증 (macOS)
 
