@@ -62,16 +62,6 @@ func Diagnose(p *project.Project) []doctor.Check {
 			fmt.Sprintf("local state was recorded for %s (moved or copied)", moved),
 			"Review .orai/, then `orai setup` to re-bind; saved sessions need --fresh").
 			WithDetail(map[string]any{"root": p.Root, "id": p.ID()}))
-	} else if p.Config.Schema < config.Schema {
-		// Still read, so nothing stops working; the edit is two lines and Orai never
-		// rewrites the body of orai.toml itself.
-		action := fmt.Sprintf("Edit orai.toml: set `schema = %d`", config.Schema)
-		if p.Config.Shelf != nil {
-			action += " and rename `[integrations.wiki]` to `[integrations.shelf]` (also `[integrations.wiki.smoke]`)"
-		}
-		checks = append(checks, doctor.New("project", doctor.Degraded,
-			fmt.Sprintf("%s uses schema %d; this version writes schema %d", project.ConfigName, p.Config.Schema, config.Schema), action).
-			WithDetail(map[string]any{"root": p.Root, "id": p.ID(), "roles": p.Config.RoleNames()}))
 	} else {
 		// What is in effect, and where it came from: the local file's settings are listed.
 		reason := project.ConfigName + " is valid"

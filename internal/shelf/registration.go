@@ -130,7 +130,7 @@ func registration(s *Settings, deep bool) doctor.Check {
 			problems = append(problems, fmt.Sprintf("%s has `%s` at %s, but this project's shelf is %s", e.File, e.Name, orNone(e.URL), s.Endpoint))
 			fixes = append(fixes, fmt.Sprintf("In %s set the url of `%s` to %s", e.File, ServerName, s.Endpoint))
 		case sameEndpoint(e.URL, s.Port):
-			// The server under an earlier name (0.3 registered it as wiki-<project>).
+			// This project's server registered under another name.
 			problems = append(problems, fmt.Sprintf("%s registers this project's shelf as `%s`", e.File, e.Name))
 			fixes = append(fixes, fmt.Sprintf("In %s rename `%s` to `%s`", e.File, e.Name, ServerName))
 		}
