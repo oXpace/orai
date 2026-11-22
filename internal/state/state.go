@@ -137,7 +137,7 @@ func (f RoleFiles) Delivery(provider string) string {
 	return f.CodexDelivery()
 }
 
-// Archive keeps a superseded state (for example before --fresh) in history/.
+// Archive keeps a superseded state (before --fresh or after /clear) in history/.
 func (f RoleFiles) Archive(value map[string]any) error {
 	name := f.Role + "-" + strconv.FormatInt(time.Now().UnixNano(), 10) + ".json"
 	return WriteJSON(filepath.Join(filepath.Dir(f.Dir), "history", name), value)

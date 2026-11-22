@@ -175,6 +175,17 @@ func RecoveryContext(p *project.Project, role config.Role) string {
 		role.Name, p.Root, guide)
 }
 
+// ClearContext replaces RecoveryContext after /clear, which dropped the guides from the
+// conversation: it points at them and at the inbox, and carries neither body.
+func ClearContext(p *project.Project, role config.Role) string {
+	guides := "프로젝트 지침=AGENTS.md"
+	if role.Guide != "" {
+		guides += ", 역할 지침=" + role.Guide
+	}
+	return fmt.Sprintf("Orai 역할 세션(clear 뒤 새 대화): 역할=%s, 프로젝트 폴더=%s. %s(프로젝트 폴더 기준 경로)를 읽고 `orai inbox`로 받은 메시지를 확인한다.",
+		role.Name, p.Root, guides)
+}
+
 // ShellQuote quotes a word for POSIX shells (hook commands run through a shell).
 func ShellQuote(word string) string {
 	if word != "" && strings.Trim(word, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@%+=:,./-_") == "" {
@@ -212,6 +223,7 @@ func str(m map[string]any, key string) string {
 }
 
 // Capture is the SessionStart hook: bind the provider's conversation ID to this run only.
+// Within a run only /clear may replace that ID.
 func Capture(p *project.Project, in io.Reader, out io.Writer) error {
 	roleName, nonce := os.Getenv("ORAI_ROLE"), os.Getenv("ORAI_RUN_NONCE")
 	if roleName == "" || nonce == "" {
@@ -246,8 +258,18 @@ func Capture(p *project.Project, in io.Reader, out io.Writer) error {
 	if !samePath(str(event, "cwd"), str(current, "cwd")) {
 		return errors.New("session cwd does not match the role worktree")
 	}
+	cleared := str(event, "source") == "clear"
 	if saved := str(current, "session_id"); saved != "" && saved != sid {
-		return errors.New("unexpected conversation identity; use --fresh explicitly")
+		if !cleared {
+			return errors.New("unexpected conversation identity; use --fresh explicitly")
+		}
+		// The new ID must never be stored next to the old conversation's transcript.
+		if str(event, "transcript_path") == "" {
+			return errors.New("clear hook has no transcript path; refusing to replace the identity")
+		}
+		if err := files.Archive(current); err != nil {
+			return err
+		}
 	}
 	current["session_id"] = sid
 	if transcript := str(event, "transcript_path"); transcript != "" {
@@ -258,8 +280,12 @@ func Capture(p *project.Project, in io.Reader, out io.Writer) error {
 	if err := state.WriteJSON(files.State(), current); err != nil {
 		return err
 	}
+	restored := RecoveryContext(p, role)
+	if cleared {
+		restored = ClearContext(p, role)
+	}
 	data, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
-		"hookEventName": "SessionStart", "additionalContext": RecoveryContext(p, role)}})
+		"hookEventName": "SessionStart", "additionalContext": restored}})
 	_, err = fmt.Fprintln(out, string(data))
 	return err
 }
