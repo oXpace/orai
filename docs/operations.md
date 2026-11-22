@@ -55,6 +55,7 @@ git add -A && git commit -m "Update Orai"
 | `todo` 답장의 kind를 읽는 스크립트 | 기본값이 `todo`에서 `status`로 바뀌었다. 이전처럼 보내려면 `--kind todo`를 붙인다 |
 | `orai inbox`의 JSON을 읽는 스크립트 | 읽을 수 없는 메시지는 `dlq/new`로 옮겨지고 `dead_lettered`에, receipt 쓰기 실패는 `receipt_error`에 나온다 |
 | Codex 역할 | 올린 뒤 처음 열 때 hook을 다시 신뢰한다(`/hooks`). 실행 파일 경로에 버전이 들어 있고 0.7.0부터 hook이 `clear`에도 실행되므로 0.6.0에서 한 신뢰가 무효가 된다. 건너뛰면 세션 ID 수집과 알림이 되지 않는다 |
+| `orai <역할>`의 실행 안내나 `orai status`를 읽는 스크립트 | 실행 안내는 stdout에서 stderr로 옮기고 문구가 바뀌었다. 인자 없는 `orai status`의 JSON은 그대로다. `orai status`에 붙인 인자는 이제 역할 이름으로 읽어, 없는 이름이면 종료 코드 2다 |
 | 전역에 등록한 `codegraph` MCP | 그대로 둔다. 그래프가 있는 역할 세션에는 Orai가 같은 이름으로 그 작업 폴더의 서버를 넘긴다 |
 | QMD 색인을 쓰던 컴퓨터 | 없다. 색인(`.orai/shelf`)이 있으면 QMD를 계속 쓴다. 팀 전체가 QMD를 쓰려면 `engine = "qmd"`를, 끄려면 `engine = "builtin"`을 `[integrations.shelf]`에 적는다(끈 뒤 `orai shelf stop`) |
 | QMD 색인이 없는 컴퓨터와 새 checkout | 내장 키워드 검색이 쓰인다. `orai shelf init`은 `engine = "qmd"`를 적어야 동작하고, MCP `shelf`와 `mcp__shelf__*` 도구는 없다 |
@@ -225,8 +226,26 @@ port = 18401                   # 이 컴퓨터에서 포트가 겹칠 때
 orai run <role>            # 또는 orai <role>. 기본은 캡처된 대화의 정확한 재개
 orai run <role> --fresh    # 새 대화 (이전 대화는 provider에 남고 상태는 .orai/history로)
 orai run <role> --dry-run  # 실행할 명령·경로·큐만 출력, 아무것도 만들지 않음
-orai status                # 실행 여부, 세션 ID, 알림 준비, 미처리 메시지 수
+orai run <role> --quiet    # -q. 실행·종료 안내 없이 경고와 오류만
+orai status                # 실행 여부, 세션 ID, 알림 준비, 미처리 메시지 수 (JSON)
+orai status <role>         # 그 역할의 상태 항목표
 ```
+
+실행하면 stderr에 세 줄, 끝나면 이어가는 명령이 나온다. 실행 중에는 provider 화면이 시작 안내를 가릴 수 있어 경고는 끝난 뒤에 낸다.
+
+```text
+● app › dev  이어서 3f2a91c4
+  Claude · opus · high
+  .worktrees/dev · 새 메시지 2
+○ app › dev 종료 · 이어가기: orai dev
+```
+
+| 종료 뒤 경고 | 뜻과 조치 |
+|---|---|
+| `! 이어갈 수 없음 → orai <role> --fresh` | 세션 ID나 transcript가 없어 재개할 수 없다. 새 대화로 시작한다 |
+| `! 이어갈 수 없음 → orai <role> --fresh 후 hook 승인` | 이번 Codex 실행에서 hook이 실행되지 않았거나 실패했다(대개 미승인). 새 대화로 시작해 첫 화면(또는 `/hooks`)에서 승인한다 |
+| `! 이번엔 알림 꺼짐 → 다음 실행에서 hook 승인` | 재개는 되지만 이번 Codex 실행은 hook이 실행되지 않았거나 실패해 알림을 받지 못했다. 다음 실행의 첫 화면(또는 `/hooks`)에서 승인한다 |
+| `! 다시 실행할 수 없음 → orai doctor` | 작업 폴더, 브랜치, 상태 파일 문제다. `--fresh`로 풀리지 않는다 |
 
 역할마다 터미널 하나에서 실행한다. 실행 중인 역할을 두 번 시작하면 거부된다. 최초 실행 때 Codex는 `/hooks`에서 `_capture` hook 신뢰를, Claude는 `server:orai` development channel 동의를 요구할 수 있다. 이 동의가 일반 도구 권한을 우회하지는 않는다. 조직 정책으로 channels가 막혀 있으면 Claude 알림은 동작하지 않는다.
 

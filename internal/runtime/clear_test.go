@@ -176,7 +176,7 @@ func TestRunAfterClearResumesTheClearedConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if code, err := Launch(f.p, "lead", false, true, &out); err != nil || code != 0 {
+	if code, err := Launch(f.p, "lead", false, true, false, &out, &bytes.Buffer{}); err != nil || code != 0 {
 		t.Fatal(code, err)
 	}
 	var plan struct {

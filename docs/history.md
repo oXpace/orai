@@ -236,7 +236,7 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 
 - `-c`로 넘긴 SessionStart hook의 신뢰는 키 `/<session-flags>/config.toml:session_start:0:0` 하나에 저장된다.
 - 같은 명령은 `trusted`였고, Orai 버전 경로만 바꾸거나 프로젝트 경로만 바꿔도 `modified`였다. 그래서 업그레이드와 프로젝트 전환 때마다 재승인이 필요하다.
-- 명령을 고정 문자열로 바꾸면 재승인은 줄지만 신뢰가 실행 파일을 묶지 못한다. 0.7.0에서는 바꾸지 않고 안내만 한다. 실제 TUI의 재승인 화면은 확인하지 않았다.
+- 명령을 고정 문자열로 바꾸면 재승인은 줄지만 신뢰가 실행 파일을 묶지 못한다. 0.7.0에서는 바꾸지 않고 안내만 한다. TUI의 승인 화면은 [실행 안내 검증](#2026-11-22-실행-안내와-상태-항목표-macos)에서 확인했다. 업그레이드·프로젝트 전환 뒤의 재승인 흐름은 확인하지 않았다.
 
 ## 기획, 설계, 검증의 기록 위치 (0.7.0)
 
@@ -250,7 +250,24 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 - **바꾼 것**: 같은 실행의 `source=clear`만 신원 교체로 받는다(`follow-session-clear`). clear 뒤에는 지침과 inbox를 안내한다.
 - **바꾸지 않은 것**: Codex `/new`(사용자 결정). `source=startup`으로 와서 clear와 같은 규칙으로 받을 수 없다.
 
+## 실행 안내와 상태 항목표 (0.7.0)
+
+사용자 요청(2026-11-22)이다. `orai <역할>`이 문제가 없어도, Claude 역할이어도 Codex hook 신뢰를 설명하는 문장을 냈다.
+
+- **바꾼 것**: 실행할 때 세 줄, 끝날 때 이어가는 명령, 실제로 생긴 문제의 경고 한 줄. 상태는 `orai status <역할>` 항목표로 본다(`improve-launch-output`).
+- **경고가 종료 뒤인 이유**: Codex와 Claude Code `tui: fullscreen`은 대체 화면을 써서 시작 출력을 가린다.
+- **하지 않은 것**: 검색 엔진 표시(사용자 결정), 인자 없는 `orai status`의 형식 변경, `hooks/list`로 하는 신뢰 사전 검사.
+
 ## 검증 기록
+
+### 2026-11-22, 실행 안내와 상태 항목표 (macOS)
+
+| 구분 | 확인한 것 |
+|---|---|
+| fake·fixture | `mise run check` 통과(race, `amq`는 PATH에서 제외). 빌드한 바이너리와 가짜 provider로 새 대화·재개·clear·hook 미실행·transcript 없음·`--quiet`·`NO_COLOR`. 72e09c5 빌드와 `orai status` JSON, `--dry-run` stdout이 같다 |
+| 실제 Codex 0.171.0 TUI (격리 설정, 응답 없는 mock 모델) | 승인 화면의 세 선택지. 신뢰 없이 계속한 뒤 Ctrl+C로 끝내면 종료 코드 0과 `! 이어갈 수 없음 → orai pm --fresh 후 hook 승인`. 신뢰하면 같은 세션에서 캡처되고 `이어가기`가 나온다 |
+| 실제 Claude Code 2.1.330 `tui: fullscreen` (격리 설정, 미로그인: `authentication_failed`) | SessionStart 캡처. Ctrl+C로 끝낸 뒤 종료 줄이 provider의 종료 출력 아래에 남는다 |
+| 미검증 | 로그인한 역할 세션, hook 없이 재개한 실제 Codex의 경고, 실행 중 실제 알림 준비 표시, 터미널 앱별 색 |
 
 ### 2026-11-22, clear 따라가기 (macOS)
 
