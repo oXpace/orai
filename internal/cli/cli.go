@@ -373,7 +373,7 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 // after `--`, and not as the value of the preceding flag, e.g. `--body --help`).
 func wantsHelp(argv []string) bool {
 	o, _ := parse(argv, map[string]bool{"project": true, "preset": true, "branch": true, "role": true, "as": true,
-		"limit": true, "body": true, "file": true, "kind": true, "thread": true, "in": true,
+		"limit": true, "body": true, "file": true, "kind": true, "thread": true, "in": true, "also": true,
 		"dry-run": false, "no-tools": false, "local": false, "fresh": false, "deep": false, "json": false, "peek": false, "again": false})
 	return o.flag("help")
 }
