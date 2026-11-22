@@ -33,7 +33,9 @@ type SearchOutcome struct {
 	Fix    string   `json:"fix,omitempty"`
 	Stale  []string `json:"stale,omitempty"` // documents changed since the last sync
 	Port   int      `json:"port,omitempty"`
-	Hits   []Hit    `json:"hits"`
+	// Built-in search only: declared collection folders that do not exist.
+	Missing string `json:"missing,omitempty"`
+	Hits    []Hit  `json:"hits"`
 	// Keyword scans only: Weak says nothing matched or the top result covers little of
 	// the query, so other words for the same question may do better;
 	// Unknown lists the query words no document contains.
@@ -55,6 +57,9 @@ func Search(s *Settings, query string, limit int, also ...string) SearchOutcome 
 	phrasings := append([]string{query}, also...)
 	if !s.usesQMD() {
 		outcome := SearchOutcome{Mode: "builtin"}
+		if check, missing := missingFolders(s); missing {
+			outcome.Missing = check.Reason
+		}
 		outcome.Hits, outcome.Weak, outcome.Unknown = s.keywordSearch(phrasings, limit)
 		return outcome
 	}
@@ -90,6 +95,10 @@ func engineSearch(s *Settings, phrasings []string, limit int) ([]Hit, string, st
 	}
 	if mismatch := identity(status, s); mismatch != "" {
 		return nil, fmt.Sprintf("port %d serves another index (%s)", s.Port, mismatch), "orai doctor"
+	}
+	if absent := unindexed(status, s); len(absent) > 0 {
+		// The engine would answer without these documents and look complete.
+		return nil, fmt.Sprintf("collection(s) %s have documents that are not in the index yet", strings.Join(absent, ", ")), unindexedFix
 	}
 	var searches []map[string]any
 	for _, q := range phrasings {

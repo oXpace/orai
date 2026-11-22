@@ -48,3 +48,11 @@
 - **GIVEN** 내장 검색이고 `.mcp.json`에 `shelf`가 있다
 - **WHEN** 진단한다
 - **THEN** `shelf.registration`이 degraded다
+
+### Requirement: 찾지 못한 묶음 폴더를 알린다
+내장 검색은 선언한 묶음 폴더가 없으면 `orai search`의 docs 줄 아래에 `note:`로 알려야 한다(SHALL).
+
+#### Scenario: 없는 묶음 폴더
+- **GIVEN** 선언한 묶음 폴더가 없다
+- **WHEN** 내장 검색으로 찾는다
+- **THEN** `note: collection folder(s) missing`과 그 묶음 이름이 나온다

@@ -3,6 +3,7 @@ package shelf
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/oXpace/orai/internal/doctor"
@@ -72,5 +73,37 @@ func TestProbeReportsDocumentsMissingFromTheIndex(t *testing.T) {
 	setClient(t, &fakeClient{status: func() map[string]any { return map[string]any{"structuredContent": status} }})
 	if got := byComponent(probe(s, false))["shelf.collections"].Status; got != doctor.Degraded {
 		t.Fatalf("shelf.collections = %q", got)
+	}
+}
+
+// 시나리오: 색인 전의 묶음을 검색한다
+func TestSearchDoesNotReportSuccessWithDocumentsOutsideTheIndex(t *testing.T) {
+	withOpenPort(t)
+	p := writeProject(t, filepath.Join(t.TempDir(), "proj"), "schema = 2\n[integrations.shelf]\nengine = \"qmd\"\ncollections = { docs = \"docs\", adr = \"adr\" }\n")
+	s := NewSettings(p)
+	writeDoc(t, s.DB, "db")
+	writeDoc(t, filepath.Join(p.Root, "docs", "a.md"), "# A\n")
+	writeDoc(t, filepath.Join(p.Root, "adr", "one.md"), "# 결정\n\n저장소는 okapi로 정했다\n")
+	setClient(t, &fakeClient{
+		status: func() map[string]any {
+			return map[string]any{"structuredContent": served("docs", s.Collections["docs"])}
+		},
+		query: func(map[string]any) map[string]any { return map[string]any{"structuredContent": map[string]any{}} },
+	})
+	out := Search(s, "okapi", 5)
+	if out.Mode != "keyword" || !strings.Contains(out.Reason, "adr") || !strings.Contains(out.Fix, "orai shelf refresh") {
+		t.Fatalf("outcome = %+v", out)
+	}
+	if len(out.Hits) != 1 || out.Hits[0].Path != "adr/one.md" {
+		t.Fatalf("hits = %+v", out.Hits)
+	}
+}
+
+// 시나리오: 빈 파일만 있는 묶음 (QMD does not index blank files)
+func TestBlankFilesAreNotMissingFromTheIndex(t *testing.T) {
+	s := twoCollections(t)
+	writeDoc(t, filepath.Join(s.Collections["specs"], "blank.md"), " \n\t\n")
+	if got := unindexed(served("docs", s.Collections["docs"]), s); len(got) != 0 {
+		t.Fatalf("unindexed = %v", got)
 	}
 }

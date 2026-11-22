@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -236,7 +237,12 @@ func identity(status map[string]any, s *Settings) string {
 	return ""
 }
 
-// unindexed lists declared collections that have documents on disk but none in the index.
+// unindexedFix is the next step for unindexed: sync refuses a collection the index
+// does not have at all, which only refresh registers.
+const unindexedFix = "orai shelf sync (after adding a collection: orai shelf stop && orai shelf refresh)"
+
+// unindexed lists declared collections that have documents on disk but none in the
+// index. QMD skips blank files, so those are not documents it could have indexed.
 func unindexed(status map[string]any, s *Settings) []string {
 	list, _ := status["collections"].([]any)
 	have := map[string]bool{}
@@ -252,8 +258,12 @@ func unindexed(status map[string]any, s *Settings) []string {
 		}
 		only := *s
 		only.Collections = map[string]string{name: s.Collections[name]}
-		if len(only.Documents()) > 0 {
-			names = append(names, name)
+		for _, path := range only.Documents() {
+			// A file that cannot be read is not known to be blank, so it counts.
+			if data, err := os.ReadFile(path); err != nil || strings.TrimSpace(string(data)) != "" {
+				names = append(names, name)
+				break
+			}
 		}
 	}
 	return names

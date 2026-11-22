@@ -170,3 +170,17 @@ func TestSearchDefaultsToTheBuiltInEngine(t *testing.T) {
 		t.Fatalf("search: %+v", r)
 	}
 }
+
+// 시나리오: 없는 묶음 폴더
+func TestBuiltInSearchNotesAMissingFolder(t *testing.T) {
+	clearEnv(t)
+	p := newProject(t, t.TempDir())
+	cfg := twoRoles + "\n[integrations.shelf]\ncollections = { gone = \"gone\" }\n"
+	if err := os.WriteFile(filepath.Join(p.Root, "orai.toml"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(p.Root)
+	if r := run("", "search", "anything", "--in", "docs"); !strings.Contains(r.out, "note: collection folder(s) missing: gone") {
+		t.Fatalf("search: %+v", r)
+	}
+}

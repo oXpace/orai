@@ -22,9 +22,19 @@ Orai는 선언한 묶음 중 하나 이상이 이 프로젝트의 절대경로�
 - **THEN** 서버를 거부한다
 
 ### Requirement: 색인에 없는 문서를 진단한다
-문서가 있는데 서버의 status에 없는 묶음은 `orai doctor`가 `shelf.collections` degraded로 보고하고 `orai shelf sync`를 안내해야 한다(SHALL).
+비어 있지 않은 문서가 있는데 서버의 status에 없는 묶음은 `orai doctor`가 `shelf.collections` degraded로 보고하고, `orai shelf sync`와 묶음을 더했을 때의 `orai shelf stop && orai shelf refresh`를 안내해야 한다(SHALL). `orai search`는 이때 서버의 부분 결과를 정상으로 내지 않고, 키워드 대체 검색과 그 안내로 답해야 한다(MUST). 엔진이 색인하지 않는 빈 파일만 있는 묶음은 빠진 것으로 보지 않는다.
 
 #### Scenario: 색인 전의 새 묶음
 - **GIVEN** 문서가 있는 묶음이 status에 없다
 - **WHEN** 진단한다
 - **THEN** `shelf.collections`가 degraded다
+
+#### Scenario: 색인 전의 묶음을 검색한다
+- **GIVEN** 문서가 있는 묶음이 status에 없다
+- **WHEN** `orai search`를 실행한다
+- **THEN** 그 묶음까지 훑은 키워드 결과와 고칠 명령이 나오고 종료 코드는 1이다
+
+#### Scenario: 빈 파일만 있는 묶음
+- **GIVEN** 공백뿐인 `.md`만 있는 묶음이 status에 없다
+- **WHEN** 진단한다
+- **THEN** 색인에서 빠진 묶음으로 보고하지 않는다

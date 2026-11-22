@@ -121,6 +121,9 @@ func docs(p *project.Project, o Options, asked bool, r *Result) Source {
 		}
 		src.Notes = append(src.Notes, note+". Ask again with --also '<the same question in other words>'")
 	}
+	if out.Missing != "" {
+		src.Notes = append(src.Notes, out.Missing+": orai doctor")
+	}
 	if n := len(out.Stale); n > 0 {
 		src.Notes = append(src.Notes, fmt.Sprintf("%d document(s) changed since the last sync, so the index may be behind (%s): orai shelf sync",
 			n, strings.Join(first(out.Stale, 3), ", ")))

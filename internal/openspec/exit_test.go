@@ -24,6 +24,9 @@ func TestDeepValidationReadsTheReportOfAFailedRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	failing := strings.Replace(string(script), "JSON\n;;", "JSON\nexit 1 ;;", 1)
+	if failing == string(script) {
+		t.Fatal("the fake was not changed to exit 1")
+	}
 	if err := os.WriteFile(bin, []byte(failing), 0o755); err != nil {
 		t.Fatal(err)
 	}

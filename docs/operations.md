@@ -59,7 +59,7 @@ git add -A && git commit -m "Update Orai"
 | QMD 색인을 쓰던 컴퓨터 | 없다. 색인(`.orai/shelf`)이 있으면 QMD를 계속 쓴다. 팀 전체가 QMD를 쓰려면 `engine = "qmd"`를, 끄려면 `engine = "builtin"`을 `[integrations.shelf]`에 적는다(끈 뒤 `orai shelf stop`) |
 | QMD 색인이 없는 컴퓨터와 새 checkout | 내장 키워드 검색이 쓰인다. `orai shelf init`은 `engine = "qmd"`를 적어야 동작하고, MCP `shelf`와 `mcp__shelf__*` 도구는 없다 |
 | `orai search`의 종료 코드와 `docs` 상태 줄을 읽는 스크립트 | 내장 검색은 `built-in keyword search`와 종료 코드 0이다. `keyword scan`과 1은 QMD를 켰는데 답하지 못했을 때만 나온다 |
-| 0.6.0으로 되돌릴 때 | `orai.toml`에서 `[integrations.openspec]`과 `engine = "builtin"`을 먼저 지운다. 0.6.0은 둘 다 거부한다 |
+| 0.6.0으로 되돌릴 때 | `orai.toml`과 `orai.local.toml`에서 `[integrations.openspec]`과 `engine = "builtin"`을 먼저 지운다. 0.6.0은 둘 다 거부한다 |
 
 #### 통합 검색과 코드 그래프
 
@@ -248,6 +248,7 @@ orai read <경로>[:N[-M]] | <메시지-ID> ... [--json] [--as user]
 | `docs: built-in keyword search` | 내장 검색이 답했다 | 없음 |
 | `docs: keyword + meaning (shelf :<포트>)` | shelf 서버가 답했다 | 없음 |
 | `docs: keyword scan of the files … Fix: …` | 서버가 없거나 꺼졌거나 다른 프로젝트 것이라 파일을 직접 훑었다 | 줄에 적힌 명령 (`orai shelf init`, `recover`, `doctor`) |
+| `note: collection folder(s) missing: …` | 선언한 묶음 폴더가 없어 그 묶음은 찾지 않았다 | 폴더를 만들거나 `collections`를 고친다 |
 | `note: N document(s) changed since the last sync` | 마지막 `sync` 뒤에 문서가 바뀌었다 | `orai shelf sync` (역할 세션 중에는 자동) |
 | `note: N message(s) not received yet also match` | 받지 않은 메시지도 맞는다. 본문은 보이지 않는다 | `orai inbox` |
 | `code: FAILED — no code graph is built …` | 이 checkout에 그래프가 없다 | `orai code init` |
@@ -338,7 +339,7 @@ shelf는 등록한 Markdown 폴더(기본 `docs/`)를 찾아보는 프로젝트 
 
 내장 검색만 쓰면 이 절에서 `collections`, `context`, `smoke` 설정만 보면 된다. "처음 준비", "평소 사용", "명령", "역할 세션 밖에서 쓰기"는 QMD를 켠 경우의 절차다. 지금 쓰는 엔진은 `orai doctor`의 `shelf` 항목에 나온다.
 
- 원본은 저장소의 파일이고 shelf는 그 색인이다. 엔진은 QMD이며(현재 유일), 사용자는 `orai shelf`만 쓴다. 같은 안내가 `orai shelf --help`에 있다.
+원본은 저장소의 파일이다. 같은 안내가 `orai shelf --help`에 있다.
 
 ### 처음 준비
 

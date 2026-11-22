@@ -113,7 +113,7 @@ var probe = func(s *Settings, deep bool) []doctor.Check {
 	} else if absent := unindexed(status, s); len(absent) > 0 {
 		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
 			fmt.Sprintf("collection(s) %s have documents that are not in the index yet", strings.Join(absent, ", ")),
-			"`orai shelf sync`"))
+			"`orai shelf sync`, or after adding a collection `orai shelf stop && orai shelf refresh`"))
 	} else if pairs := s.overlapping(); len(pairs) > 0 {
 		checks = append(checks, doctor.New(c+".collections", doctor.Degraded,
 			fmt.Sprintf("collections %s cover the same documents, so searches return them twice", strings.Join(pairs, "; ")),
