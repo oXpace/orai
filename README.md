@@ -116,7 +116,7 @@ pre-alpha다. 최신 버전은 위 배지와 [Releases](https://github.com/oXpac
 | 호스트 도구(Codex, Claude Code) capability·로그인 진단 | 통과 (`orai doctor`) |
 | 이 저장소 문서의 실제 shelf 색인·의미 검색, 서버 다운 감지와 `recover` | 통과 (`orai doctor --deep`) |
 | 실제 CodeGraph 색인·심볼 조회 | 통과 |
-| Codex↔Claude 실제 요청·회신, 종료 후 동일 대화 복구 | **미검증** — [실제 파일럿](docs/operations.md#실제-파일럿-계정호스트-준비-후) 대기 |
+| Codex↔Claude 실제 요청·회신, 종료 후 동일 대화 복구 | macOS에서 확인 (실제 업무에 사용 중, 여러 Mac). Linux는 **미검증** |
 
 확인한 도구 버전은 [호환성](docs/compatibility.md)에, 날짜별 검증 기록은 [이력](docs/history.md#검증-기록)에 있다.
 

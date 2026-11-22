@@ -151,6 +151,14 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 
 ## 검증 기록
 
+### 2026-11-22, 0.6.0 실사용 확인 (macOS)
+
+사용자 보고로 기록한다(이 저장소의 자동 검증이나 별도 파일럿 기록이 아니다).
+
+- 사용자가 0.6.0을 실제 업무 프로젝트에서 Codex·Claude 역할로 쓰고 있고, 다른 Mac에서도 동작을 확인했다. 그래서 [운영 안내](operations.md#실제-파일럿-계정호스트-준비-후)의 실제 파일럿 범위(요청·회신과 알림, 종료 후 같은 대화로 재개, 중복 실행 거부, SessionStart hook 전제)를 macOS에서 확인된 것으로 본다.
+- 항목별 provider·도구 버전과 날짜별 관찰은 남기지 않았다. 버전을 바꾸면 같은 절차로 다시 확인한다.
+- 미검증: Linux에서의 실제 provider 실행.
+
 ### 2026-10-09, 0.6.0 (macOS 27.0 arm64)
 
 - `mise run check` 통과.
@@ -262,6 +270,5 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 
 ### 미검증
 
-- Codex↔Claude 실제 요청·회신, 알림 도착(Codex queue·Claude channel), 종료 후 동일 UUID 복구, 중복 실행 거부.
-- 설치 버전의 SessionStart hook 전제: Claude 재개 시 `session_id` 유지, Codex payload의 `cwd`·`transcript_path`, `codex resume` 시 hook 실행. 틀리면 실패는 안전한 쪽(신원 덮어쓰기 없이 캡처 거부)이지만 해당 provider의 재개나 알림이 동작하지 않는다. [운영 안내](operations.md#실제-파일럿-계정호스트-준비-후) 절차로 수행한다.
+- macOS의 Codex↔Claude 실제 흐름은 [2026-11-22 실사용 확인](#2026-11-22-060-실사용-확인-macos)으로 옮겼다.
 - Linux에서의 실제 provider 실행, QMD CPU fallback, 재부팅 후 자동 복구(현재는 수동 `recover`).
