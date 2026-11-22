@@ -49,6 +49,22 @@ git add -A && git commit -m "Update Orai"
 
 `orai setup`이 `AGENTS.md`의 Orai 블록과 스킬을 바꾼다. 에이전트가 쓰는 명령이 `orai search`, `orai read`, `orai inbox`, `orai send`, `orai reply`로 바뀌고, `orai msg …`는 같은 명령으로 계속 동작한다. 역할 이름으로 `search`, `read`, `code`를 쓸 수 없게 됐으므로, 그런 이름의 역할이 있으면 `orai.toml`에서 이름을 바꾼다. 코드 그래프를 쓰는 프로젝트는 `orai code init`으로 역할 worktree의 그래프를 만든다. 실행 중인 역할 세션은 끝낸 뒤 다시 열어야 문서 자동 sync와 `codegraph` 서버가 붙는다.
 
+### 기존 프로젝트에서 OpenSpec 연동 켜기
+
+새 `orai.toml`에는 `[integrations.openspec]`과 shelf 묶음 `specs`가 들어 있다. `setup`은 기존 `orai.toml`을 고치지 않으므로, 이미 있는 프로젝트는 아래를 직접 넣는다. 이 표를 읽지 못하는 이전 Orai는 `orai.toml`을 거부하므로 같은 저장소를 쓰는 사람 모두 새 버전으로 올린 뒤 넣는다.
+
+```toml
+[integrations.shelf]
+collections = { docs = "docs", specs = "openspec/specs" }   # 기존 묶음에 specs를 더한다
+
+[integrations.shelf.context]
+"openspec/specs" = "OpenSpec 스펙: 기능별 요구(SHALL)와 시나리오(WHEN/THEN). 구현과 테스트의 기준"
+
+[integrations.openspec]
+```
+
+그다음 `orai setup`을 실행하면 `openspec/config.yaml`(테스트 우선 시작 규칙, 이미 있으면 건드리지 않는다)을 만들고 `openspec init`을 프로젝트 범위로 실행한다. shelf는 `orai shelf stop && orai shelf refresh`로 새 묶음을 등록한다. OpenSpec을 이미 쓰던 프로젝트는 기존 `openspec/`과 `config.yaml`이 그대로 남는다. 스킬이 전역(`~/.agents/skills/`)에만 있다면 `setup`이 프로젝트에도 설치한다.
+
 ### 0.5.x → 0.6.0
 
 `orai setup`이 `AGENTS.md`의 Orai 블록과 스킬을 새 구성으로 바꾼다. 블록은 진입점만 남고, 실행법은 스킬(`SKILL.md`)과 참조 문서(`references/search.md`, `references/diagnosis.md`)로 옮겨졌다. 새 파일은 커밋한다.
@@ -99,7 +115,7 @@ orai setup --role reviewer=claude # 기존 프로젝트에 역할 추가
 orai setup --preset manager-engineer   # --role manager=codex --role engineer=claude 의 줄임
 orai setup --preset manager-engineer:manager=pm,engineer=staff   # 같은 구성을 원하는 역할 이름으로
 orai setup --dry-run              # 바꿀 내용만 출력
-orai setup --no-tools             # 파일만 준비 (shelf 서버·코드 그래프 생략, CI 등)
+orai setup --no-tools             # 파일만 준비 (OpenSpec·shelf 서버·코드 그래프 생략, CI 등)
 orai setup --branch <이름>        # 새 저장소의 기본 브랜치 (기본 trunk)
 orai setup --help                 # 옵션과 예시
 ```
@@ -171,17 +187,19 @@ port = 18401                   # 이 컴퓨터에서 포트가 겹칠 때
 2. **파일**:
    - `orai.toml`: 없으면 만든다. 있으면 검증하고, `--role`로 요청한 새 역할만 덧붙인다. `orai.local.toml`은 읽기만 하고, `--local`로 요청한 역할만 덧붙인다.
    - `AGENTS.md`, `.gitignore`, `.agents/.gitignore`: `orai:begin`/`orai:end` 관리 블록만 추가하거나 교체한다. 블록 밖 내용은 바꾸지 않는다. `AGENTS.md` 블록은 Orai의 목적, 할 일별로 쓰는 도구와 실행법이 있는 스킬 파일, 설정 위치만 담는다. 역할 권한, 완료 기준, 보고·승인 절차는 정하지 않는다. `.agents/.gitignore` 블록은 `/roles/`를 제외해 역할 지침을 저장소에 넣지 않는다.
-   - `.agents/skills/orai/`: `SKILL.md`(메시지, 참조 문서 목차), `references/search.md`(문서와 코드 찾기), `references/diagnosis.md`(상태 확인과 복구). 생성 표식이 있는 파일만 갱신한다. 표식 없이 사용자가 만든 파일이 있으면 충돌로 보고한다.
+   - `.agents/skills/orai/`: `SKILL.md`(메시지, 참조 문서 목차), `references/search.md`(문서와 코드 찾기), `references/diagnosis.md`(상태 확인과 복구), `references/workflow.md`(스펙 확인, 실패 테스트 먼저, 검증 범위를 나눈 보고, 역할 사이 인계). 생성 표식이 있는 파일만 갱신한다. 표식 없이 사용자가 만든 파일이 있으면 충돌로 보고한다.
    - `.claude/skills/orai` 심볼릭 링크를 만든다.
    - `CLAUDE.md`: 없을 때만 `@AGENTS.md`로 만든다.
    - 역할 지침(`guide`에 적은 파일, 기본 `.agents/roles/<이름>.md`): 선언된 역할의 지침 파일이 없을 때만 만든다.
-   - shelf에 등록한 폴더가 없으면 `docs/README.md` 시작 페이지를 만든다.
+   - shelf에 등록한 폴더가 없으면 `docs/README.md` 시작 페이지를 만든다. `openspec/` 아래 폴더에는 시작 페이지 대신 빈 `.gitkeep`을 둔다(OpenSpec이 읽는 폴더다).
+   - `[integrations.openspec]`이 있고 `openspec/config.yaml`이 없으면 테스트 우선 시작 규칙으로 만든다. OpenSpec이 이 파일의 `context`, `rules`, `operations`를 모든 워크플로 지시에 넣는다. 이후로는 프로젝트 소유라 다시 쓰지 않는다.
    - `.orai/project.json`을 기록한다.
    - 기존 파일을 바꿀 때는 원본을 `.orai/backups/<시각>/`에 먼저 저장한다.
 3. **메일함** (역할이 있는 프로젝트): `.agent-mail/<session>`에 역할과 `user`의 메일함을 만든다. 기존 메일함이 있으면 없는 handle만 추가하고 메시지는 건드리지 않는다. `.gitignore` 블록에 `/.agent-mail/`와 루트 안의 역할 worktree가 추가된다.
-4. **shelf**: 엔진(QMD)이 설치돼 있고 문서가 있으면 색인이 없을 때 `orai shelf init`을, 있으면 `orai shelf recover`를 실행한다. 두 경우 모두 서버를 시작하고 검증한다.
-5. **코드 그래프**: CodeGraph가 설치돼 있고 색인이 없으면 `codegraph init`을 실행한다.
-6. **진단**: `orai doctor`와 같은 형식으로 문제 항목과 남은 조치(Next steps)만 보여준다.
+4. **OpenSpec**: `openspec` 2.0 이상이 설치돼 있고 프로젝트에 OpenSpec 스킬(`.agents/skills/openspec-propose/`)이 없으면 `openspec init --tools claude,codex --scope project --no-animation --no-copilot-cloud`을 실행한다. 스킬을 `.agents/skills/openspec-*`에 쓰고 `.claude/skills/`에 링크하며, `openspec/specs`, `openspec/changes`를 만든다. 기존 `config.yaml`은 그대로 둔다. OpenSpec의 기본 범위는 전역이므로 프로젝트 범위를 항상 명시한다.
+5. **shelf**: 엔진(QMD)이 설치돼 있고 문서가 있으면 색인이 없을 때 `orai shelf init`을, 있으면 `orai shelf recover`를 실행한다. 두 경우 모두 서버를 시작하고 검증한다.
+6. **코드 그래프**: CodeGraph가 설치돼 있고 색인이 없으면 `codegraph init`을 실행한다.
+7. **진단**: `orai doctor`와 같은 형식으로 문제 항목과 남은 조치(Next steps)만 보여준다.
 
 도구가 없으면 해당 단계는 건너뛰고 설치 명령을 출력한다. 도구 단계가 실패하면 종료 코드 1로 끝난다.
 
@@ -238,7 +256,7 @@ orai reply <받은-ID> [본문] [--kind K]
 
 ```sh
 orai doctor           # 읽기 전용. 모델을 불러오지 않음
-orai doctor --deep    # shelf의 실제 검색(vector, lex+vec, 본문 조회)과 CodeGraph 심볼 조회까지
+orai doctor --deep    # shelf의 실제 검색(vector, lex+vec, 본문 조회), CodeGraph 심볼 조회, OpenSpec 스펙 검증까지
 orai doctor --json    # 같은 내용을 JSON으로 (detail 포함, 스크립트·에이전트용)
 orai doctor --help    # 표시와 종료 코드 설명
 ```
@@ -417,6 +435,23 @@ Claude Code에 프로젝트 범위로 등록하면 Claude 역할 세션에서는
 
 `--deep`에서는 Claude 역할이 있을 때 `claude mcp get shelf`로 Claude Code의 사용자·로컬 범위도 확인한다. 같은 이름의 서버가 다른 주소로 등록돼 있으면 알린다. 그런 경우 역할 세션이 어느 쪽을 쓰는지는 Claude Code 문서에 나와 있지 않고 직접 확인하지도 못했다.
 
+## OpenSpec (스펙)
+
+OpenSpec은 프로젝트의 스펙 계층이다. 기능별 스펙은 `openspec/specs/<기능>/spec.md`(요구 `### Requirement:`와 시나리오 `#### Scenario:` WHEN/THEN)에, 진행 중인 변경은 `openspec/changes/<변경>/`(proposal, 스펙 델타, design, tasks)에 둔다. 단계는 OpenSpec 스킬(`openspec-explore`, `openspec-propose`, `openspec-apply-change`, `openspec-archive-change` 등)이 안내하고, Orai 스킬의 `references/workflow.md`가 그 위에 테스트 우선 순서와 역할 사이 인계·보고 형식을 더한다.
+
+```sh
+npm install -g @fission-ai/openspec@latest   # 또는 프로젝트에 고정: mise use npm:@fission-ai/openspec@2.1.1
+orai setup                                   # 프로젝트 범위로 init (한 번)
+openspec list                                # 진행 중인 변경
+openspec validate --specs                    # 본 스펙 검증 (`orai doctor --deep`도 실행한다)
+openspec update                              # OpenSpec을 올린 뒤 스킬 갱신 (스킬 폴더를 통째로 다시 쓴다)
+```
+
+- **규칙 두는 곳**: 프로젝트 규칙은 `openspec/config.yaml`의 `context`, `rules`(산출물별), `operations`(apply·archive 안내)에 둔다. OpenSpec 스킬 폴더는 `openspec update`가 다시 쓰므로 고치지 않는다.
+- **텔레메트리**: OpenSpec은 명령 이름과 버전을 보낸다. Orai는 역할 세션과 자기 실행에 `OPENSPEC_TELEMETRY=0`을 넣는다. 켜려면 `[integrations.openspec]`에 `telemetry = true`를 적는다. 역할 세션 밖에서 직접 실행할 때는 사용자의 설정을 따른다.
+- **전역 파일**: `openspec init`은 OpenSpec 자체의 프로젝트 목록(`~/.local/share/openspec/projects.json`)을 갱신한다. Orai는 이 파일과 `~/.config/openspec/`을 읽거나 쓰지 않는다.
+- **쓰지 않으려면**: `orai.toml`에서 `[integrations.openspec]`을 지운다. 진단에서 빠지고, 스킬의 흐름은 프로젝트 규칙이 정한 스펙 위치를 따른다.
+
 ## CodeGraph
 
 엔진(CodeGraph) 설치는 사용자가 한다. 그 뒤의 색인, 갱신, 역할 세션 연결은 Orai가 맡는다.
@@ -452,6 +487,9 @@ orai code check    # 진단과 smoke 심볼 조회
 | 역할 밖 설정의 주소가 다름(`shelf.registration` degraded) | Next steps에 나온 파일의 주소·이름을 고치고, `orai.toml`에 `port`를 고정한다 |
 | QMD `access denied` | 샌드박스 밖에서 다시 확인한다. 그 결과는 그 환경에만 적용된다 |
 | QMD 다른 index 서버 | 그대로 두고 `integrations.shelf.port`를 바꾼다 |
+| OpenSpec이 준비되지 않음(`openspec` not-ready) | `orai setup` (프로젝트 범위로 `openspec init`을 실행한다) |
+| OpenSpec 1.x(`openspec` unsupported) | `npm install -g @fission-ai/openspec@latest` 후 `orai setup`. 1.x가 남긴 `.claude/commands/openspec/`, AGENTS.md의 OpenSpec 블록은 `openspec update`가 정리한다 |
+| 스펙 검증 실패(`openspec.specs` degraded) | `openspec validate --specs`로 빠진 절(Purpose, 시나리오 등)을 확인해 스펙을 고친다 |
 
 ## 검증
 

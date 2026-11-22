@@ -21,6 +21,7 @@ import (
 
 	"github.com/oXpace/orai/internal/config"
 	"github.com/oXpace/orai/internal/mail"
+	"github.com/oXpace/orai/internal/openspec"
 	"github.com/oXpace/orai/internal/project"
 	"github.com/oXpace/orai/internal/providers"
 	"github.com/oXpace/orai/internal/scaffold"
@@ -363,18 +364,24 @@ func RoleIdentity() (string, error) {
 // foreign context inherited from another project's shell must never reach a role.
 func childEnv(p *project.Project, role config.Role, nonce string) []string {
 	var env []string
+	extra := openspec.Env(p.Config.OpenSpec)
 	for _, kv := range os.Environ() {
 		if strings.HasPrefix(kv, "AM_") || strings.HasPrefix(kv, "AMQ_GLOBAL_ROOT=") || strings.HasPrefix(kv, "ORAI_") {
+			continue
+		}
+		if len(extra) > 0 && strings.HasPrefix(kv, "OPENSPEC_TELEMETRY=") {
 			continue
 		}
 		env = append(env, kv)
 	}
 	root := p.MailRoot()
-	return append(env,
+	env = append(env,
 		"ORAI_ROLE="+role.Name, "ORAI_RUN_NONCE="+nonce, "ORAI_STATE_DIR="+p.RolesDir(), "ORAI_PROJECT="+p.Root,
 		"ORAI_SESSION="+p.Config.Session, "ORAI_MAIL_ROOT="+root,
 		// The mailbox is AMQ-compatible; these let `amq` itself work inside a role session.
 		"AM_ROOT="+root, "AM_BASE_ROOT="+filepath.Dir(root), "AM_ME="+role.Name, "AM_SESSION="+p.Config.Session)
+	// OpenSpec's usage reporting stays off in a role session unless the project turned it on.
+	return append(env, extra...)
 }
 
 func interactive() bool {

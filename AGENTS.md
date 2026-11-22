@@ -60,6 +60,7 @@
 | 프로젝트 문서·지난 메시지·코드 찾기 | `orai search` | `.agents/skills/orai/SKILL.md` (결과 자세히: `.agents/skills/orai/references/search.md`) |
 | 찾은 파일 줄이나 메시지 원문 읽기 | `orai read` | `.agents/skills/orai/SKILL.md` |
 | 다른 역할·사용자와 메시지 주고받기 | `orai inbox`, `orai send`, `orai reply` | `.agents/skills/orai/SKILL.md` |
+| 기능 작업을 시작·인계·보고할 때 (스펙과 테스트 우선) | OpenSpec (`openspec/`가 있을 때), 프로젝트 테스트 | `.agents/skills/orai/references/workflow.md` |
 | 도구 상태 확인·복구 | `orai doctor` | `.agents/skills/orai/references/diagnosis.md` |
 
 - **설정**: 프로젝트가 공유하는 설정은 `orai.toml`, 이 컴퓨터만의 설정은 `orai.local.toml`(없을 수 있다)에 있다. 항목은 `orai setup --help`에 있다.

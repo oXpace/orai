@@ -2,10 +2,10 @@
 // project in one command.
 //
 // Order: preflight every file change (scaffold.Plan) -> apply -> run injected tool steps
-// (shelf index, code graph) -> read-only diagnosis. A tool step is skipped, never forced,
+// (OpenSpec, shelf index, code graph) -> read-only diagnosis. A tool step is skipped, never forced,
 // when its tool is missing; each step reports what happened and the diagnosis summary
-// says what is left. The caller supplies the tool steps (shelf.SetupStep,
-// codegraph.SetupStep) and the diagnosis function so this package does not depend on
+// says what is left. The caller supplies the tool steps (openspec.SetupStep,
+// shelf.SetupStep, codegraph.SetupStep) and the diagnosis function so this package does not depend on
 // them.
 package setup
 
@@ -78,7 +78,7 @@ func Run(
 			lines = append(lines, step(proj))
 		}
 	} else {
-		lines = []string{"shelf, codegraph: skipped (--no-tools)"}
+		lines = []string{"openspec, shelf, codegraph: skipped (--no-tools)"}
 	}
 	for _, line := range lines {
 		fmt.Fprintln(out, line)

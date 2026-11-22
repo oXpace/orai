@@ -37,7 +37,7 @@ var (
 		"setup": true, "run": true, "status": true, "doctor": true, "msg": true, "shelf": true, "wiki": true,
 		"version": true, "help": true, "_capture": true, "_channel": true, UserHandle: true, "orai": true, "all": true,
 		"init": true, "inbox": true, "send": true, "reply": true, "qmd": true, "codegraph": true,
-		"search": true, "read": true, "code": true,
+		"search": true, "read": true, "code": true, "openspec": true,
 	}
 	NamePattern       = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
 	sessionPattern    = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
@@ -130,6 +130,18 @@ func (s *Shelf) ContextPlan() map[string]map[string]string {
 
 type Codegraph struct{ SmokeSymbol string }
 
+// OpenSpec declares the project's specs as OpenSpec (Fission-AI/OpenSpec) keeps them
+// under openspec/. Telemetry is OpenSpec's own usage reporting, off in role sessions and
+// in Orai's own runs of the tool unless the project turns it on.
+type OpenSpec struct{ Telemetry bool }
+
+// OpenSpecDir is where OpenSpec keeps the project's specs and changes, and SpecsDir the
+// specs themselves (one folder per capability).
+const (
+	OpenSpecDir   = "openspec"
+	OpenSpecSpecs = OpenSpecDir + "/specs"
+)
+
 type Config struct {
 	Schema    int // as written in the file; always Schema
 	Name      string
@@ -137,6 +149,7 @@ type Config struct {
 	Roles     map[string]Role
 	Shelf     *Shelf
 	Codegraph *Codegraph
+	OpenSpec  *OpenSpec
 	// LocalFile is the local settings file that was applied over orai.toml ("" when
 	// there is none), and LocalKeys the settings it set, as dotted paths such as
 	// "roles.pm.model" (a table the shared file lacks is named once, as a whole).
@@ -528,7 +541,7 @@ func validate(raw map[string]any) (*Config, error) {
 	}
 	if raw, ok := t["integrations"]; ok {
 		key := "shelf"
-		integrations, err := table(raw, "integrations", key, "codegraph")
+		integrations, err := table(raw, "integrations", key, "codegraph", "openspec")
 		if err != nil {
 			return nil, err
 		}
@@ -545,6 +558,20 @@ func validate(raw map[string]any) (*Config, error) {
 			cfg.Codegraph = &Codegraph{}
 			if cfg.Codegraph.SmokeSymbol, err = optionalText(c, "smoke_symbol", "integrations.codegraph.smoke_symbol"); err != nil {
 				return nil, err
+			}
+		}
+		if value, ok := integrations["openspec"]; ok {
+			o, err := table(value, "integrations.openspec", "telemetry")
+			if err != nil {
+				return nil, err
+			}
+			cfg.OpenSpec = &OpenSpec{}
+			if raw, present := o["telemetry"]; present {
+				on, isBool := raw.(bool)
+				if !isBool {
+					return nil, errorf("integrations.openspec.telemetry must be true or false")
+				}
+				cfg.OpenSpec.Telemetry = on
 			}
 		}
 	}
