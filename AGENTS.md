@@ -47,6 +47,8 @@
 | `docs/compatibility.md` | 플랫폼, 도구 버전·capability·설치 출처, 라이선스 |
 | `docs/history.md` | 추출 원천 SHA, 알려진 장애, 변환 내역, 검증 기록 |
 | `docs/release.md` | 배포 단계, 버전 정책, 릴리스 절차 |
+| `openspec/specs/` | 기능별 동작 계약: 요구(SHALL)와 시나리오(WHEN/THEN). 구현과 테스트의 기준 |
+| `openspec/changes/` | 진행 중인 변경(proposal, 스펙 델타, design, tasks). 병합 뒤 `openspec archive`로 스펙에 합친다 |
 
 검증 결과를 보고할 때는 fake·fixture 통과, 실제 provider 동작, 의미 검색 품질을 구분한다. 실행하지 않은 범위는 미검증으로 적는다.
 
