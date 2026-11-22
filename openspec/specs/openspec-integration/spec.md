@@ -16,16 +16,26 @@
 #### Scenario: 표가 없는 기존 프로젝트
 - **GIVEN** `[integrations.openspec]`이 없는 `orai.toml`
 - **WHEN** `orai setup`을 실행한다
-- **THEN** `openspec/` 파일을 만들지 않고 doctor에 `openspec` 항목이 없다
+- **THEN** `openspec/` 파일을 만들지 않고 doctor의 `openspec`은 not-configured다
 
-### Requirement: setup은 프로젝트 범위로 한 번 init한다
-`[integrations.openspec]`이 있고 OpenSpec 2.0 이상이 설치돼 있으며 프로젝트 스킬이 없으면, `orai setup`은 `openspec init --tools claude,codex --scope project`를 실행해야 한다(SHALL). 스킬이 이미 있으면 다시 실행하지 않는다.
+### Requirement: setup은 스킬 없이 한 번 init한다
+`[integrations.openspec]`이 있고 OpenSpec 2.0 이상이 설치돼 있으며 `openspec/changes`가 없으면, `orai setup`은 OpenSpec 스킬을 만들지 않도록 `openspec init --tools none`을 실행해야 한다(SHALL). `openspec/changes`가 있으면 다시 실행하지 않고, 이미 있는 OpenSpec 스킬은 지우거나 고치지 않는다.
 
 #### Scenario: 처음 setup
-- **GIVEN** OpenSpec 2.1.1이 설치되고 프로젝트 스킬이 없다
+- **GIVEN** OpenSpec 2.1.1이 설치되고 `openspec/changes`가 없다
 - **WHEN** `orai setup`을 실행한다
-- **THEN** `--scope project`를 포함한 init이 한 번 실행된다
+- **THEN** `--tools none`을 포함한 init이 한 번 실행되고 `openspec-*` 스킬이 생기지 않는다
 - **AND** 다시 `orai setup`을 실행하면 init이 실행되지 않는다
+
+#### Scenario: 이미 설치된 OpenSpec 스킬
+- **GIVEN** 프로젝트에 `.agents/skills/openspec-propose`가 있다
+- **WHEN** `orai setup`을 실행한다
+- **THEN** 그 스킬의 파일이 그대로 남는다
+
+#### Scenario: 스킬 없이 준비된 프로젝트의 진단
+- **GIVEN** `openspec/changes`가 있고 OpenSpec 스킬이 없다
+- **WHEN** `orai doctor`를 실행한다
+- **THEN** `openspec`이 healthy다
 
 ### Requirement: OpenSpec이 없어도 setup은 실패하지 않는다
 OpenSpec이 설치돼 있지 않으면 `orai setup`은 OpenSpec 단계를 건너뛰고 설치 안내를 남겨야 하며(SHALL), `orai doctor`는 `openspec`을 blocked로 보고해야 한다(SHALL). 1.x는 unsupported로 보고하고 실행하지 않아야 한다(MUST).
@@ -59,9 +69,9 @@ Orai가 시작하는 역할 세션과 Orai가 실행하는 OpenSpec 명령은 `O
 - **THEN** Orai는 `OPENSPEC_TELEMETRY`를 넣지 않고 사용자의 값을 그대로 둔다
 
 ### Requirement: deep 진단은 스펙을 검증한다
-`orai doctor --deep`은 `openspec validate --specs` 결과를 `openspec.specs`로 보고해야 한다(SHALL). 실패한 스펙 이름을 보여 주고, 결과를 읽을 수 없으면 healthy로 보고하지 않아야 한다(MUST).
+`orai doctor --deep`은 `openspec validate --specs` 결과를 `openspec.specs`로 보고해야 한다(SHALL). 검증 명령의 종료 코드가 0이 아니어도 보고서를 읽어 실패한 스펙 이름을 보여 주고, 결과를 읽을 수 없거나 실패한 스펙 없이 명령이 실패하면 healthy로 보고하지 않아야 한다(MUST).
 
 #### Scenario: 스펙 하나가 잘못됐다
 - **GIVEN** Purpose가 없는 스펙
-- **WHEN** `orai doctor --deep`을 실행한다
+- **WHEN** 검증 명령이 보고서를 출력하고 종료 코드 1로 끝난다
 - **THEN** `openspec.specs`가 degraded이고 그 스펙 이름이 나온다

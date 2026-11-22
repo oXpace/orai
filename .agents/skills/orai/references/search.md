@@ -20,7 +20,8 @@
 |---|---|---|
 | `docs: built-in keyword search` | 내장 검색이 답했다 | 없음 |
 | `docs: keyword + meaning (shelf :<포트>)` | shelf 서버가 답했다 | 없음 |
-| `docs: keyword scan of the files … Fix: …` | 서버가 없거나 꺼졌거나 다른 프로젝트 것이다 | 줄에 적힌 명령. 샌드박스의 접근 거부는 서버가 꺼졌다는 근거가 아니다 |
+| `docs: keyword scan of the files … Fix: …` | 서버가 없거나 꺼졌거나 다른 프로젝트 것이거나, 색인에 없는 묶음이 있다 | 줄에 적힌 명령. 샌드박스의 접근 거부는 서버가 꺼졌다는 근거가 아니다 |
+| `note: collection folder(s) missing: …` | 선언한 묶음 폴더가 없어 그 묶음은 찾지 않았다 | 폴더를 만들거나 `collections`를 고친다 |
 | `note: N document(s) changed since the last sync` | 색인이 문서보다 뒤처졌다 | `orai shelf sync` |
 | `note: N message(s) not received yet also match` | 받지 않은 메시지 중에도 맞는 것이 있다 | `orai inbox` |
 | `note: N file(s) changed since the graph was synced` | 코드 그래프가 파일보다 뒤처졌다 | `orai code sync` |
