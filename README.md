@@ -24,7 +24,7 @@ Orai는 [AMQ](https://github.com/avivsinai/agent-message-queue)를 실행하지 
 
 ## 프로젝트에 추가하기
 
-Orai는 프로젝트마다 설치하고 버전을 고정한다. 준비물은 [mise](https://mise.jdx.dev)와 Git이다. 아래 명령은 최신 릴리스를 받아 그 버전을 프로젝트의 `mise.toml`에 적는다. 특정 버전을 쓰려면 `mise use github:oXpace/orai@0.6.0`처럼 `v` 없이 번호를 붙인다. 막 나온 릴리스는 mise의 버전 목록에 늦게 나타날 수 있다. `mise.toml`에 적힌 버전이 위 배지보다 낮으면 번호를 직접 붙여 다시 실행한다.
+Orai는 프로젝트마다 설치하고 버전을 고정한다. 준비물은 [mise](https://mise.jdx.dev)와 Git이다. 아래 명령은 최신 릴리스를 받아 그 버전을 프로젝트의 `mise.toml`에 적는다. 특정 버전을 쓰려면 `mise use github:oXpace/orai@0.7.0`처럼 `v` 없이 번호를 붙인다. 막 나온 릴리스는 mise의 버전 목록에 늦게 나타날 수 있다. `mise.toml`에 적힌 버전이 위 배지보다 낮으면 번호를 직접 붙여 다시 실행한다.
 
 **새 프로젝트**
 
@@ -127,8 +127,9 @@ pre-alpha다. 최신 버전은 위 배지와 [Releases](https://github.com/oXpac
 | 호스트 도구(Codex, Claude Code) capability·로그인 진단 | 통과 (`orai doctor`) |
 | 이 저장소 문서의 실제 shelf 색인·의미 검색, 서버 다운 감지와 `recover` | 통과 (`orai doctor --deep`) |
 | 실제 CodeGraph 색인·심볼 조회 | 통과 |
-| `orai search`·`orai read` (키워드 대체 검색, 메일, 실제 CodeGraph 1.6.0 심볼 검색) | Linux에서 확인. 실제 QMD 서버를 거친 검색과 역할 세션 중 자동 sync, 역할 세션의 `codegraph` MCP는 **미검증** |
-| 실제 OpenSpec 2.1.1 프로젝트 범위 init, 시작 규칙 주입, 스펙 검증 진단 | 통과 (Linux 컨테이너). 역할 세션의 propose→apply→archive는 **미검증** |
+| `orai search`·`orai read` (키워드 대체 검색, 메일, 실제 CodeGraph 1.6.0 심볼 검색) | Linux에서 확인 |
+| 실제 QMD 2.8.3을 거친 `orai search`(`--also` 포함), 세션 중 자동 sync, checkout별 `codegraph` MCP(1.6.2) | macOS에서 확인, 역할 세션은 fake provider. 빈 묶음이 있으면 shelf 준비가 실패하는 [알려진 문제](docs/history.md#2026-11-22-070-개발본-실검증-macos)가 있다. 실제 provider 역할 세션은 **미검증** |
+| 실제 OpenSpec 2.1.1 프로젝트 범위 init, 시작 규칙 주입, 스펙 검증 진단 | init·규칙 주입은 통과 (Linux 컨테이너, macOS). 실패한 스펙의 진단에 [알려진 문제](docs/history.md#2026-11-22-070-개발본-실검증-macos)가 있다. 역할 세션의 propose→apply→archive는 **미검증** |
 | Codex↔Claude 실제 요청·회신, 종료 후 동일 대화 복구 | macOS에서 확인 (실제 업무에 사용 중, 여러 Mac). Linux는 **미검증** |
 
 확인한 도구 버전은 [호환성](docs/compatibility.md)에, 날짜별 검증 기록은 [이력](docs/history.md#검증-기록)에 있다.

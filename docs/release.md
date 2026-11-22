@@ -11,7 +11,7 @@ Orai는 Go 단일 실행 파일(`orai`)이다. 외부 도구(Codex, Claude Code,
 | 버전 | 형태 | 설치 명령 |
 |---|---|---|
 | 0.1.0 | Python 패키지 (AMQ 필요) | `mise use pypi:oXpace/orai@0.1.0` |
-| 0.2.0~ | Go 바이너리 (AMQ 불필요) | `mise use --pin github:oXpace/orai` (최신) 또는 `mise use github:oXpace/orai@0.6.0` |
+| 0.2.0~ | Go 바이너리 (AMQ 불필요) | `mise use --pin github:oXpace/orai` (최신) 또는 `mise use github:oXpace/orai@0.7.0` |
 
 ## 릴리스 절차
 

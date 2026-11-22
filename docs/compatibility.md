@@ -34,15 +34,15 @@ Go 의존성의 정본은 `go.mod`와 `go.sum`이다. mise는 Go 버전과 task�
 | CodeGraph | `npm install -g @colbymchenry/codegraph` | `[integrations.codegraph]`를 쓸 때 (선택) |
 | OpenSpec | `npm install -g @fission-ai/openspec@latest` (Node 20.19 이상) 또는 단일 바이너리·Homebrew | `[integrations.openspec]`를 쓸 때 (선택, 새 프로젝트 기본). 2.0 이상 |
 
-2026-10-05 macOS 27.0 arm64 호스트에서 확인했다.
+2026-11-22 macOS 27.2.1 arm64 호스트에서 확인했다. Codex와 Claude Code는 doctor의 capability 검사와 MCP 설정 우선순위까지만 확인했고, 이 버전의 실제 역할 세션은 확인하지 않았다.
 
 | 도구 | 확인 버전 | 설치 출처(확인) | Orai가 쓰는 capability | doctor 검사 |
 |---|---|---|---|---|
-| Codex CLI | 0.160.0 | Homebrew cask `codex` | `resume <UUID>`, `queue --thread --message`, `-c hooks.SessionStart`, `-c mcp_servers.*`, `--add-dir` | 도움말 + `codex login status` |
-| Claude Code | 2.1.289 | 네이티브 설치 (`~/.local/share/claude/versions`) | `--session-id`, `--resume`, `--settings`, `--mcp-config`, `--dangerously-load-development-channels server:orai`, `--name`, `--effort` | 도움말 + `claude auth status` (channel 플래그는 도움말에 없어 실행 시 확인). `--deep`은 `claude mcp get shelf`의 출력(`URL:` 줄)으로 같은 이름의 다른 서버를 찾는다 |
-| QMD | 2.8.3 | npm `@tobilu/qmd` (mise Node 24.21.0 전역) | `--index`, `QMD_CONFIG_DIR`/`INDEX_PATH`, `collection show`, `update`, `embed`, `mcp --http --daemon --host --port`, `mcp stop`, MCP `status`/`query`(`searches` lex+vec, 결과의 `file`·`line`·`snippet`·`context`)/`get`, `context list`/`add`/`rm` | 포트·MCP·식별·색인·폴더 설명, `--deep`에서 검색. `orai search`도 같은 `query`를 쓴다 |
-| CodeGraph | 1.6.0 | 번들 설치 `~/.codegraph/versions/v1.6.0` (npm 설치 아님) | `status --json`(`pendingChanges`), `query --json --limit --path`(`node.name`·`kind`·`filePath`·`startLine`·`endLine`·`signature`·`docstring`), `init <경로>`, `sync <경로>`, `serve --mcp --path`(역할 세션 주입). `install`은 쓰지 않는다 | `status --json`, 역할 worktree 그래프 유무, `--deep`에서 심볼 조회. 2026-11-22 Linux에서 1.6.0 출력 형식 확인 |
-| OpenSpec | 2.1.1 (2026-11-22, Linux x64 컨테이너에서 확인. macOS 미확인) | npm `@fission-ai/openspec` | `--version`, `init --tools claude,codex --scope project --no-animation --no-copilot-cloud`(기존 `openspec/config.yaml` 유지, 기존 `.agents/skills/orai` 유지), `validate --specs --json --no-interactive`(실패해도 종료 코드 0이라 JSON의 `valid`로 판정), `config.yaml`의 `context`·`rules`·`operations` 주입(`instructions --json`으로 확인), `OPENSPEC_TELEMETRY` | 버전(2.0 미만은 unsupported), 프로젝트 스킬 존재, `--deep`에서 스펙 검증 |
+| Codex CLI | 0.171.0 | Homebrew cask `codex` | `resume <UUID>`, `queue --thread --message`, `-c hooks.SessionStart`, `-c mcp_servers.*`, `--add-dir` | 도움말 + `codex login status` |
+| Claude Code | 2.1.325 | 네이티브 설치 (`~/.local/share/claude/versions`) | `--session-id`, `--resume`, `--settings`, `--mcp-config`, `--dangerously-load-development-channels server:orai`, `--name`, `--effort` | 도움말 + `claude auth status` (channel 플래그는 도움말에 없어 실행 시 확인). `--deep`은 `claude mcp get shelf`의 출력(`URL:` 줄)으로 같은 이름의 다른 서버를 찾는다 |
+| QMD | 2.8.3 | npm `@tobilu/qmd` (mise `npm:` 설치, Node 26.13.1로 확인) | `--index`, `QMD_CONFIG_DIR`/`INDEX_PATH`, `collection show`, `update`, `embed`, `mcp --http --daemon --host --port`, `mcp stop`, MCP `status`(문서가 없는 묶음은 목록에서 빠진다)/`query`(`searches` lex+vec, 결과의 `file`·`line`·`snippet`·`context`)/`get`, `context list`/`add`/`rm` | 포트·MCP·식별·색인·폴더 설명, `--deep`에서 검색. `orai search`도 같은 `query`를 쓴다 |
+| CodeGraph | 1.6.2 | 번들 설치 `~/.codegraph/versions/v1.6.2` (npm 설치 아님) | `status --json`(`pendingChanges`), `query --json --limit --path`(`node.name`·`kind`·`filePath`·`startLine`·`endLine`·`signature`·`docstring`), `init <경로>`, `sync <경로>`, `serve --mcp --path`(역할 세션 주입). `install`은 쓰지 않는다 | `status --json`, 역할 worktree 그래프 유무, `--deep`에서 심볼 조회. 2026-11-22 Linux에서 1.6.0 출력 형식 확인 |
+| OpenSpec | 2.1.1 (Linux x64 컨테이너, macOS arm64에서 확인) | npm `@fission-ai/openspec` | `--version`, `init --tools claude,codex --scope project --no-animation --no-copilot-cloud`(기존 `openspec/config.yaml` 유지, 기존 `.agents/skills/orai` 유지), `validate --specs --json --no-interactive`(실패한 스펙이 있으면 JSON을 출력하고 종료 코드 1), `config.yaml`의 `context`·`rules`·`operations` 주입(`instructions --json`으로 확인), `OPENSPEC_TELEMETRY` | 버전(2.0 미만은 unsupported), 프로젝트 스킬 존재, `--deep`에서 스펙 검증 |
 | Git | 2.56.0 | Homebrew | `worktree list --porcelain`, `rev-parse --show-toplevel` | 없음 |
 
 ### shelf 결과가 모델에 전달되는 범위
