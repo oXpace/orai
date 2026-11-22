@@ -6,6 +6,7 @@
 - [ ] 1.2 역할 세션 중 문서를 고쳐 `.orai/shelf/autosync.log`에 sync가 남는지 확인한다 (`unify-agent-harness-cli` 5.2). 2026-11-22 fake provider로 확인, 실제 provider 세션이 남음
 - [ ] 1.3 역할 세션에서 `codegraph` MCP 도구가 보이고 자기 worktree를 읽는지, 전역 `codegraph` 등록과의 우선순위를 확인한다 (`unify-agent-harness-cli` 5.3). 2026-11-22 직접 MCP 호출과 격리 설정의 우선순위까지 확인, 실제 provider 세션이 남음
 - [x] 1.4 `orai setup`으로 실제 OpenSpec init과 doctor `openspec` 항목을 확인한다 (`default-spec-test-first` 4.3)
+- [ ] 1.5 Codex와 Claude 새 세션이 propose 요청에 Orai 스킬을 고르는지 확인한다. 전역 `openspec-*` 스킬이 있는 경우를 포함한다 (`unify-agent-skill` 4.2)
 
 ## 2. Linux 준비
 

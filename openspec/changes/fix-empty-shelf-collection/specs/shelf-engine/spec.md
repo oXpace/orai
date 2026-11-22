@@ -1,3 +1,7 @@
+## Purpose
+
+선택형 shelf 엔진(QMD)의 서버가 이 프로젝트의 것인지 안전하게 가리고, 색인이 문서와 어긋난 곳을 진단한다.
+
 ## ADDED Requirements
 
 ### Requirement: 문서가 없는 묶음이 서버 식별을 막지 않는다

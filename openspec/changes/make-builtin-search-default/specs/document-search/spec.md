@@ -1,3 +1,7 @@
+## Purpose
+
+설치와 서버 없이 프로젝트 문서를 찾게 하고, 의미 검색이 필요한 프로젝트만 QMD를 선택해 켜도록 검색 엔진을 정하고 진단한다.
+
 ## ADDED Requirements
 
 ### Requirement: 내장 검색이 표준이다

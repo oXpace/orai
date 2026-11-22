@@ -15,13 +15,13 @@
 ## 3. 이 저장소에 적용
 
 - [x] 3.1 `orai.toml`에 OpenSpec 연동과 specs 묶음을 넣고 `go run ./cmd/orai setup --no-tools` 뒤 `TestThisRepositoryIsSetupCurrent` 통과를 확인한다
-- [ ] 3.2 `mise run check` 통과를 확인한다 (2026-11-22 같은 명령을 격리 HOME으로 직접 실행해 통과, `amq` 제외. CI 대기)
+- [x] 3.2 `mise run check` 통과를 확인한다 (2026-11-22, `amq`는 PATH에서 제외)
 
 ## 4. 실제 동작
 
 - [x] 4.1 격리 HOME의 새 프로젝트에서 실제 OpenSpec 2.1.1로 setup부터 보관까지 돌려 스킬이 하나만 남는지 확인한다
-- [ ] 4.2 Codex와 Claude 새 세션이 propose 요청에 Orai 스킬을 고르는지 확인한다 (미검증)
 
 ## Workflow follow-up
 
+- Codex와 Claude 새 세션이 propose 요청에 Orai 스킬을 고르는지는 `verify-real-hosts` 1.5에서 확인한다.
 - PR 자체 리뷰 뒤 change를 보관한다.

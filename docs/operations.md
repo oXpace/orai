@@ -492,7 +492,7 @@ orai code check    # 진단과 smoke 심볼 조회
 
 - 그래프는 checkout마다 따로 둔다(`.codegraph/`). 역할이 자기 worktree에서 고친 코드는 그 checkout의 그래프에만 반영되기 때문이다. `git worktree add`로 역할 작업 폴더를 새로 만들었으면 `orai code init`을 다시 실행한다. `orai doctor`의 `codegraph.worktrees`가 빠진 곳을 알려 준다.
 - 역할 세션에는 그 역할의 작업 폴더에 그래프가 있을 때만 MCP 서버 `codegraph`가 연결된다(`codegraph serve --mcp --path <작업 폴더>`). 이 서버가 파일 변경을 감시해 그래프를 스스로 갱신한다.
-- Orai는 `codegraph install`을 실행하지 않고 전역 에이전트 설정을 바꾸지 않는다. 전역에 직접 등록한 `codegraph`가 따로 있으면 Orai가 넘긴 쪽이 쓰인다(Codex 0.171.0의 유효 설정, Claude Code 2.1.325의 비대화형 실행에서 확인. 역할 세션 TUI는 미검증).
+- Orai는 `codegraph install`을 실행하지 않고 전역 에이전트 설정을 바꾸지 않는다. 전역에 직접 등록한 `codegraph`가 따로 있으면 Orai가 넘긴 쪽이 쓰인다(Codex 0.171.0의 유효 설정, Claude Code 2.1.325의 비대화형 실행에서 확인. 역할 세션 TUI와, 전역 설정의 도구별 승인(`tools.*`)이 남는지는 미검증).
 - `orai search --in code`는 검색하는 위치에서 가장 가까운 그래프를 쓴다. 빈 검색이나 부정확한 호출 관계를 코드가 없다는 근거로 삼지 않는다.
 
 ## 복구 표
@@ -514,7 +514,7 @@ orai code check    # 진단과 smoke 심볼 조회
 | 역할 밖 설정의 주소가 다름(`shelf.registration` degraded) | Next steps에 나온 파일의 주소·이름을 고치고, `orai.toml`에 `port`를 고정한다 |
 | QMD `access denied` | 샌드박스 밖에서 다시 확인한다. 그 결과는 그 환경에만 적용된다 |
 | QMD 다른 index 서버 | 그대로 두고 `integrations.shelf.port`를 바꾼다 |
-| OpenSpec이 준비되지 않음(`openspec` not-ready) | `orai setup` (프로젝트 범위로 `openspec init`을 실행한다) |
+| OpenSpec이 준비되지 않음(`openspec` not-ready) | `orai setup` (`openspec init --tools none`을 실행한다) |
 | OpenSpec 1.x(`openspec` unsupported) | `npm install -g @fission-ai/openspec@latest` 후 `orai setup`. 1.x가 남긴 `.claude/commands/openspec/`, AGENTS.md의 OpenSpec 블록은 `openspec update`가 정리한다 |
 | 스펙 검증 실패(`openspec.specs` degraded) | `openspec validate --specs`로 빠진 절(Purpose, 시나리오 등)을 확인해 스펙을 고친다 |
 

@@ -129,7 +129,7 @@ pre-alpha다. 최신 버전은 위 배지와 [Releases](https://github.com/oXpac
 | 실제 CodeGraph 색인·심볼 조회 | 통과 |
 | `orai search`·`orai read` (키워드 대체 검색, 메일, 실제 CodeGraph 1.6.0 심볼 검색) | Linux에서 확인 |
 | 실제 QMD 2.8.3을 거친 `orai search`(`--also` 포함), 세션 중 자동 sync, checkout별 `codegraph` MCP(1.6.2) | macOS에서 확인, 역할 세션은 fake provider. 실제 provider 역할 세션은 **미검증** |
-| 실제 OpenSpec 2.1.1 스킬 없는 init, 통합 스킬의 제안·보관 명령, 시작 규칙 주입, 스펙 검증 진단 | 통과 (Linux 컨테이너, macOS). 역할 세션의 propose→apply→archive는 **미검증** |
+| 실제 OpenSpec 2.1.1 스킬 없는 init, 통합 스킬의 제안·보관 명령, 시작 규칙 주입, 스펙 검증 진단 | macOS에서 통과. Linux 컨테이너는 스킬 통합 전의 init과 규칙 주입까지만 확인했다. 역할 세션의 propose→apply→archive는 **미검증** |
 | Codex↔Claude 실제 요청·회신, 종료 후 동일 대화 복구 | macOS에서 확인 (실제 업무에 사용 중, 여러 Mac). Linux는 **미검증** |
 
 확인한 도구 버전은 [호환성](docs/compatibility.md)에, 날짜별 검증 기록은 [이력](docs/history.md#검증-기록)에 있다.

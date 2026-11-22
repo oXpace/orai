@@ -238,7 +238,6 @@ Pockets를 저장소 안 Python 런처에서 Orai 0.3.0으로 옮겼다. 사용�
 | `engine`으로 켜고 끄기 | 실제 QMD | init·검색 통과, 끈 뒤 내장 검색과 `shelf stop` 통과 |
 | 이 저장소 smoke, 내장 검색 | 실제 문서 5개 | 낱말과 질문 모두 기대 문서가 5위 안, 질문은 `docs/architecture.md:95`가 1위 |
 | 속도 | 합성 문서 | 200개 0.03초, 2,000개 0.10초(최대 RSS 60 MB). 품질은 재지 않았다 |
-
 | 통합 스킬: 새 프로젝트 setup부터 보관까지 | 실제 OpenSpec 2.1.1 | 스킬은 `orai` 하나, `openspec-*` 0개. 스킬의 명령대로 change를 만들고 검증했고, 보관은 `archive_confirmation_required` 뒤 `--yes`로 끝났다. 순차 보관이 앞 change를 되돌리는 동작과 열린 task의 `archive_tasks_incomplete`를 재현했다 |
 | 0.6.0 프로젝트에 남아 있는 `openspec-*` 스킬 | 실제 바이너리 | setup 뒤 그대로 |
 
