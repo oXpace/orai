@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +29,7 @@ import (
 const exitUsage = 2
 
 var commands = map[string]bool{"setup": true, "run": true, "status": true, "doctor": true, "msg": true, "shelf": true,
+	"search": true, "read": true, "inbox": true, "send": true, "reply": true, "code": true,
 	"_capture": true, "_channel": true, "help": true, "version": true}
 
 var shelfActions = map[string]bool{"init": true, "recover": true, "sync": true, "refresh": true, "check": true, "stop": true}
@@ -37,7 +39,18 @@ const help = `usage: orai [--project PATH] <command> ...
 Run Codex and Claude Code as role sessions with exact resume, notifications and
 diagnostics. ` + "`orai <role>`" + ` is short for ` + "`orai run <role>`" + `.
 
-commands:
+what agents use (inside role sessions or not):
+  search <words or a question> [--in docs,mail,code] [--limit N] [--json]
+                        Search the documents, your mailbox and the code graph at once
+  read <path[:N[-M]] | message ID>...
+                        Print a file's lines or a received/sent message
+  inbox [ID] [--again] [--peek] [--limit N]
+  send <role|user> [BODY | --body TEXT | --file PATH] [--kind K] [--thread T]
+  reply <ID> [BODY | --body TEXT | --file PATH] [--kind K]
+                        Messages (outside a role session add --as user; the body
+                        defaults to piped stdin). ` + "`orai msg inbox|send|reply`" + ` is the same
+
+setting up and operating:
   setup [--role NAME=PROVIDER ...] [--preset NAME[:SLOT=ROLE,...]] [--dry-run] [--no-tools]
                         Set up this project, or add roles to it (safe to re-run)
   run <role> [--fresh] [--dry-run]
@@ -45,12 +58,9 @@ commands:
   status                Role processes, delivery readiness, pending mail
   doctor [--deep] [--json]
                         Read-only diagnosis with next steps
-  msg inbox [ID] [--again] [--peek] [--limit N] [--as user]
-  msg send <role|user> [--body TEXT | --file PATH] [--kind K] [--thread T] [--as user]
-  msg reply <ID> [--body TEXT | --file PATH] [--kind K] [--as user]
-                        Messages; the body defaults to piped stdin
   shelf init|recover|sync|refresh|check|stop
                         Project shelf (docs search) lifecycle
+  code init|sync|check  Code graph (CodeGraph) for the project and role worktrees
 
 options:
   --project PATH        project directory (default: nearest orai.toml above the current directory)
@@ -154,12 +164,14 @@ Without them, --deep only checks that searches return something.
 // alreadyReceivedNotice is what `orai msg inbox <ID>` says for a message received before.
 const alreadyReceivedNotice = "This message was already received, so it is not shown again and must not be processed a second time. To read it again on purpose: orai msg inbox <ID> --again"
 
-var msgHelp = `usage: orai msg inbox [ID] [--again] [--peek] [--limit N] [--as user]
-       orai msg send <role|user> [--body TEXT | --file PATH] [--kind K] [--thread T] [--as user]
-       orai msg reply <ID> [--body TEXT | --file PATH] [--kind K] [--as user]
+var msgHelp = `usage: orai inbox [ID] [--again] [--peek] [--limit N] [--as user]
+       orai send <role|user> [BODY | --body TEXT | --file PATH] [--kind K] [--thread T] [--as user]
+       orai reply <ID> [BODY | --body TEXT | --file PATH] [--kind K] [--as user]
 
-Messages between roles. Inside a role session the sender is that role. Outside one
-(your own terminal), add --as user. The body comes from --body, --file or piped stdin.
+Messages between roles. ` + "`orai msg inbox|send|reply`" + ` is the same command.
+Inside a role session the sender is that role. Outside one (your own terminal), add
+--as user. The body is the argument after the recipient or ID, --body, --file, or
+piped stdin; it is sent as written, never run.
 
   inbox                 receive pending messages (marks them read); --peek only lists
   inbox ID              receive one message. If it was already received (for
@@ -197,7 +209,12 @@ first time:
      the first real search downloads the search models (about 2 GB). Projects share them.
   ` + "`orai setup`" + ` does steps 2-3 for you when QMD is installed.
 
+searching:
+  orai search '<words or a question>' --in docs     (works for any agent, role or not)
+
 after editing documents:
+  While a role session runs, Orai syncs by itself a few seconds after the documents
+  change (log: .orai/shelf/autosync.log). Outside sessions:
   orai shelf sync
   (no restart: sessions connected to the shelf stay connected)
 
@@ -244,10 +261,20 @@ More: ` + doctor.DocsURL + `/operations.md
 // commandHelp is what `orai <command> --help` prints.
 var commandHelp = map[string]string{
 	"setup": setupHelp, "run": runHelp, "status": statusHelp, "doctor": doctorHelp, "msg": msgHelp, "shelf": shelfHelp,
+	"search": searchHelp, "read": readHelp, "inbox": msgHelp, "send": msgHelp, "reply": msgHelp, "code": codeHelp,
 }
 
 func init() {
-	runtime.MCPServers = shelf.MCPServers
+	runtime.MCPServers = func(p *project.Project, role config.Role) map[string]map[string]any {
+		servers := shelf.MCPServers(p, role.Provider)
+		for name, entry := range codegraph.MCPServers(p, role) {
+			servers[name] = entry
+		}
+		return servers
+	}
+	runtime.Background = func(ctx context.Context, p *project.Project, _ config.Role) {
+		shelf.AutoSync(ctx, p)
+	}
 }
 
 // Main runs the CLI and returns the process exit code.
@@ -308,6 +335,15 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 		return runDoctor(rest, stdout)
 	case "msg":
 		return runMessage(rest, stdin, stdout)
+	case "inbox", "send", "reply":
+		// The same commands as `orai msg <action>`, one word shorter.
+		return runMessage(append([]string{word}, rest...), stdin, stdout)
+	case "search":
+		return runSearch(rest, stdout)
+	case "read":
+		return runRead(rest, stdout)
+	case "code":
+		return runCode(rest, stdout)
 	case "shelf":
 		if o, err := parse(rest, map[string]bool{"project": true}); err == nil && len(o.args) == 0 {
 			fmt.Fprint(stdout, shelfHelp)
@@ -337,7 +373,7 @@ func dispatch(argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, er
 // after `--`, and not as the value of the preceding flag, e.g. `--body --help`).
 func wantsHelp(argv []string) bool {
 	o, _ := parse(argv, map[string]bool{"project": true, "preset": true, "branch": true, "role": true, "as": true,
-		"limit": true, "body": true, "file": true, "kind": true, "thread": true,
+		"limit": true, "body": true, "file": true, "kind": true, "thread": true, "in": true,
 		"dry-run": false, "no-tools": false, "local": false, "fresh": false, "deep": false, "json": false, "peek": false, "again": false})
 	return o.flag("help")
 }
@@ -494,9 +530,12 @@ var isTerminal = func(r io.Reader) bool {
 
 func readBody(o options, stdin io.Reader) (string, error) {
 	var body string
+	positional := len(o.args) == 2 // send <to> BODY, reply <ID> BODY
 	switch {
-	case o.has("file") && o.has("body"):
-		return "", usagef("--body and --file are mutually exclusive")
+	case o.has("file") && o.has("body"), positional && (o.has("file") || o.has("body")):
+		return "", usagef("give the body once: as an argument, --body, or --file")
+	case positional:
+		body = o.args[1]
 	case o.has("file"):
 		data, err := os.ReadFile(o.get("file"))
 		if err != nil {
@@ -552,39 +591,9 @@ func runMessage(argv []string, stdin io.Reader, stdout io.Writer) (int, error) {
 	if hasLimit && limit < 0 {
 		return exitUsage, usagef("--limit must be non-negative")
 	}
-	role, err := runtime.RoleIdentity()
+	p, me, code, err := mailIdentity(o, true)
 	if err != nil {
-		return 1, err
-	}
-	var p *project.Project
-	me := config.UserHandle
-	if role != "" {
-		// A role's identity is bound to its own project; never mix in another one.
-		if p, err = project.Load(os.Getenv("ORAI_PROJECT")); err != nil {
-			return 1, err
-		}
-		if explicit := o.get("project"); explicit != "" {
-			if located, err := project.Locate(explicit); err != nil || located != p.Root {
-				return exitUsage, usagef("a role session cannot act on another project")
-			}
-		}
-		if o.has("as") {
-			return 1, errors.New("an Orai role cannot override its messaging identity")
-		}
-		me = role
-	} else {
-		if !o.has("as") {
-			return 1, errors.New("outside Orai, use --as user for an authorized Desktop action")
-		}
-		target := o.get("project")
-		if target == "" {
-			if target, err = os.Getwd(); err != nil {
-				return 1, err
-			}
-		}
-		if p, err = project.Load(target); err != nil {
-			return exitUsage, err
-		}
+		return code, err
 	}
 	root := mail.Root(p.MailRoot())
 	switch action {
@@ -631,8 +640,8 @@ func runMessage(argv []string, stdin io.Reader, stdout io.Writer) (int, error) {
 		}
 		return 0, printJSON(stdout, result)
 	case "send":
-		if len(o.args) != 1 {
-			return exitUsage, usagef("usage: orai msg send <role|user> [--body TEXT | --file PATH]")
+		if len(o.args) != 1 && len(o.args) != 2 {
+			return exitUsage, usagef("usage: orai send <role|user> [BODY | --body TEXT | --file PATH]")
 		}
 		target := o.args[0]
 		handles := p.Config.Handles()
@@ -653,8 +662,8 @@ func runMessage(argv []string, stdin io.Reader, stdout io.Writer) (int, error) {
 		}
 		return 0, printJSON(stdout, result)
 	default: // reply
-		if len(o.args) != 1 {
-			return exitUsage, usagef("usage: orai msg reply <ID> [--body TEXT | --file PATH]")
+		if len(o.args) != 1 && len(o.args) != 2 {
+			return exitUsage, usagef("usage: orai reply <ID> [BODY | --body TEXT | --file PATH]")
 		}
 		body, err := readBody(o, stdin)
 		if err != nil {

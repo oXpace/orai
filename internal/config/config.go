@@ -37,6 +37,7 @@ var (
 		"setup": true, "run": true, "status": true, "doctor": true, "msg": true, "shelf": true, "wiki": true,
 		"version": true, "help": true, "_capture": true, "_channel": true, UserHandle: true, "orai": true, "all": true,
 		"init": true, "inbox": true, "send": true, "reply": true, "qmd": true, "codegraph": true,
+		"search": true, "read": true, "code": true,
 	}
 	NamePattern       = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
 	sessionPattern    = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)

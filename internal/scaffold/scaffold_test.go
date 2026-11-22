@@ -930,7 +930,7 @@ func TestRoleGuideCarriesOnlyTheProviderSpecificStart(t *testing.T) {
 			t.Errorf("%s: start section present = %v, want %v\n%s", file, !claude, claude, text)
 		}
 		// Shared steps are the prompt's, not repeated per role.
-		if strings.Contains(text, "orai msg inbox") {
+		if strings.Contains(text, "orai inbox") || strings.Contains(text, "orai msg inbox") {
 			t.Errorf("%s repeats a shared step", file)
 		}
 	}
@@ -1093,13 +1093,13 @@ func TestTheAgentsBlockIsAnEntryPoint(t *testing.T) {
 	if !strings.Contains(block, "역할 권한, 완료 기준, 보고·승인 절차는 프로젝트 규칙과 역할 지침이 정한다") {
 		t.Fatal("the block does not leave role rules to the project")
 	}
-	for _, command := range []string{"orai msg send", "orai msg inbox", "orai msg reply", "orai shelf sync", "--deep"} {
+	for _, command := range []string{"orai send <", "orai inbox <", "orai reply <", "orai msg", "orai shelf sync", "--deep", "--in "} {
 		if strings.Contains(block, command) {
 			t.Errorf("the block carries %q; it belongs in the skill", command)
 		}
 	}
 	skill := scaffold.Template("skill.md")
-	for _, kept := range []string{"orai msg inbox <ID>", "orai msg reply <받은-ID>", "already_received", "--again", "--peek",
+	for _, kept := range []string{"orai inbox <ID>", "orai reply <받은-ID>", "orai search", "orai read <메시지-ID>", "already_received", "--again", "--peek",
 		"--as user", "세션을 시작하거나 다시 열었을 때", "ORAI_*"} {
 		if !strings.Contains(skill, kept) {
 			t.Errorf("the skill lost %q", kept)

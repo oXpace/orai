@@ -89,9 +89,14 @@ func TestHelpForACommandChangesNothing(t *testing.T) {
 	project := filepath.Join(t.TempDir(), "app")
 	_ = os.Mkdir(project, 0o755)
 	for _, argv := range [][]string{{"setup", "--help"}, {"setup", "-h"}, {"doctor", "--help"}, {"shelf", "--help"},
-		{"msg", "--help"}, {"msg", "send", "--help"}, {"run", "--help"}, {"status", "--help"}} {
+		{"msg", "--help"}, {"msg", "send", "--help"}, {"run", "--help"}, {"status", "--help"},
+		{"search", "--help"}, {"read", "--help"}, {"code", "--help"}, {"send", "--help"}, {"inbox", "-h"}} {
 		out, errOut, code := orai(t, project, "", "", argv...)
-		if code != 0 || !strings.HasPrefix(out, "usage: orai "+argv[0]) {
+		want := "usage: orai " + argv[0]
+		if argv[0] == "msg" || argv[0] == "send" {
+			want = "usage: orai inbox" // one page covers inbox, send and reply
+		}
+		if code != 0 || !strings.HasPrefix(out, want) {
 			t.Fatalf("%v: %d %q %q", argv, code, out, errOut)
 		}
 	}
