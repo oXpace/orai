@@ -19,12 +19,17 @@
 - **THEN** sync가 실행되지 않는다
 
 ### Requirement: 만들지 않은 shelf는 만들지 않는다
-자동 sync는 `orai shelf init`을 하지 않은 프로젝트에서 색인을 만들지 않아야 한다(MUST).
+자동 sync는 QMD를 쓰지 않거나 `orai shelf init`을 하지 않은 프로젝트에서 색인을 만들거나 갱신하지 않아야 한다(MUST).
 
 #### Scenario: shelf가 없다
 - **GIVEN** shelf를 init하지 않은 프로젝트에서 역할 세션이 떠 있다
 - **WHEN** 묶음 폴더의 문서를 고친다
 - **THEN** 색인 폴더가 생기지 않는다
+
+#### Scenario: 내장 검색으로 껐다
+- **GIVEN** 색인이 남아 있고 `engine = "builtin"`이다
+- **WHEN** 역할 세션이 시작된다
+- **THEN** sync가 실행되지 않는다
 
 ### Requirement: 세션 시작 때 밀린 변경을 따라잡는다
 역할 세션을 시작할 때 마지막 sync 표식보다 새 문서가 있으면 Orai는 sync를 한 번 실행해야 한다(SHALL). 다른 역할의 sync가 이미 반영한 변경이면 건너뛴다.
