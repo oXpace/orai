@@ -85,7 +85,12 @@ func SyncDir(dir string) error {
 		return err
 	}
 	defer d.Close()
-	return d.Sync()
+	// Some filesystems (network and FUSE mounts) cannot fsync a directory. The write
+	// itself succeeded, so that is not a reason to fail it.
+	if err := d.Sync(); err != nil && !errors.Is(err, syscall.EINVAL) && !errors.Is(err, syscall.ENOTSUP) {
+		return err
+	}
+	return nil
 }
 
 func JSONBytes(value any) []byte {

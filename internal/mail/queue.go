@@ -174,7 +174,13 @@ func (r Root) deadLetter(me, path string) (string, error) {
 	dir := r.box(me, "dlq/new")
 	target := filepath.Join(dir, filepath.Base(path))
 	if err := os.Link(path, target); err != nil {
-		return "", err
+		// A move that was interrupted after the link leaves the same file in both
+		// places; finish it. Any other file under that name is kept, not replaced.
+		source, statErr := os.Stat(path)
+		existing, existErr := os.Stat(target)
+		if statErr != nil || existErr != nil || !os.SameFile(source, existing) {
+			return "", err
+		}
 	}
 	if err := state.SyncDir(dir); err != nil {
 		return "", err

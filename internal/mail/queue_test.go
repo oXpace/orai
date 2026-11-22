@@ -339,3 +339,34 @@ func TestPendingReadsNamesOnly(t *testing.T) {
 		t.Fatalf("pending %v %v", pending, err)
 	}
 }
+
+// A dead-letter move interrupted between its link and its remove leaves the file in
+// both folders. The next drain finishes the move instead of failing on it forever.
+func TestAnInterruptedDeadLetterMoveIsFinished(t *testing.T) {
+	root := newRoot(t, "dev", "lead", "user")
+	source := filepath.Join(root.box("dev", "inbox/new"), "bad.md")
+	if err := os.WriteFile(source, []byte("not a message"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(source, filepath.Join(root.box("dev", "dlq/new"), "bad.md")); err != nil {
+		t.Fatal(err)
+	}
+	drained, err := root.Drain("dev", 0, true)
+	if err != nil || len(drained.DeadLettered) != 1 || drained.DeadLettered[0].Error != "" {
+		t.Fatalf("drain %+v %v", drained, err)
+	}
+	if left, _ := os.ReadDir(root.box("dev", "inbox/new")); len(left) != 0 {
+		t.Fatalf("inbox/new keeps %v", left)
+	}
+	// A different file under the same name is reported and kept, never overwritten.
+	if err := os.WriteFile(source, []byte("another"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	again, err := root.Drain("dev", 0, true)
+	if err != nil || len(again.DeadLettered) != 1 || again.DeadLettered[0].Error == "" {
+		t.Fatalf("second drain %+v %v", again, err)
+	}
+	if kept, _ := os.ReadFile(filepath.Join(root.box("dev", "dlq/new"), "bad.md")); string(kept) != "not a message" {
+		t.Fatalf("dlq copy replaced: %q", kept)
+	}
+}
